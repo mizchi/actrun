@@ -20,7 +20,11 @@ case "$workflow_file" in
 esac
 
 echo "dispatching $workflow_file on $repo@$ref"
-gh workflow run "$workflow_file" -R "$repo" --ref "$ref" "${dispatch_args[@]}"
+if [ "${#dispatch_args[@]}" -gt 0 ]; then
+  gh workflow run "$workflow_file" -R "$repo" --ref "$ref" "${dispatch_args[@]}"
+else
+  gh workflow run "$workflow_file" -R "$repo" --ref "$ref"
+fi
 
 run_id=""
 for _ in $(seq 1 24); do
