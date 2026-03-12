@@ -350,6 +350,29 @@ test "lowering: checkout uses step becomes checkout task" {
 }
 
 ///|
+test "lowering: checkout with values become INPUT env" {
+  let workflow = new_workflow("ci", [
+    new_job("test", [
+      new_uses_step("checkout", "actions/checkout@v4", with_values={
+        "path": "repo",
+        "sparse-checkout": "README.md\n.github",
+      }),
+    ]),
+  ])
+
+  let result = lower_push_workflow(workflow)
+
+  inspect(result.errors, content="[]")
+  let checkout_plan = expect_task_plan(result.plan, "test/checkout")
+  inspect(checkout_plan.action.unwrap().kind, content="checkout")
+  inspect(checkout_plan.env.get("INPUT_PATH").unwrap_or(""), content="repo")
+  inspect(
+    checkout_plan.env.get("INPUT_SPARSE_CHECKOUT").unwrap_or(""),
+    content="README.md\n.github",
+  )
+}
+
+///|
 test "lowering: unsupported uses step is rejected" {
   let workflow = new_workflow("ci", [
     new_job("test", [new_uses_step("setup", "bit://std/cache@v1")]),

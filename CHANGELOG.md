@@ -93,5 +93,6 @@
 - Added builtin emulators for `actions/upload-artifact` and `actions/download-artifact`, plus dispatchable GitHub-hosted compat workflows that upload observed values as artifacts
 - Added builtin emulators for `actions/cache/save` and `actions/cache/restore`, plus local / GitHub-hosted cache roundtrip compat scenarios
 - Added builtin `actions/cache` restore + deferred post-save emulation, plus local / GitHub-hosted auto-save compat scenarios
+- Added builtin `actions/checkout` support for `path` and `sparse-checkout`, plus local / GitHub-hosted sparse checkout compat scenarios
 - Added `gha-compat-compare` to replay dispatchable compat workflows locally and compare downloaded GitHub-hosted artifacts against local emulator output
 - Added `gha-compat-live` to dispatch a GitHub-hosted compat workflow, wait for completion, download artifacts, and compare against local emulator output in one step

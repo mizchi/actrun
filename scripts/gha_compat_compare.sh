@@ -19,10 +19,15 @@ event_path="$workspace_root/event.json"
 cli_bin="$repo_root/_build/native/debug/build/main/main.exe"
 event_added_path=".github/workflows/$workflow_file"
 compat_key="${ACTION_RUNNER_COMPAT_CACHE_KEY:-}"
+seed_license=0
 
 case "$workflow_file" in
   compat-checkout-artifact.yml)
     report_name="compat-checkout-report"
+    ;;
+  compat-checkout-sparse.yml)
+    report_name="compat-checkout-sparse-report"
+    seed_license=1
     ;;
   compat-artifact-multi-job.yml)
     report_name="compat-artifact-report"
@@ -57,6 +62,9 @@ rm -rf "$local_root"
 mkdir -p "$(dirname "$workflow_dst")"
 cp "$workflow_src" "$workflow_dst"
 cp "$repo_root/README.md" "$workspace_root/README.md"
+if [ "$seed_license" = "1" ]; then
+  cp "$repo_root/LICENSE" "$workspace_root/LICENSE"
+fi
 
 if [ -n "$compat_key" ]; then
   placeholder='${{ inputs.compat_key }}'

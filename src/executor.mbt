@@ -1340,6 +1340,164 @@ fn exec_copy_tree(src : String, dst : String) -> Bool {
 }
 
 ///|
+fn checkout_wildcard_match(pattern : String, text : String) -> Bool {
+  let mut p = 0
+  let mut t = 0
+  let mut star = -1
+  let mut mark = 0
+  while t < text.length() {
+    if p < pattern.length() {
+      let pc = pattern.unsafe_get(p)
+      let tc = text.unsafe_get(t)
+      if pc == '*' {
+        star = p
+        p += 1
+        mark = t
+        continue
+      }
+      if pc == tc {
+        p += 1
+        t += 1
+        continue
+      }
+    }
+    if star >= 0 {
+      p = star + 1
+      mark += 1
+      t = mark
+    } else {
+      return false
+    }
+  }
+  while p < pattern.length() && pattern.unsafe_get(p) == '*' {
+    p += 1
+  }
+  p == pattern.length()
+}
+
+///|
+fn normalize_checkout_pattern(pattern : String) -> String {
+  let trimmed = pattern.trim(chars=" \t\r").to_string()
+  let no_prefix = if trimmed.has_prefix("./") {
+    exec_text_slice(trimmed, 2, trimmed.length())
+  } else if trimmed.has_prefix("/") {
+    exec_text_slice(trimmed, 1, trimmed.length())
+  } else {
+    trimmed
+  }
+  if no_prefix.has_suffix("/") {
+    exec_text_slice(no_prefix, 0, no_prefix.length() - 1)
+  } else {
+    no_prefix
+  }
+}
+
+///|
+fn checkout_sparse_match(
+  patterns : Array[String],
+  relative_path : String,
+) -> Bool {
+  for raw_pattern in patterns {
+    let pattern = normalize_checkout_pattern(raw_pattern)
+    if pattern.length() == 0 {
+      continue
+    }
+    if pattern.contains("*") {
+      if checkout_wildcard_match(pattern, relative_path) {
+        return true
+      }
+    } else if relative_path == pattern ||
+      relative_path.has_prefix(pattern + "/") {
+      return true
+    }
+  }
+  false
+}
+
+///|
+fn exec_relative_path(root : String, path : String) -> String {
+  let root_abs = absolute_exec_path(root)
+  let path_abs = absolute_exec_path(path)
+  if path_abs == root_abs {
+    return ""
+  }
+  let prefix = root_abs + "/"
+  if path_abs.has_prefix(prefix) {
+    return exec_text_slice(path_abs, prefix.length(), path_abs.length())
+  }
+  path_abs
+}
+
+///|
+fn exec_copy_workspace_snapshot(
+  workspace_root : String,
+  destination : String,
+) -> Bool {
+  guard workspace_relative_store_path(workspace_root, destination)
+    is Some(relative_destination) else {
+    return false
+  }
+  let top_level = match relative_destination.split("/").next() {
+    Some(segment) => segment.to_string()
+    None => relative_destination
+  }
+  if not(exec_remove_tree(destination)) {
+    return false
+  }
+  if not(ensure_exec_dir_recursive(destination)) {
+    return false
+  }
+  let entries = try @xfs.read_dir(workspace_root) catch {
+    _ => []
+  } noraise {
+    value => value
+  }
+  for entry in entries {
+    if entry == top_level {
+      continue
+    }
+    if not(
+        exec_copy_tree(workspace_root + "/" + entry, destination + "/" + entry),
+      ) {
+      return false
+    }
+  }
+  true
+}
+
+///|
+fn exec_prune_sparse_checkout(
+  root : String,
+  current : String,
+  patterns : Array[String],
+) -> Bool {
+  if exec_is_dir(current) {
+    let entries = try @xfs.read_dir(current) catch {
+      _ => []
+    } noraise {
+      value => value
+    }
+    let kept_entries : Array[String] = []
+    for entry in entries {
+      let child = current + "/" + entry
+      if exec_prune_sparse_checkout(root, child, patterns) {
+        kept_entries.push(entry)
+      } else if not(exec_remove_tree(child)) {
+        return false
+      }
+    }
+    let relative = exec_relative_path(root, current)
+    if relative.length() == 0 {
+      return true
+    }
+    kept_entries.length() > 0 || checkout_sparse_match(patterns, relative)
+  } else {
+    let relative = exec_relative_path(root, current)
+    checkout_sparse_match(patterns, relative)
+  }
+}
+
+///|
 fn artifact_store_root(workspace_root : String) -> String {
   ignore(ensure_exec_dir_recursive("_build/action_runner/artifacts"))
   let workspace_key = sanitize_task_id(
@@ -1411,15 +1569,42 @@ fn execute_builtin_checkout_native(
   action : ResolvedAction,
   plan : TaskPlan,
   workspace_root : String,
+  resolved_plan_env : Map[String, String],
 ) -> TaskRunReport {
-  if action.kind == "checkout" {
-    return task_report_success(plan, workspace_root)
+  if action.kind != "checkout" {
+    return task_report_failure(
+      plan,
+      workspace_root,
+      "builtin action kind '\{action.kind}' is not supported",
+    )
   }
-  task_report_failure(
-    plan,
-    workspace_root,
-    "builtin action kind '\{action.kind}' is not supported",
-  )
+  let path_input = resolved_plan_env.get("INPUT_PATH").unwrap_or("")
+  let sparse_input = resolved_plan_env
+    .get("INPUT_SPARSE_CHECKOUT")
+    .unwrap_or("")
+  let checkout_root = if path_input.length() > 0 {
+    resolve_task_cwd(workspace_root, path_input)
+  } else {
+    resolve_task_cwd(workspace_root, "")
+  }
+  if path_input.length() > 0 &&
+    not(exec_copy_workspace_snapshot(workspace_root, checkout_root)) {
+    return task_report_failure(
+      plan,
+      workspace_root,
+      "failed to prepare checkout path '\{path_input}'",
+    )
+  }
+  let sparse_patterns = split_nonempty_lines(sparse_input)
+  if sparse_patterns.length() > 0 &&
+    not(
+      exec_prune_sparse_checkout(checkout_root, checkout_root, sparse_patterns),
+    ) {
+    return task_report_failure(
+      plan, workspace_root, "failed to apply sparse-checkout",
+    )
+  }
+  task_report_success(plan, workspace_root)
 }
 
 ///|
@@ -2092,7 +2277,9 @@ async fn execute_action_plan_native(
     )
     if action.kind == "checkout" {
       return builtin_task_result(
-        execute_builtin_checkout_native(action, plan, workspace_root),
+        execute_builtin_checkout_native(
+          action, plan, workspace_root, resolved_plan_env,
+        ),
       )
     }
     if action.kind == "upload-artifact" {

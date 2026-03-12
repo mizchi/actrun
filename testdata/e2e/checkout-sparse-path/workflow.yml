@@ -1,0 +1,26 @@
+name: e2e-checkout-sparse
+
+on:
+  push:
+    paths:
+      - workflow.yml
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: checkout
+        uses: actions/checkout@v4
+        with:
+          path: repo
+          sparse-checkout: |
+            README.md
+            .github
+      - id: build-report
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          printf '%s|%s|%s' \
+            "$(test -f repo/README.md && echo yes || echo no)" \
+            "$(test -f repo/.github/workflows/workflow.yml && echo yes || echo no)" \
+            "$(test -f repo/LICENSE && echo yes || echo no)" > artifacts/result.txt
