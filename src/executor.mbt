@@ -55,6 +55,7 @@ priv struct JobRuntimeState {
   env_updates : Map[String, String]
   path_entries : Array[String]
   step_outputs : Map[String, Map[String, String]]
+  step_results : Map[String, String]
   action_states : Map[String, Map[String, String]]
   started_action_scopes : Map[String, Bool]
 }
@@ -84,6 +85,7 @@ fn empty_job_runtime_state() -> JobRuntimeState {
     env_updates: {},
     path_entries: [],
     step_outputs: {},
+    step_results: {},
     action_states: {},
     started_action_scopes: {},
   }
@@ -150,6 +152,7 @@ fn append_paths(newer : Array[String], older : Array[String]) -> Array[String] {
 fn apply_job_runtime_updates(
   state : JobRuntimeState,
   step_id : String,
+  step_result : String?,
   action_scope : String?,
   env_updates : Map[String, String],
   path_entries : Array[String],
@@ -162,8 +165,16 @@ fn apply_job_runtime_updates(
   for key, value in state.step_outputs {
     updated_outputs[key] = value
   }
+  let updated_results : Map[String, String] = {}
+  for key, value in state.step_results {
+    updated_results[key] = value
+  }
   if step_id.length() > 0 && output_values.length() > 0 {
     updated_outputs[step_id] = output_values
+  }
+  match step_result {
+    Some(value) if step_id.length() > 0 => updated_results[step_id] = value
+    _ => ()
   }
   let updated_env = if updated_paths.length() > 0 {
     let base_path = merged_env
@@ -204,6 +215,7 @@ fn apply_job_runtime_updates(
     env_updates: updated_env,
     path_entries: updated_paths,
     step_outputs: updated_outputs,
+    step_results: updated_results,
     action_states: updated_action_states,
     started_action_scopes: updated_started_action_scopes,
   }
@@ -1174,6 +1186,36 @@ fn job_if_failure_value(needs_results : Map[String, String]) -> Bool {
 ///|
 fn job_if_cancelled_value(needs_results : Map[String, String]) -> Bool {
   for _, value in needs_results {
+    if value == "cancelled" {
+      return true
+    }
+  }
+  false
+}
+
+///|
+fn step_if_success_value(state : JobRuntimeState) -> Bool {
+  for _, value in state.step_results {
+    if value == "failed" || value == "cancelled" {
+      return false
+    }
+  }
+  true
+}
+
+///|
+fn step_if_failure_value(state : JobRuntimeState) -> Bool {
+  for _, value in state.step_results {
+    if value == "failed" {
+      return true
+    }
+  }
+  false
+}
+
+///|
+fn step_if_cancelled_value(state : JobRuntimeState) -> Bool {
+  for _, value in state.step_results {
     if value == "cancelled" {
       return true
     }
@@ -2826,18 +2868,61 @@ pub async fn execute_lowered_native(
             blocked_deps.push(dep)
           }
         }
-        let allow_blocked_needs = match plan_opt {
-          Some(plan) => not(started_job_tasks.get(plan.job_id).unwrap_or(false))
+        let is_barrier = match plan_opt {
+          Some(plan) => plan.kind == "barrier"
           None => false
         }
-        if blocked_deps.length() > 0 &&
-          not(
-            match plan_opt {
-              Some(plan) =>
-                plan.if_condition == "always()" || allow_blocked_needs
-              None => false
-            },
-          ) {
+        let step_should_run = match plan_opt {
+          Some(plan) if not(is_barrier) => {
+            let github_ctx = github_context(
+              ir.name,
+              plan,
+              workspace_root,
+              push_event,
+            )
+            let runner_ctx = runner_context(plan, workspace_root)
+            evaluate_if_condition(
+              plan.if_condition,
+              new_if_condition_context(
+                step_outputs=current_state.step_outputs,
+                env_context=merge_runner_env(
+                  plan.env,
+                  current_state.env_updates,
+                ),
+                github_context=github_ctx,
+                runner_context=runner_ctx,
+                needs_outputs~,
+                needs_results~,
+                success_value=step_if_success_value(current_state),
+                failure_value=step_if_failure_value(current_state),
+                cancelled_value=step_if_cancelled_value(current_state),
+              ),
+            )
+          }
+          _ => true
+        }
+        if not(is_barrier) && not(step_should_run) {
+          match plan_opt {
+            Some(plan) => {
+              let message = "step if condition evaluated to false"
+              reports.push(task_report_skipped(plan, workspace_root, message))
+              steps.push({
+                id: task.id,
+                status: "skipped",
+                required: task.required,
+                message,
+              })
+            }
+            None =>
+              steps.push({
+                id: task.id,
+                status: "skipped",
+                required: task.required,
+                message: "step if condition evaluated to false",
+              })
+          }
+          success[task.id] = true
+        } else if blocked_deps.length() > 0 && is_barrier {
           steps.push({
             id: task.id,
             status: "blocked",
@@ -2889,6 +2974,7 @@ pub async fn execute_lowered_native(
               let next_state = apply_job_runtime_updates(
                 current_state,
                 plan.step_id,
+                Some(report.status),
                 plan.action_scope,
                 result.env_updates,
                 result.path_entries,

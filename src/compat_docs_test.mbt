@@ -228,6 +228,29 @@ test "compat docs: parse steps with fixture" {
 }
 
 ///|
+test "compat docs: lower steps if status functions fixture" {
+  let (fixture, workflow, lowered) = compat_expect_lowered_docs_fixture(
+    "steps-if-status-functions",
+  )
+
+  inspect(fixture.id, content="docs-steps-if-status-functions")
+  inspect(workflow.jobs[0].steps[2].if_condition, content="failure()")
+  inspect(lowered.errors, content="[]")
+  inspect(
+    compat_expect_task_plan(lowered.plan, "build/on_failure").if_condition,
+    content="failure()",
+  )
+  inspect(
+    compat_expect_task_plan(lowered.plan, "build/always_step").if_condition,
+    content="always()",
+  )
+  inspect(
+    compat_expect_task_plan(lowered.plan, "build/on_cancelled").if_condition,
+    content="cancelled()",
+  )
+}
+
+///|
 test "compat docs: lower matrix axes fixture" {
   let (fixture, workflow, lowered) = compat_expect_lowered_docs_fixture(
     "strategy-matrix-axes",
@@ -570,6 +593,43 @@ async test "compat docs: github repository context is available in push workflow
   inspect(report.ok, content="true")
   inspect(task.status, content="success")
   inspect(task.stdout, content="<mizchi/action_runner|mizchi/action_runner>")
+}
+
+///|
+#cfg(target="native")
+async test "compat docs: step if status functions work in push workflow" {
+  let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
+    "steps-if-status-functions",
+  )
+  let report = execute_lowered_native(
+    lower_push_workflow(workflow),
+    workspace_root=workspace,
+    push_event=compat_push_event_fixture(fixture),
+  )
+
+  inspect(fixture.id, content="docs-steps-if-status-functions")
+  inspect(report.ok, content="false")
+  inspect(report.state, content="partial_failed")
+  inspect(
+    compat_expect_task_report(report, "build/default_skip").status,
+    content="skipped",
+  )
+  inspect(
+    compat_expect_task_report(report, "build/on_failure").status,
+    content="success",
+  )
+  inspect(
+    compat_expect_task_report(report, "build/always_step").status,
+    content="success",
+  )
+  inspect(
+    compat_expect_task_report(report, "build/on_cancelled").status,
+    content="skipped",
+  )
+  inspect(
+    @xfs.read_file_to_string(workspace + "/artifacts/result.txt"),
+    content="no|yes|no|mizchi/action_runner",
+  )
 }
 
 ///|

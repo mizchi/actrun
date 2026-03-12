@@ -707,6 +707,7 @@ async fn run_artifact_actions_roundtrip() -> Unit {
 #cfg(target="native")
 async fn run_cache_actions_roundtrip() -> Unit {
   let scenario = "cache-actions-roundtrip"
+  e2e_remove_tree("_build/action_runner/cache")
   let workspace = e2e_prepare_copied_dir(
     "_build/e2e/workspaces",
     scenario,
@@ -733,6 +734,7 @@ async fn run_cache_actions_roundtrip() -> Unit {
 #cfg(target="native")
 async fn run_cache_auto_save_roundtrip() -> Unit {
   let scenario = "cache-auto-save-roundtrip"
+  e2e_remove_tree("_build/action_runner/cache")
   let workspace = e2e_prepare_copied_dir(
     "_build/e2e/workspaces",
     scenario,
@@ -1054,6 +1056,48 @@ async fn run_job_if_always() -> Unit {
     e2e_read_text(e2e_join_path(workspace, "artifacts/cleanup.txt")),
     "cleanup-ran",
     scenario + " cleanup artifact",
+  )
+}
+
+///|
+#cfg(target="native")
+async fn run_step_if_status_functions() -> Unit {
+  let scenario = "step-if-status-functions"
+  let workspace = e2e_prepare_copied_dir(
+    "_build/e2e/workspaces",
+    scenario,
+    e2e_fixture_dir(scenario),
+  )
+  let result = e2e_run_cli([
+    e2e_join_path(workspace, "workflow.yml"),
+    "--event",
+    e2e_join_path(workspace, "event.json"),
+  ])
+  e2e_expect_fail(result, scenario)
+  e2e_expect_contains(result.stdout, "workflow=e2e-step-if-status", scenario)
+  e2e_expect_contains(result.stdout, "state=partial_failed", scenario)
+  e2e_expect_contains(result.stdout, "build/fail: failed", scenario)
+  e2e_expect_contains(result.stdout, "build/default_skip: skipped", scenario)
+  e2e_expect_contains(result.stdout, "build/on_failure: success", scenario)
+  e2e_expect_contains(result.stdout, "build/always_step: success", scenario)
+  e2e_expect_contains(result.stdout, "build/on_cancelled: skipped", scenario)
+  e2e_expect_missing(
+    e2e_join_path(workspace, "artifacts/default.txt"),
+    scenario + " default skip artifact",
+  )
+  e2e_expect_eq(
+    e2e_read_text(e2e_join_path(workspace, "artifacts/failure.txt")),
+    "failure-ran",
+    scenario + " failure artifact",
+  )
+  e2e_expect_eq(
+    e2e_read_text(e2e_join_path(workspace, "artifacts/always.txt")),
+    "always-ran",
+    scenario + " always artifact",
+  )
+  e2e_expect_missing(
+    e2e_join_path(workspace, "artifacts/cancelled.txt"),
+    scenario + " cancelled artifact",
   )
 }
 
@@ -1499,7 +1543,7 @@ async fn run_remote_node_failure_cleanup() -> Unit {
   e2e_expect_contains(result.stdout, "state=partial_failed", scenario)
   e2e_expect_contains(result.stdout, "build/remote: failed", scenario)
   e2e_expect_contains(result.stdout, "build/remote__post: success", scenario)
-  e2e_expect_contains(result.stdout, "build/verify: blocked", scenario)
+  e2e_expect_contains(result.stdout, "build/verify: skipped", scenario)
   e2e_expect_eq(
     e2e_read_text(e2e_join_path(workspace, "post.txt")),
     "started|" + workspace,
@@ -1557,7 +1601,7 @@ async fn run_remote_node_failure_cache_hit() -> Unit {
   e2e_expect_contains(result.stdout, "state=partial_failed", scenario)
   e2e_expect_contains(result.stdout, "build/remote: failed", scenario)
   e2e_expect_contains(result.stdout, "build/remote__post: success", scenario)
-  e2e_expect_contains(result.stdout, "build/verify: blocked", scenario)
+  e2e_expect_contains(result.stdout, "build/verify: skipped", scenario)
   e2e_expect_eq(
     e2e_read_text(e2e_join_path(workspace, "post.txt")),
     "started|" + workspace,
@@ -1851,7 +1895,7 @@ async fn run_remote_docker_failure_cleanup() -> Unit {
   e2e_expect_contains(result.stdout, "state=partial_failed", scenario)
   e2e_expect_contains(result.stdout, "build/remote: failed", scenario)
   e2e_expect_contains(result.stdout, "build/remote__post: success", scenario)
-  e2e_expect_contains(result.stdout, "build/verify: blocked", scenario)
+  e2e_expect_contains(result.stdout, "build/verify: skipped", scenario)
   e2e_expect_eq(
     e2e_read_text(e2e_join_path(workspace, "post.txt")),
     "main|" + workspace,
@@ -1910,7 +1954,7 @@ async fn run_remote_docker_failure_cache_hit() -> Unit {
   e2e_expect_contains(result.stdout, "state=partial_failed", scenario)
   e2e_expect_contains(result.stdout, "build/remote: failed", scenario)
   e2e_expect_contains(result.stdout, "build/remote__post: success", scenario)
-  e2e_expect_contains(result.stdout, "build/verify: blocked", scenario)
+  e2e_expect_contains(result.stdout, "build/verify: skipped", scenario)
   e2e_expect_eq(
     e2e_read_text(e2e_join_path(workspace, "post.txt")),
     "main|" + workspace,
@@ -2422,7 +2466,7 @@ async fn run_repo_remote_node_failure_cleanup() -> Unit {
   e2e_expect_contains(result.stdout, "state=partial_failed", scenario)
   e2e_expect_contains(result.stdout, "build/remote: failed", scenario)
   e2e_expect_contains(result.stdout, "build/remote__post: success", scenario)
-  e2e_expect_contains(result.stdout, "build/verify: blocked", scenario)
+  e2e_expect_contains(result.stdout, "build/verify: skipped", scenario)
   e2e_expect_eq(
     e2e_read_text(e2e_join_path(workspace_root, "post.txt")),
     "started|" + workspace_root,
@@ -2504,7 +2548,7 @@ async fn run_repo_remote_node_failure_cache_hit() -> Unit {
   e2e_expect_contains(result.stdout, "state=partial_failed", scenario)
   e2e_expect_contains(result.stdout, "build/remote: failed", scenario)
   e2e_expect_contains(result.stdout, "build/remote__post: success", scenario)
-  e2e_expect_contains(result.stdout, "build/verify: blocked", scenario)
+  e2e_expect_contains(result.stdout, "build/verify: skipped", scenario)
   e2e_expect_eq(
     e2e_read_text(e2e_join_path(workspace_root, "post.txt")),
     "started|" + workspace_root,
@@ -2576,7 +2620,7 @@ async fn run_repo_remote_docker_failure_cleanup() -> Unit {
   e2e_expect_contains(result.stdout, "state=partial_failed", scenario)
   e2e_expect_contains(result.stdout, "build/remote: failed", scenario)
   e2e_expect_contains(result.stdout, "build/remote__post: success", scenario)
-  e2e_expect_contains(result.stdout, "build/verify: blocked", scenario)
+  e2e_expect_contains(result.stdout, "build/verify: skipped", scenario)
   e2e_expect_eq(
     e2e_read_text(e2e_join_path(workspace_root, "post.txt")),
     "main|" + workspace_root,
@@ -2659,7 +2703,7 @@ async fn run_repo_remote_docker_failure_cache_hit() -> Unit {
   e2e_expect_contains(result.stdout, "state=partial_failed", scenario)
   e2e_expect_contains(result.stdout, "build/remote: failed", scenario)
   e2e_expect_contains(result.stdout, "build/remote__post: success", scenario)
-  e2e_expect_contains(result.stdout, "build/verify: blocked", scenario)
+  e2e_expect_contains(result.stdout, "build/verify: skipped", scenario)
   e2e_expect_eq(
     e2e_read_text(e2e_join_path(workspace_root, "post.txt")),
     "main|" + workspace_root,
@@ -3069,6 +3113,10 @@ async fn main {
   println("e2e: job-if-always")
   run_job_if_always()
   println("e2e: job-if-always ok")
+
+  println("e2e: step-if-status-functions")
+  run_step_if_status_functions()
+  println("e2e: step-if-status-functions ok")
 
   println("e2e: unsupported-uses")
   run_unsupported_uses()

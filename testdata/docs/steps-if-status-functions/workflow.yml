@@ -1,0 +1,37 @@
+name: steps-if-status-functions
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: fail
+        shell: bash
+        run: |
+          printf '%s' 'boom' >&2
+          exit 9
+      - id: default_skip
+        run: |
+          mkdir -p artifacts
+          printf '<default-ran>' > artifacts/default.txt
+      - id: on_failure
+        if: failure()
+        run: |
+          mkdir -p artifacts
+          printf '<failure-ran>' > artifacts/failure.txt
+      - id: always_step
+        if: always()
+        run: printf '<always-ran>'
+      - id: on_cancelled
+        if: cancelled()
+        run: |
+          mkdir -p artifacts
+          printf '<cancelled-ran>' > artifacts/cancelled.txt
+      - id: after
+        if: always()
+        run: |
+          mkdir -p artifacts
+          printf '%s|%s|%s|%s' \
+            "$(test -f artifacts/default.txt && echo yes || echo no)" \
+            "$(test -f artifacts/failure.txt && echo yes || echo no)" \
+            "$(test -f artifacts/cancelled.txt && echo yes || echo no)" \
+            "${{ github.repository }}" > artifacts/result.txt

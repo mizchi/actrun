@@ -79,7 +79,7 @@ async test "compat act: steps context outcome is a known diff" {
   inspect(report.ok, content="false")
   inspect(report.state, content="partial_failed")
   inspect(second.status, content="failed")
-  inspect(third.status, content="blocked")
+  inspect(third.status, content="skipped")
 }
 
 ///|
@@ -100,7 +100,7 @@ async test "compat act: steps context conclusion is a known diff" {
   inspect(report.ok, content="false")
   inspect(report.state, content="partial_failed")
   inspect(second.status, content="failed")
-  inspect(third.status, content="blocked")
+  inspect(third.status, content="skipped")
 }
 
 ///|

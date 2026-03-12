@@ -1,0 +1,34 @@
+name: e2e-step-if-status
+'on': push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: fail
+        shell: bash
+        run: |
+          printf '%s' 'boom' >&2
+          exit 9
+      - id: default_skip
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          printf '%s' 'default-ran' > artifacts/default.txt
+      - id: on_failure
+        if: failure()
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          printf '%s' 'failure-ran' > artifacts/failure.txt
+      - id: always_step
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          printf '%s' 'always-ran' > artifacts/always.txt
+      - id: on_cancelled
+        if: cancelled()
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          printf '%s' 'cancelled-ran' > artifacts/cancelled.txt

@@ -18,6 +18,7 @@
 - `matrix-needs-output-basic`: matrix job を `needs` した downstream job が aggregated result と outputs を読める
 - `job-failure-blocked`: required step failure 後に downstream job が default `success()` で `skipped` になる
 - `job-if-always`: failed `needs` の後でも job-level `if: always()` が downstream job を実行する
+- `step-if-status-functions`: step-level `if: always()/failure()/cancelled()` が prior step failure に応じて動く
 - `unsupported-uses`: unsupported `uses:` を CLI error として reject
 - `unsupported-matrix`: invalid / unsupported な matrix 設定を CLI error として reject
 - `event-cli-overrides`: `--event` より CLI flag (`--ref` / `--repository` / `--after` / `--changed`) が優先される

@@ -1353,6 +1353,71 @@ async test "executor: job if always runs despite failed needs" {
 
 ///|
 #cfg(target="native")
+async test "executor: step if status functions respect prior step results" {
+  let workspace = prepare_workspace("executor-step-if-status")
+
+  let workflow = new_workflow("ci", [
+    new_job(
+      "build",
+      [
+        new_run_step("fail", "echo boom 1>&2; exit 9"),
+        new_run_step("default_skip", "printf '%s' should-not-run"),
+        new_run_step(
+          "on_failure",
+          "printf '%s' failure-ran",
+          if_condition="failure()",
+        ),
+        new_run_step(
+          "always_step",
+          "printf '%s' always-ran",
+          if_condition="always()",
+        ),
+        new_run_step(
+          "on_cancelled",
+          "printf '%s' cancelled-ran",
+          if_condition="cancelled()",
+        ),
+      ],
+      defaults=new_run_defaults(shell=Some("bash")),
+    ),
+  ])
+
+  let report = execute_lowered_native(
+    lower_push_workflow(workflow),
+    workspace_root=workspace,
+  )
+
+  inspect(report.ok, content="false")
+  inspect(report.state, content="partial_failed")
+  inspect(expect_task_report(report, "build/fail").status, content="failed")
+  inspect(
+    expect_task_report(report, "build/default_skip").status,
+    content="skipped",
+  )
+  inspect(
+    expect_task_report(report, "build/on_failure").status,
+    content="success",
+  )
+  inspect(
+    expect_task_report(report, "build/on_failure").stdout,
+    content="failure-ran",
+  )
+  inspect(
+    expect_task_report(report, "build/always_step").status,
+    content="success",
+  )
+  inspect(
+    expect_task_report(report, "build/always_step").stdout,
+    content="always-ran",
+  )
+  inspect(
+    expect_task_report(report, "build/on_cancelled").status,
+    content="skipped",
+  )
+}
+
+///|
+#cfg(target="native")
 async test "executor: matrix fail-fast cancels later siblings" {
   let workspace = prepare_workspace("executor-matrix-fail-fast")
 

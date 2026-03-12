@@ -1086,6 +1086,42 @@ test "lowering: cached github repo node action schedules post lifecycle at job e
 }
 
 ///|
+test "lowering: step if status functions are accepted" {
+  let workflow = new_workflow("ci", [
+    new_job(
+      "build",
+      [
+        new_run_step("fail", "exit 1"),
+        new_run_step("always_step", "echo always", if_condition="always()"),
+        new_run_step("failure_step", "echo failure", if_condition="failure()"),
+        new_run_step(
+          "cancelled_step",
+          "echo cancelled",
+          if_condition="cancelled()",
+        ),
+      ],
+      defaults=new_run_defaults(shell=Some("bash")),
+    ),
+  ])
+
+  let lowered = lower_push_workflow(workflow)
+
+  inspect(lowered.errors, content="[]")
+  inspect(
+    expect_task_plan(lowered.plan, "build/always_step").if_condition,
+    content="always()",
+  )
+  inspect(
+    expect_task_plan(lowered.plan, "build/failure_step").if_condition,
+    content="failure()",
+  )
+  inspect(
+    expect_task_plan(lowered.plan, "build/cancelled_step").if_condition,
+    content="cancelled()",
+  )
+}
+
+///|
 #cfg(target="native")
 async test "lowering: github repo action cache miss fetches and expands composite action" {
   let workspace = prepare_local_action_workspace(

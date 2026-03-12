@@ -12,6 +12,7 @@ MVP の GitHub Actions 互換 push CI ランナー向けコア API。
 - `strategy.matrix` の最小対応 (`axes` / `include` / `exclude` / mixed `axes + include` / `fail-fast` / `max-parallel`)
 - matrix job に対する `needs` fan-in と aggregated `${{ needs.<job>.result }}` / `${{ needs.<job>.outputs.* }}`
 - minimal job-level `if:` (`success()` default, `always()` / `failure()` / `cancelled()`, simple `github.*` / `needs.*` comparison)
+- minimal step-level `if:` (`success()` default, `always()` / `failure()` / `cancelled()`)
 - native host executor
 - `bit` repo から push commit を materialize する runtime
 - `uses: actions/checkout@*` と `uses: builtin://checkout` の最小 no-op 対応
@@ -90,6 +91,5 @@ test {
 - `pwsh` binary が存在しない環境での PowerShell workflow 実行
 - reusable workflow
 - job container / services
-- step `if` の `success()` 以外
 
 `parse_action_ref` は GitHub repo ref、local path、`docker://...`、custom registry ref を区別します。`./local-action` は workspace 上の `action.yml` / `action.yaml` を読んで composite step に展開し、`with` を `${{ inputs.* }}` に流し込みます。`prefetch_workflow_github_actions_native` は `owner/repo[/path]@ref` を `_build/action_runner/github_actions` か `ACTION_RUNNER_GITHUB_ACTION_CACHE_ROOT` 配下へ clone し、manifest が composite なら同様に展開し、`runs.using: node*` なら `runs.main` と `pre` / `post` lifecycle、`runs.using: docker` なら `runs.image` / `runs.args` / `runs.entrypoint` / `runs.pre-entrypoint` / `runs.post-entrypoint` を native executor から実行できます。prefetch が使う `git` binary は `ACTION_RUNNER_GIT_BIN`、native executor が使う `node` / `docker` binary は `ACTION_RUNNER_NODE_BIN` / `ACTION_RUNNER_DOCKER_BIN`、GitHub host は `ACTION_RUNNER_GITHUB_BASE_URL` で上書きできます。現時点で resolver は `actions/checkout`、`builtin://checkout`、`docker://...` を action task に変換し、native executor が実行できるのは `builtin` backend、local / cached GitHub composite action 展開後の `run` task、`docker://...` action、cache 済み / prefetched GitHub repo `node*` action、cache 済み / prefetched GitHub repo `runs.using: docker` action です。

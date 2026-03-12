@@ -609,7 +609,7 @@ fn validate_step_if(
   if_condition : String,
   errors : Array[String],
 ) -> Unit {
-  if if_condition != "success()" {
+  if not(if_condition_supported(if_condition)) {
     errors.push(
       "step '\{job_id}/\{step_id}' if='\{if_condition}' is not supported in MVP",
     )
