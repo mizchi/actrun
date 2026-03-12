@@ -1,0 +1,22 @@
+name: steps-if-hash-files
+'on': push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: on_match
+        if: hashFiles('**/*.lock', '!vendor/**') != ''
+        run: |
+          mkdir -p artifacts
+          printf '%s' yes > artifacts/match.txt
+      - id: skip_missing
+        if: hashFiles('**/*.missing') != ''
+        run: |
+          mkdir -p artifacts
+          printf '%s' no > artifacts/missing.txt
+      - id: verify
+        shell: bash
+        run: |
+          printf '<%s|%s>' \
+            "$(test -f artifacts/match.txt && echo yes || echo no)" \
+            "$(test -f artifacts/missing.txt && echo yes || echo no)"

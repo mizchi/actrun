@@ -1,0 +1,16 @@
+name: hash-files
+'on': push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: show
+        shell: bash
+        env:
+          LOCK_HASH: ${{ hashFiles('**/*.lock', '!vendor/**') }}
+          MISSING_HASH: ${{ hashFiles('**/*.missing') }}
+        run: |
+          printf '<%s|%s|%s>' \
+            "$(test ${#LOCK_HASH} -eq 64 && echo yes || echo no)" \
+            "$(test "$LOCK_HASH" = "${{ hashFiles('**/*.lock', '!vendor/**') }}" && echo yes || echo no)" \
+            "$(test -z "$MISSING_HASH" && echo yes || echo no)"

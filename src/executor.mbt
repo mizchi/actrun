@@ -947,6 +947,7 @@ async fn runner_context(
 fn substitute_runtime_text(
   text : String,
   state : JobRuntimeState,
+  workspace_root : String,
   env_context : Map[String, String],
   github_context : Map[String, String],
   runner_context : Map[String, String],
@@ -1019,6 +1020,7 @@ fn substitute_runtime_text(
                                                   step_outputs=state.step_outputs,
                                                   step_outcomes=state.step_outcomes,
                                                   step_conclusions=state.step_conclusions,
+                                                  workspace_root~,
                                                   env_context~,
                                                   github_context~,
                                                   runner_context~,
@@ -1065,6 +1067,7 @@ fn substitute_runtime_text(
 fn substitute_runtime_optional(
   value : String?,
   state : JobRuntimeState,
+  workspace_root : String,
   env_context : Map[String, String],
   github_context : Map[String, String],
   runner_context : Map[String, String],
@@ -1075,8 +1078,8 @@ fn substitute_runtime_optional(
     Some(text) =>
       Some(
         substitute_runtime_text(
-          text, state, env_context, github_context, runner_context, needs_outputs,
-          needs_results,
+          text, state, workspace_root, env_context, github_context, runner_context,
+          needs_outputs, needs_results,
         ),
       )
     None => None
@@ -1087,6 +1090,7 @@ fn substitute_runtime_optional(
 fn resolve_plan_env(
   plan : TaskPlan,
   state : JobRuntimeState,
+  workspace_root : String,
   github_context : Map[String, String],
   runner_context : Map[String, String],
   needs_outputs : Map[String, Map[String, String]],
@@ -1100,7 +1104,8 @@ fn resolve_plan_env(
     let next : Map[String, String] = {}
     for key, value in plan.env {
       next[key] = substitute_runtime_text(
-        value, state, context, github_context, runner_context, needs_outputs, needs_results,
+        value, state, workspace_root, context, github_context, runner_context, needs_outputs,
+        needs_results,
       )
     }
     for key, value in state.env_updates {
@@ -1331,6 +1336,7 @@ fn matrix_group_members(plan : ExecutionPlan) -> Map[String, Array[String]] {
 fn evaluate_job_outputs(
   output_defs : Map[String, String],
   state : JobRuntimeState,
+  workspace_root : String,
 ) -> Map[String, String] {
   let values : Map[String, String] = {}
   let empty_github : Map[String, String] = {}
@@ -1341,6 +1347,7 @@ fn evaluate_job_outputs(
     values[key] = substitute_runtime_text(
       value,
       state,
+      workspace_root,
       state.env_updates,
       empty_github,
       empty_runner,
@@ -3257,7 +3264,7 @@ async fn execute_node_action_native(
   )
   let runner_ctx = runner_context(plan, workspace_root)
   let resolved_plan_env = resolve_plan_env(
-    plan, state, github_ctx, runner_ctx, needs_outputs, needs_results,
+    plan, state, workspace_root, github_ctx, runner_ctx, needs_outputs, needs_results,
   )
   let env = default_runner_env(
     workflow_name, plan, workspace_root, github_ctx, resolved_plan_env, file_commands,
@@ -3333,7 +3340,7 @@ async fn execute_docker_action_native(
   )
   let runner_ctx = runner_context(plan, workspace_root)
   let resolved_plan_env = resolve_plan_env(
-    plan, state, github_ctx, runner_ctx, needs_outputs, needs_results,
+    plan, state, workspace_root, github_ctx, runner_ctx, needs_outputs, needs_results,
   )
   let env = default_runner_env(
     workflow_name, plan, workspace_root, github_ctx, resolved_plan_env, file_commands,
@@ -3463,7 +3470,7 @@ async fn execute_action_plan_native(
     )
     let runner_ctx = runner_context(plan, workspace_root)
     let resolved_plan_env = resolve_plan_env(
-      plan, state, github_ctx, runner_ctx, needs_outputs, needs_results,
+      plan, state, workspace_root, github_ctx, runner_ctx, needs_outputs, needs_results,
     )
     if action.kind == "checkout" {
       return builtin_task_result(
@@ -3638,11 +3645,12 @@ async fn execute_task_plan_native(
   )
   let runner_ctx = runner_context(plan, workspace_root)
   let resolved_plan_env = resolve_plan_env(
-    plan, state, github_ctx, runner_ctx, needs_outputs, needs_results,
+    plan, state, workspace_root, github_ctx, runner_ctx, needs_outputs, needs_results,
   )
   let resolved_script = substitute_runtime_text(
     plan.script,
     state,
+    workspace_root,
     resolved_plan_env,
     github_ctx,
     runner_ctx,
@@ -3652,6 +3660,7 @@ async fn execute_task_plan_native(
   let resolved_shell = substitute_runtime_optional(
     Some(plan.shell),
     state,
+    workspace_root,
     resolved_plan_env,
     github_ctx,
     runner_ctx,
@@ -3661,6 +3670,7 @@ async fn execute_task_plan_native(
   let resolved_working_directory = substitute_runtime_optional(
     Some(plan.working_directory),
     state,
+    workspace_root,
     resolved_plan_env,
     github_ctx,
     runner_ctx,
@@ -3839,6 +3849,7 @@ pub async fn execute_lowered_native(
                   step_outputs=current_state.step_outputs,
                   step_outcomes=current_state.step_outcomes,
                   step_conclusions=current_state.step_conclusions,
+                  workspace_root~,
                   github_context=github_ctx,
                   runner_context=runner_ctx,
                   needs_outputs~,
@@ -3935,6 +3946,7 @@ pub async fn execute_lowered_native(
                 step_outputs=current_state.step_outputs,
                 step_outcomes=current_state.step_outcomes,
                 step_conclusions=current_state.step_conclusions,
+                workspace_root~,
                 env_context=merge_runner_env(
                   plan.env,
                   current_state.env_updates,
@@ -4059,6 +4071,7 @@ pub async fn execute_lowered_native(
                     step_outputs=current_state.step_outputs,
                     step_outcomes=current_state.step_outcomes,
                     step_conclusions=current_state.step_conclusions,
+                    workspace_root~,
                     env_context=merge_runner_env(
                       plan.env,
                       current_state.env_updates,
@@ -4092,6 +4105,7 @@ pub async fn execute_lowered_native(
                   completed_job_outputs[plan.job_id] = evaluate_job_outputs(
                     lowered.plan.job_outputs.get(plan.job_id).unwrap_or({}),
                     next_state,
+                    workspace_root,
                   )
                   completed_job_results[plan.job_id] = "success"
                 }

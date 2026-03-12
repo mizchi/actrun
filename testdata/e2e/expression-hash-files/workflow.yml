@@ -1,0 +1,33 @@
+name: e2e-expression-hash-files
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: show
+        shell: bash
+        env:
+          LOCK_HASH: ${{ hashFiles('**/*.lock', '!vendor/**') }}
+          MISSING_HASH: ${{ hashFiles('**/*.missing') }}
+        run: |
+          mkdir -p artifacts
+          printf '%s|%s|%s' \
+            "$(test ${#LOCK_HASH} -eq 64 && echo yes || echo no)" \
+            "$(test "$LOCK_HASH" = "${{ hashFiles('**/*.lock', '!vendor/**') }}" && echo yes || echo no)" \
+            "$(test -z "$MISSING_HASH" && echo yes || echo no)" > artifacts/script.txt
+      - id: on_match
+        if: hashFiles('**/*.lock', '!vendor/**') != ''
+        run: |
+          mkdir -p artifacts
+          printf '%s' yes > artifacts/match.txt
+      - id: skip_missing
+        if: hashFiles('**/*.missing') != ''
+        run: |
+          mkdir -p artifacts
+          printf '%s' no > artifacts/missing.txt
+      - id: collect
+        shell: bash
+        run: |
+          printf '%s|%s' \
+            "$(test -f artifacts/match.txt && echo yes || echo no)" \
+            "$(test -f artifacts/missing.txt && echo yes || echo no)" > artifacts/result.txt

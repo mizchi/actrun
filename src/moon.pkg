@@ -8,6 +8,7 @@ import {
   "moonbitlang/core/strconv" @strconv,
   "moonbitlang/async/process" @process,
   "moonbitlang/core/bench",
+  "moonbitlang/x/crypto" @crypto,
   "mizchi/bitflow/workflow" @wf,
   "moonbitlang/x/fs" @xfs,
   "moonbitlang/x/sys" @xsys,

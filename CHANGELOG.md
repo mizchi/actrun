@@ -6,8 +6,9 @@
 
 - `actions/setup-node@*` の最小 builtin emulator (`node-version`, `cache: npm`, `registry-url`)
 - `compat-setup-node-cache-npm.yml` と `gha-compat-*` script の live compare 導線
-- expression function の最小 subset (`contains`, `startsWith`, `endsWith`, `fromJSON`, `toJSON`)
+- expression function の最小 subset (`contains`, `startsWith`, `endsWith`, `fromJSON`, `toJSON`, `hashFiles`)
 - docs/E2E coverage for `fromJSON()` / `toJSON()` and `contains(fromJSON(...), ...)`
+- docs/E2E coverage for `hashFiles()` in script/env and step `if:`
 
 - `push` trigger matcher for MVP CI workflows
 - workflow YAML subset parser for `on.push`, `jobs`, `steps`, `env`, and `defaults.run`

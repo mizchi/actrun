@@ -804,6 +804,27 @@ async test "compat docs: json functions are available in step script and env" {
 
 ///|
 #cfg(target="native")
+async test "compat docs: hashFiles is available in step script and env" {
+  let (fixture, workflow, workspace) = compat_prepare_suite_fixture_auto(
+    compat_docs_suite(),
+    "context-hash-files",
+    copy_fixture=true,
+  )
+  let report = execute_lowered_native(
+    lower_push_workflow(workflow),
+    workspace_root=workspace,
+    push_event=compat_push_event_fixture(fixture),
+  )
+  let task = compat_expect_task_report(report, "build/show")
+
+  inspect(fixture.id, content="docs-context-hash-files")
+  inspect(report.ok, content="true")
+  inspect(task.status, content="success")
+  inspect(task.stdout, content="<yes|yes|yes>")
+}
+
+///|
+#cfg(target="native")
 async test "compat docs: github.action is available in step script and env" {
   let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
     "context-github-action",
@@ -961,6 +982,34 @@ async test "compat docs: step if json functions work in push workflow" {
     content="skipped",
   )
   inspect(verify.stdout, content="<yes|yes|no>")
+}
+
+///|
+#cfg(target="native")
+async test "compat docs: step if hashFiles works in push workflow" {
+  let (fixture, workflow, workspace) = compat_prepare_suite_fixture_auto(
+    compat_docs_suite(),
+    "steps-if-hash-files",
+    copy_fixture=true,
+  )
+  let report = execute_lowered_native(
+    lower_push_workflow(workflow),
+    workspace_root=workspace,
+    push_event=compat_push_event_fixture(fixture),
+  )
+  let verify = compat_expect_task_report(report, "build/verify")
+
+  inspect(fixture.id, content="docs-steps-if-hash-files")
+  inspect(report.ok, content="true")
+  inspect(
+    compat_expect_task_report(report, "build/on_match").status,
+    content="success",
+  )
+  inspect(
+    compat_expect_task_report(report, "build/skip_missing").status,
+    content="skipped",
+  )
+  inspect(verify.stdout, content="<yes|no>")
 }
 
 ///|

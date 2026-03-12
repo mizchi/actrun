@@ -1,0 +1,8 @@
+id=docs-context-hash-files
+source=docs
+mode=supported
+kind=run
+url=https://docs.github.com/en/actions/reference/workflows-and-actions/expressions#hashfiles
+docs_urls=https://docs.github.com/en/actions/reference/workflows-and-actions/expressions
+added_at=2026-03-13
+notes=hashFiles() is available in step script and env

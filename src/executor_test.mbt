@@ -2148,6 +2148,52 @@ async test "executor: fromJSON can drive continue-on-error expression" {
 
 ///|
 #cfg(target="native")
+async test "executor: hashFiles returns a stable hex digest and empty string on no match" {
+  let workspace = prepare_workspace("executor-hash-files")
+  @xfs.write_string_to_file(workspace + "/package-lock.json", "{\"lock\":1}\n")
+  @xfs.write_string_to_file(workspace + "/Gemfile.lock", "GEM\n")
+  ensure_dir(workspace + "/vendor")
+  @xfs.write_string_to_file(workspace + "/vendor/ignored.lock", "skip\n")
+  let script =
+    #|printf '%s|%s|%s' \
+    #|  "$(test ${#LOCK_HASH} -eq 64 && echo yes || echo no)" \
+    #|  "$(test "$LOCK_HASH" = "${{ hashFiles('**/*.lock', '!vendor/**') }}" && echo yes || echo no)" \
+    #|  "$(test -z "$MISSING_HASH" && echo yes || echo no)"
+
+  let workflow = new_workflow("ci", [
+    new_job(
+      "build",
+      [
+        new_run_step("show", script, env={
+          "LOCK_HASH": "${{ hashFiles('**/*.lock', '!vendor/**') }}",
+          "MISSING_HASH": "${{ hashFiles('**/*.missing') }}",
+        }),
+        new_run_step(
+          "gate",
+          "printf '%s' hash-ran",
+          if_condition="hashFiles('**/*.lock', '!vendor/**') != ''",
+        ),
+      ],
+      defaults=new_run_defaults(shell=Some("bash")),
+    ),
+  ])
+
+  let report = execute_lowered_native(
+    lower_push_workflow(workflow),
+    workspace_root=workspace,
+  )
+
+  inspect(report.ok, content="true")
+  inspect(
+    expect_task_report(report, "build/show").stdout,
+    content="yes|yes|yes",
+  )
+  inspect(expect_task_report(report, "build/gate").status, content="success")
+  inspect(expect_task_report(report, "build/gate").stdout, content="hash-ran")
+}
+
+///|
+#cfg(target="native")
 async test "executor: steps outcome and conclusion are available to later steps and if" {
   let workspace = prepare_workspace("executor-step-status-context")
 

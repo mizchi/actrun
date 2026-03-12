@@ -8,6 +8,7 @@ priv struct IfConditionContext {
   step_outputs : Map[String, Map[String, String]]
   step_outcomes : Map[String, String]
   step_conclusions : Map[String, String]
+  workspace_root : String
   env_context : Map[String, String]
   github_context : Map[String, String]
   runner_context : Map[String, String]
@@ -23,6 +24,7 @@ fn new_if_condition_context(
   step_outputs? : Map[String, Map[String, String]] = {},
   step_outcomes? : Map[String, String] = {},
   step_conclusions? : Map[String, String] = {},
+  workspace_root? : String = "",
   env_context? : Map[String, String] = {},
   github_context? : Map[String, String] = {},
   runner_context? : Map[String, String] = {},
@@ -36,6 +38,7 @@ fn new_if_condition_context(
     step_outputs,
     step_outcomes,
     step_conclusions,
+    workspace_root,
     env_context,
     github_context,
     runner_context,
@@ -472,6 +475,9 @@ fn if_expression_function_supported(text : String) -> Bool {
     Some(args) => return if_condition_supported(args[0])
     None => ()
   }
+  if if_hash_files_function_supported(text) {
+    return true
+  }
   false
 }
 
@@ -713,6 +719,10 @@ fn if_expression_function_value(
       let json_text = Json::stringify(if_condition_value_json(value))
       return Some(if_condition_value_from_json(Json::string(json_text)))
     }
+    None => ()
+  }
+  match if_hash_files_function_value(text, ctx) {
+    Some(value) => return Some(value)
     None => ()
   }
   None
