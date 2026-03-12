@@ -45,8 +45,9 @@ jobs:
       - name: Fill npm cache
         shell: bash
         run: |
-          mkdir -p "$NPM_CONFIG_CACHE"
-          printf '%s' ocean > "$NPM_CONFIG_CACHE/value.txt"
+          cache_dir="${NPM_CONFIG_CACHE:-$HOME/.npm}"
+          mkdir -p "$cache_dir"
+          printf '%s' ocean > "$cache_dir/value.txt"
 
   restore:
     needs:
@@ -68,10 +69,11 @@ jobs:
       - name: Build report
         shell: bash
         run: |
+          cache_dir="${NPM_CONFIG_CACHE:-$HOME/.npm}"
           mkdir -p report
           printf '%s|%s|%s|%s' \
             "${{ steps.setup.outputs.cache-hit }}" \
-            "$(cat "$NPM_CONFIG_CACHE/value.txt")" \
+            "$(cat "$cache_dir/value.txt")" \
             "${{ needs.save.outputs.first_hit }}" \
             "$(node --version)" > report/result.txt
       - name: Upload report
