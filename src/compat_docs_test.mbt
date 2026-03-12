@@ -244,6 +244,23 @@ test "compat docs: lower matrix include fixture" {
 }
 
 ///|
+test "compat docs: lower matrix exclude fixture" {
+  let (fixture, workflow, lowered) = compat_expect_lowered_docs_fixture(
+    "strategy-matrix-exclude",
+  )
+  let first = compat_expect_task_plan(lowered.plan, "build__matrix_1/show")
+  let second = compat_expect_task_plan(lowered.plan, "build__matrix_2/show")
+  let third = compat_expect_task_plan(lowered.plan, "build__matrix_3/show")
+
+  inspect(fixture.id, content="docs-strategy-matrix-exclude")
+  inspect(workflow.jobs[0].matrix.unwrap().rows.length(), content="3")
+  inspect(lowered.errors, content="[]")
+  inspect(first.script, content="printf '%s|%s' 'ubuntu-latest' 'native'")
+  inspect(second.script, content="printf '%s|%s' 'ubuntu-latest' 'js'")
+  inspect(third.script, content="printf '%s|%s' 'macos-latest' 'native'")
+}
+
+///|
 #cfg(target="native")
 async test "compat docs: missing env property evaluates to empty string" {
   let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(

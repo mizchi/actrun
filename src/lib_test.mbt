@@ -241,6 +241,54 @@ test "parser: reject non-push trigger" {
 }
 
 ///|
+test "parser: parse matrix exclude rows" {
+  let src =
+    #|name: ci
+    #|on: push
+    #|jobs:
+    #|  build:
+    #|    strategy:
+    #|      matrix:
+    #|        os: [ubuntu-latest, macos-latest]
+    #|        target: [native, js]
+    #|        exclude:
+    #|          - os: macos-latest
+    #|            target: js
+    #|    runs-on: ${{ matrix.os }}
+    #|    steps:
+    #|      - run: printf '%s' '${{ matrix.target }}'
+  let parsed = parse_workflow_yaml(src)
+  let workflow = expect_workflow(parsed)
+
+  inspect(parsed.errors, content="[]")
+  inspect(workflow.jobs[0].matrix.unwrap().rows.length(), content="3")
+}
+
+///|
+test "parser: reject mixed matrix axes and include in P0" {
+  let src =
+    #|name: ci
+    #|on: push
+    #|jobs:
+    #|  build:
+    #|    strategy:
+    #|      matrix:
+    #|        os: [ubuntu-latest]
+    #|        include:
+    #|          - os: ubuntu-latest
+    #|            target: native
+    #|    runs-on: ubuntu-latest
+    #|    steps:
+    #|      - run: printf '%s' ok
+  let parsed = parse_workflow_yaml(src)
+
+  inspect(
+    parsed.errors,
+    content="[\"jobs.build.strategy.matrix include with axes is not supported in P0\"]",
+  )
+}
+
+///|
 test "push trigger: branch and path filters" {
   let trigger = new_push_trigger(branches=["main"], paths=["src/*", "README.md"])
   let matched = new_push_event("main", ["src/lib.mbt"])

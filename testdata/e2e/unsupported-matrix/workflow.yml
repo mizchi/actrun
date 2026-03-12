@@ -6,8 +6,9 @@ jobs:
       matrix:
         os:
           - ubuntu-latest
-        exclude:
+        include:
           - os: ubuntu-latest
+            target: native
     runs-on: ubuntu-latest
     steps:
       - run: printf '%s' 'nope'

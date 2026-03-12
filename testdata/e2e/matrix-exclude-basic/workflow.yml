@@ -1,0 +1,24 @@
+name: e2e-matrix-exclude
+'on':
+  push:
+    paths:
+      - workflow.yml
+jobs:
+  build:
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+        target:
+          - native
+          - js
+        exclude:
+          - os: macos-latest
+            target: js
+    runs-on: ${{ matrix.os }}
+    steps:
+      - id: emit
+        run: |
+          mkdir -p artifacts
+          printf '%s|%s' '${{ matrix.os }}' '${{ matrix.target }}' > artifacts/${{ matrix.target }}-${{ matrix.os }}.txt

@@ -1,0 +1,19 @@
+name: ci-matrix-exclude
+on: push
+jobs:
+  build:
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+        target:
+          - native
+          - js
+        exclude:
+          - os: macos-latest
+            target: js
+    runs-on: ${{ matrix.os }}
+    steps:
+      - id: show
+        run: printf '%s|%s' '${{ matrix.os }}' '${{ matrix.target }}'

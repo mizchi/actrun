@@ -604,6 +604,44 @@ fn matrix_product_rows(
 }
 
 ///|
+fn matrix_row_matches(
+  row : Map[String, String],
+  pattern : Map[String, String],
+) -> Bool {
+  for key, value in pattern {
+    match row.get(key) {
+      Some(actual) if actual == value => ()
+      _ => return false
+    }
+  }
+  true
+}
+
+///|
+fn filter_matrix_excludes(
+  rows : Array[Map[String, String]],
+  excludes : Array[Map[String, String]],
+) -> Array[Map[String, String]] {
+  if excludes.length() == 0 {
+    return rows
+  }
+  let filtered : Array[Map[String, String]] = []
+  for row in rows {
+    let mut excluded = false
+    for pattern in excludes {
+      if matrix_row_matches(row, pattern) {
+        excluded = true
+        break
+      }
+    }
+    if not(excluded) {
+      filtered.push(row)
+    }
+  }
+  filtered
+}
+
+///|
 fn parse_job_matrix(
   strategy_value : YamlValue?,
   errors : Array[String],
@@ -616,7 +654,7 @@ fn parse_job_matrix(
   let matrix_fields = yaml_as_obj(actual_matrix, errors, ctx + ".matrix")
   let axes : Array[(String, Array[String])] = []
   let mut include_rows : Array[Map[String, String]] = []
-  let mut has_exclude = false
+  let mut exclude_rows : Array[Map[String, String]] = []
   for field in matrix_fields {
     if field.key == "include" {
       include_rows = yaml_as_string_map_list(
@@ -627,7 +665,11 @@ fn parse_job_matrix(
       continue
     }
     if field.key == "exclude" {
-      has_exclude = true
+      exclude_rows = yaml_as_string_map_list(
+        Some(field.value),
+        errors,
+        ctx + ".matrix.exclude",
+      )
       continue
     }
     match field.value {
@@ -646,10 +688,6 @@ fn parse_job_matrix(
         errors.push(ctx + ".matrix." + field.key + " must be a string or list")
     }
   }
-  if has_exclude {
-    errors.push(ctx + ".matrix.exclude is not supported in P0")
-    return None
-  }
   if axes.length() > 0 && include_rows.length() > 0 {
     errors.push(ctx + ".matrix include with axes is not supported in P0")
     return None
@@ -661,6 +699,7 @@ fn parse_job_matrix(
   } else {
     rows = include_rows
   }
+  rows = filter_matrix_excludes(rows, exclude_rows)
   if rows.length() == 0 {
     errors.push(ctx + ".matrix must define at least one row")
     return None

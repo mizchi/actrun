@@ -11,9 +11,10 @@
 - `cache-auto-save-roundtrip`: `actions/cache` 本体の miss -> deferred save -> next job hit
 - `checkout-sparse-path`: `actions/checkout` の `path` と `sparse-checkout`
 - `matrix-include-basic`: `strategy.matrix.include` と `${{ matrix.* }}` の最小展開
+- `matrix-exclude-basic`: `strategy.matrix.exclude` が row を除外する
 - `job-failure-blocked`: required step failure と downstream `blocked`
 - `unsupported-uses`: unsupported `uses:` を CLI error として reject
-- `unsupported-matrix`: `strategy.matrix.exclude` のような未対応 matrix 構文を CLI error として reject
+- `unsupported-matrix`: mixed `axes + include` のような未対応 matrix 構文を CLI error として reject
 - `event-cli-overrides`: `--event` より CLI flag (`--ref` / `--repository` / `--after` / `--changed`) が優先される
 - `event-head-commit-fallback`: `commits` が無くても `head_commit` から changed paths を読んで trigger 判定する
 - `docker-image-basic`: direct `docker://...` action を native docker adapter で実行する
