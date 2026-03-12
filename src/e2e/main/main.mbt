@@ -776,7 +776,7 @@ async fn run_checkout_sparse_path() -> Unit {
   e2e_expect_contains(result.stdout, "build/checkout: success", scenario)
   e2e_expect_eq(
     e2e_read_text(e2e_join_path(workspace, "artifacts/result.txt")),
-    "yes|yes|no",
+    "yes|yes|yes",
     scenario + " result artifact",
   )
 }

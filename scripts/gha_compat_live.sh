@@ -53,13 +53,43 @@ run_url="$(
 
 echo "watching run $run_id"
 echo "$run_url"
-gh run watch "$run_id" -R "$repo" --interval 5 --exit-status
+conclusion=""
+for _ in $(seq 1 120); do
+  status_json="$(
+    gh run view \
+      "$run_id" \
+      -R "$repo" \
+      --json status,conclusion \
+      --jq '{status: .status, conclusion: (.conclusion // "")}'
+  )"
+  status="$(printf '%s' "$status_json" | jq -r '.status')"
+  conclusion="$(printf '%s' "$status_json" | jq -r '.conclusion')"
+  echo "status=$status conclusion=${conclusion:-pending}"
+  if [ "$status" = "completed" ]; then
+    break
+  fi
+  sleep 5
+done
+
+if [ "${status:-}" != "completed" ]; then
+  echo "run did not complete in time: $run_id" >&2
+  exit 1
+fi
+
+if [ "$conclusion" != "success" ]; then
+  echo "run failed: $run_url" >&2
+  gh run view "$run_id" -R "$repo"
+  exit 1
+fi
 
 download_dir="_build/gha-compat/$run_id"
 rm -rf "$download_dir"
 mkdir -p "$download_dir"
 gh run download "$run_id" -R "$repo" --dir "$download_dir"
 
-moon build src/main --target native >/dev/null
+cli_bin="_build/native/debug/build/main/main.exe"
+if [ ! -x "$cli_bin" ]; then
+  moon build src/main --target native >/dev/null
+fi
 ACTION_RUNNER_COMPAT_CACHE_KEY="$compat_key" \
   bash scripts/gha_compat_compare.sh "$workflow_file" "$download_dir"

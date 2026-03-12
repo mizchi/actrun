@@ -598,6 +598,48 @@ async test "executor: checkout supports path and sparse-checkout" {
   inspect(checkout.status, content="success")
   let verify = expect_task_report(report, "build/verify")
   inspect(verify.status, content="success")
+  inspect(verify.stdout.trim(chars=" \n\r\t").to_string(), content="yes|yes|yes")
+}
+
+///|
+#cfg(target="native")
+async test "executor: checkout supports sparse-checkout cone mode false" {
+  let workspace = prepare_workspace("executor-checkout-sparse-noncone")
+  ensure_dir(workspace + "/.github")
+  ensure_dir(workspace + "/.github/workflows")
+  @xfs.write_string_to_file(workspace + "/README.md", "readme")
+  @xfs.write_string_to_file(workspace + "/LICENSE", "license")
+  @xfs.write_string_to_file(workspace + "/.github/workflows/ci.yml", "name: ci")
+
+  let workflow = new_workflow("ci", [
+    new_job(
+      "build",
+      [
+        new_uses_step("checkout", "actions/checkout@v4", with_values={
+          "path": "repo",
+          "sparse-checkout": "README.md\n.github",
+          "sparse-checkout-cone-mode": "false",
+        }),
+        new_run_step(
+          "verify",
+          "printf '%s|%s|%s' \"$(test -f repo/README.md && echo yes || echo no)\" \"$(test -f repo/.github/workflows/ci.yml && echo yes || echo no)\" \"$(test -f repo/LICENSE && echo yes || echo no)\"",
+          shell=Some("bash"),
+        ),
+      ],
+      defaults=new_run_defaults(shell=Some("bash")),
+    ),
+  ])
+
+  let lowered = lower_push_workflow(workflow)
+  inspect(lowered.errors, content="[]")
+
+  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  inspect(report.ok, content="true")
+
+  let checkout = expect_task_report(report, "build/checkout")
+  inspect(checkout.status, content="success")
+  let verify = expect_task_report(report, "build/verify")
+  inspect(verify.status, content="success")
   inspect(verify.stdout.trim(chars=" \n\r\t").to_string(), content="yes|yes|no")
 }
 

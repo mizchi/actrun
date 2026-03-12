@@ -14,7 +14,7 @@
 - `bit` repo から push commit を materialize する runtime
 - `ActionRef` / resolver による `uses:` 解決
 - `uses: actions/checkout@*` と `uses: builtin://checkout` の最小 no-op 対応
-- `actions/checkout` の `path` / `sparse-checkout` の最小 builtin 対応
+- `actions/checkout` の `path` / `sparse-checkout` / `sparse-checkout-cone-mode` の最小 builtin 対応
 - `uses: actions/upload-artifact@*` / `uses: actions/download-artifact@*` の最小 builtin emulator
 - `uses: actions/cache/save@*` / `uses: actions/cache/restore@*` の最小 builtin emulator
 - `uses: actions/cache@*` の restore + deferred post-save builtin emulator

@@ -1396,7 +1396,14 @@ fn normalize_checkout_pattern(pattern : String) -> String {
 fn checkout_sparse_match(
   patterns : Array[String],
   relative_path : String,
+  is_dir : Bool,
+  cone_mode : Bool,
 ) -> Bool {
+  if cone_mode &&
+    not(is_dir) &&
+    not(relative_path.contains("/")) {
+    return true
+  }
   for raw_pattern in patterns {
     let pattern = normalize_checkout_pattern(raw_pattern)
     if pattern.length() == 0 {
@@ -1470,6 +1477,7 @@ fn exec_prune_sparse_checkout(
   root : String,
   current : String,
   patterns : Array[String],
+  cone_mode : Bool,
 ) -> Bool {
   if exec_is_dir(current) {
     let entries = try @xfs.read_dir(current) catch {
@@ -1480,7 +1488,7 @@ fn exec_prune_sparse_checkout(
     let kept_entries : Array[String] = []
     for entry in entries {
       let child = current + "/" + entry
-      if exec_prune_sparse_checkout(root, child, patterns) {
+      if exec_prune_sparse_checkout(root, child, patterns, cone_mode) {
         kept_entries.push(entry)
       } else if not(exec_remove_tree(child)) {
         return false
@@ -1490,11 +1498,18 @@ fn exec_prune_sparse_checkout(
     if relative.length() == 0 {
       return true
     }
-    kept_entries.length() > 0 || checkout_sparse_match(patterns, relative)
+    kept_entries.length() > 0 ||
+    checkout_sparse_match(patterns, relative, true, cone_mode)
   } else {
     let relative = exec_relative_path(root, current)
-    checkout_sparse_match(patterns, relative)
+    checkout_sparse_match(patterns, relative, false, cone_mode)
   }
+}
+
+///|
+fn parse_checkout_cone_mode(value : String) -> Bool {
+  let normalized = value.trim(chars=" \t\r\n").to_lower()
+  normalized != "false" && normalized != "0" && normalized != "no"
 }
 
 ///|
@@ -1582,6 +1597,9 @@ fn execute_builtin_checkout_native(
   let sparse_input = resolved_plan_env
     .get("INPUT_SPARSE_CHECKOUT")
     .unwrap_or("")
+  let cone_mode = parse_checkout_cone_mode(
+    resolved_plan_env.get("INPUT_SPARSE_CHECKOUT_CONE_MODE").unwrap_or("true"),
+  )
   let checkout_root = if path_input.length() > 0 {
     resolve_task_cwd(workspace_root, path_input)
   } else {
@@ -1598,7 +1616,12 @@ fn execute_builtin_checkout_native(
   let sparse_patterns = split_nonempty_lines(sparse_input)
   if sparse_patterns.length() > 0 &&
     not(
-      exec_prune_sparse_checkout(checkout_root, checkout_root, sparse_patterns),
+      exec_prune_sparse_checkout(
+        checkout_root,
+        checkout_root,
+        sparse_patterns,
+        cone_mode,
+      ),
     ) {
     return task_report_failure(
       plan, workspace_root, "failed to apply sparse-checkout",

@@ -96,3 +96,4 @@
 - Added builtin `actions/checkout` support for `path` and `sparse-checkout`, plus local / GitHub-hosted sparse checkout compat scenarios
 - Added `gha-compat-compare` to replay dispatchable compat workflows locally and compare downloaded GitHub-hosted artifacts against local emulator output
 - Added `gha-compat-live` to dispatch a GitHub-hosted compat workflow, wait for completion, download artifacts, and compare against local emulator output in one step
+- Fixed builtin `actions/checkout` sparse-checkout to match default cone-mode semantics on GitHub-hosted runners, and added `sparse-checkout-cone-mode: false` regression coverage
