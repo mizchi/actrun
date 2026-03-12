@@ -863,6 +863,29 @@ async test "compat docs: vars context is available in step script and env" {
 
 ///|
 #cfg(target="native")
+async test "compat docs: secrets context is available in step script and env" {
+  let previous_token = compat_docs_set_env_var(
+    "ACTION_RUNNER_SECRET_TOKEN", "s3cr3t",
+  )
+  let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
+    "context-secrets",
+  )
+  let report = execute_lowered_native(
+    lower_push_workflow(workflow),
+    workspace_root=workspace,
+    push_event=compat_push_event_fixture(fixture),
+  )
+  compat_docs_restore_env_var("ACTION_RUNNER_SECRET_TOKEN", previous_token)
+  let task = compat_expect_task_report(report, "build/show")
+
+  inspect(fixture.id, content="docs-context-secrets")
+  inspect(report.ok, content="true")
+  inspect(task.status, content="success")
+  inspect(task.stdout, content="<s3cr3t|s3cr3t|yes|s3cr3t>")
+}
+
+///|
+#cfg(target="native")
 async test "compat docs: github.action is available in step script and env" {
   let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
     "context-github-action",

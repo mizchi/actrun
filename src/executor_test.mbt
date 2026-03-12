@@ -2270,6 +2270,45 @@ async test "executor: vars context resolves from ACTION_RUNNER_VAR prefix and mi
 
 ///|
 #cfg(target="native")
+async test "executor: secrets context resolves from ACTION_RUNNER_SECRET prefix and missing secrets are empty" {
+  let workspace = prepare_workspace("executor-secrets-context")
+  let previous_token = executor_test_set_env_var(
+    "ACTION_RUNNER_SECRET_TOKEN", "s3cr3t",
+  )
+
+  let workflow = new_workflow("ci", [
+    new_job(
+      "build",
+      [
+        new_run_step(
+          "show",
+          "printf '%s|%s|%s|%s' '${{ secrets.TOKEN }}' \"$TOKEN_FROM_ENV\" \"$(test -z \"$MISSING_FROM_ENV\" && echo yes || echo no)\" '${{ secrets.token }}'",
+          env={
+            "TOKEN_FROM_ENV": "${{ secrets.TOKEN }}",
+            "MISSING_FROM_ENV": "${{ secrets.MISSING }}",
+          },
+        ),
+      ],
+      defaults=new_run_defaults(shell=Some("bash")),
+    ),
+  ])
+
+  let report = execute_lowered_native(
+    lower_push_workflow(workflow),
+    workspace_root=workspace,
+  )
+
+  executor_test_restore_env_var("ACTION_RUNNER_SECRET_TOKEN", previous_token)
+
+  inspect(report.ok, content="true")
+  inspect(
+    expect_task_report(report, "build/show").stdout,
+    content="s3cr3t|s3cr3t|yes|s3cr3t",
+  )
+}
+
+///|
+#cfg(target="native")
 async test "executor: steps outcome and conclusion are available to later steps and if" {
   let workspace = prepare_workspace("executor-step-status-context")
 

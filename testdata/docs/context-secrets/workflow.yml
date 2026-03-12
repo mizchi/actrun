@@ -1,0 +1,17 @@
+name: secrets-context
+'on': push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: show
+        shell: bash
+        env:
+          TOKEN_FROM_ENV: ${{ secrets.TOKEN }}
+          MISSING_FROM_ENV: ${{ secrets.MISSING }}
+        run: |
+          printf '<%s|%s|%s|%s>' \
+            "${{ secrets.TOKEN }}" \
+            "$TOKEN_FROM_ENV" \
+            "$(test -z "$MISSING_FROM_ENV" && echo yes || echo no)" \
+            "${{ secrets.token }}"
