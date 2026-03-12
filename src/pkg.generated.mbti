@@ -29,7 +29,7 @@ pub fn materialize_bit_push_workspace(&@types.FileSystem, &@types.RepoFileSystem
 
 pub fn materialize_bit_push_workspace_native(String, PushEvent, String, remote_url? : String) -> BitWorkspaceResult
 
-pub fn new_job(String, Array[StepSpec], name? : String, needs? : Array[String], outputs? : Map[String, String], runs_on? : Array[String], env? : Map[String, String], defaults? : RunDefaults, matrix? : JobMatrixSpec?, reusable_workflow? : String?, container_image? : String?) -> JobSpec
+pub fn new_job(String, Array[StepSpec], name? : String, if_condition? : String, needs? : Array[String], outputs? : Map[String, String], runs_on? : Array[String], env? : Map[String, String], defaults? : RunDefaults, matrix? : JobMatrixSpec?, reusable_workflow? : String?, container_image? : String?) -> JobSpec
 
 pub fn new_job_matrix(Array[Map[String, String]], fail_fast? : Bool, max_parallel? : Int?) -> JobMatrixSpec
 
@@ -107,6 +107,7 @@ pub struct BitWorkspaceResult {
 pub struct ExecutionPlan {
   tasks : Array[TaskPlan]
   job_outputs : Map[String, Map[String, String]]
+  job_if_conditions : Map[String, String]
   job_needs : Map[String, Array[String]]
   job_need_targets : Map[String, Map[String, Array[String]]]
   job_matrix_groups : Map[String, String]
@@ -127,6 +128,7 @@ pub struct JobMatrixSpec {
 pub struct JobSpec {
   id : String
   name : String
+  if_condition : String
   needs : Array[String]
   outputs : Map[String, String]
   runs_on : Array[String]

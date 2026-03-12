@@ -445,6 +445,7 @@ fn substitute_matrix_job(
     actual_id,
     steps,
     name=substitute_matrix_text(job.name, matrix_values),
+    if_condition=job.if_condition,
     needs=actual_needs,
     outputs=substitute_matrix_map(job.outputs, matrix_values),
     runs_on=substitute_matrix_list(job.runs_on, matrix_values),
@@ -549,6 +550,7 @@ fn expand_matrix_jobs(jobs : Array[JobSpec]) -> Array[ExpandedJob] {
             job.id,
             job.steps,
             name=job.name,
+            if_condition=job.if_condition,
             needs=actual_needs,
             outputs=job.outputs,
             runs_on=job.runs_on,
@@ -611,6 +613,17 @@ fn validate_step_if(
     errors.push(
       "step '\{job_id}/\{step_id}' if='\{if_condition}' is not supported in MVP",
     )
+  }
+}
+
+///|
+fn validate_job_if(
+  job_id : String,
+  if_condition : String,
+  errors : Array[String],
+) -> Unit {
+  if not(if_condition_supported(if_condition)) {
+    errors.push("job '\{job_id}' if='\{if_condition}' is not supported in MVP")
   }
 }
 
@@ -1410,6 +1423,7 @@ pub fn lower_push_workflow_in_workspace(
   let tasks : Array[@wf.FlowTask] = []
   let task_plans : Array[TaskPlan] = []
   let job_outputs : Map[String, Map[String, String]] = {}
+  let job_if_conditions : Map[String, String] = {}
   let job_needs : Map[String, Array[String]] = {}
   let job_need_targets : Map[String, Map[String, Array[String]]] = {}
   let job_matrix_groups : Map[String, String] = {}
@@ -1440,6 +1454,7 @@ pub fn lower_push_workflow_in_workspace(
   for expanded in expanded_jobs {
     let job = expanded.job
     job_outputs[job.id] = job.outputs
+    job_if_conditions[job.id] = job.if_condition
     job_needs[job.id] = expanded.visible_needs
     job_need_targets[job.id] = expanded.need_targets
     match expanded.matrix_group {
@@ -1457,6 +1472,7 @@ pub fn lower_push_workflow_in_workspace(
     if job.container_image is Some(image) {
       errors.push("job '\{job.id}' container is not supported in MVP: \{image}")
     }
+    validate_job_if(job.id, job.if_condition, errors)
     for need in job.needs {
       if known_jobs.get(need) is None {
         errors.push("job '\{job.id}' needs unknown job '\{need}'")
@@ -1620,6 +1636,7 @@ pub fn lower_push_workflow_in_workspace(
     plan: {
       tasks: task_plans,
       job_outputs,
+      job_if_conditions,
       job_needs,
       job_need_targets,
       job_matrix_groups,

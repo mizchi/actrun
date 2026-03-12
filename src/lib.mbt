@@ -115,6 +115,7 @@ pub fn new_uses_step(
 pub struct JobSpec {
   id : String
   name : String
+  if_condition : String
   needs : Array[String]
   outputs : Map[String, String]
   runs_on : Array[String]
@@ -147,6 +148,7 @@ pub fn new_job(
   id : String,
   steps : Array[StepSpec],
   name? : String = "",
+  if_condition? : String = "success()",
   needs? : Array[String] = [],
   outputs? : Map[String, String] = {},
   runs_on? : Array[String] = ["ubuntu-latest"],
@@ -159,6 +161,7 @@ pub fn new_job(
   {
     id,
     name,
+    if_condition,
     needs,
     outputs,
     runs_on,
@@ -248,6 +251,7 @@ pub fn new_task_plan(
 pub struct ExecutionPlan {
   tasks : Array[TaskPlan]
   job_outputs : Map[String, Map[String, String]]
+  job_if_conditions : Map[String, String]
   job_needs : Map[String, Array[String]]
   job_need_targets : Map[String, Map[String, Array[String]]]
   job_matrix_groups : Map[String, String]

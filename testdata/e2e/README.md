@@ -16,7 +16,8 @@
 - `matrix-max-parallel-basic`: `strategy.matrix.max-parallel` が expanded row を段階的に throttle しても全 row が実行される
 - `matrix-fail-fast-basic`: `strategy.matrix.fail-fast` が sibling row failure 後の未実行 row を cancel する
 - `matrix-needs-output-basic`: matrix job を `needs` した downstream job が aggregated result と outputs を読める
-- `job-failure-blocked`: required step failure と downstream `blocked`
+- `job-failure-blocked`: required step failure 後に downstream job が default `success()` で `skipped` になる
+- `job-if-always`: failed `needs` の後でも job-level `if: always()` が downstream job を実行する
 - `unsupported-uses`: unsupported `uses:` を CLI error として reject
 - `unsupported-matrix`: invalid / unsupported な matrix 設定を CLI error として reject
 - `event-cli-overrides`: `--event` より CLI flag (`--ref` / `--repository` / `--after` / `--changed`) が優先される

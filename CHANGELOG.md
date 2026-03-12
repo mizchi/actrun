@@ -95,6 +95,7 @@
 - Added builtin `actions/cache` restore + deferred post-save emulation, plus local / GitHub-hosted auto-save compat scenarios
 - Added builtin `actions/checkout` support for `path` and `sparse-checkout`, plus local / GitHub-hosted sparse checkout compat scenarios
 - Added minimal `strategy.matrix` support for axes-only, include-only, exclude filtering, mixed axes+include workflows, `fail-fast`, `max-parallel` throttling, matrix-job `needs` fan-in, and aggregated matrix `needs.<job>.result` / `needs.<job>.outputs.*`, plus docs/E2E coverage for `${{ matrix.* }}` substitution
+- Added minimal job-level `if:` support with status functions and simple `github.*` / `needs.*` comparisons, plus docs/E2E coverage for default skip and `if: always()`
 - Added `gha-compat-compare` to replay dispatchable compat workflows locally and compare downloaded GitHub-hosted artifacts against local emulator output
 - Added `gha-compat-live` to dispatch a GitHub-hosted compat workflow, wait for completion, download artifacts, and compare against local emulator output in one step
 - Fixed builtin `actions/checkout` sparse-checkout to match default cone-mode semantics on GitHub-hosted runners, and added `sparse-checkout-cone-mode: false` regression coverage

@@ -1152,6 +1152,36 @@ fn job_needs_results(
 }
 
 ///|
+fn job_if_success_value(needs_results : Map[String, String]) -> Bool {
+  for _, value in needs_results {
+    if value != "success" {
+      return false
+    }
+  }
+  true
+}
+
+///|
+fn job_if_failure_value(needs_results : Map[String, String]) -> Bool {
+  for _, value in needs_results {
+    if value == "failure" {
+      return true
+    }
+  }
+  false
+}
+
+///|
+fn job_if_cancelled_value(needs_results : Map[String, String]) -> Bool {
+  for _, value in needs_results {
+    if value == "cancelled" {
+      return true
+    }
+  }
+  false
+}
+
+///|
 fn matrix_group_members(plan : ExecutionPlan) -> Map[String, Array[String]] {
   let groups : Map[String, Array[String]] = {}
   for job_id, group in plan.job_matrix_groups {
@@ -2665,6 +2695,8 @@ pub async fn execute_lowered_native(
   let completed_job_results : Map[String, String] = {}
   let matrix_groups = matrix_group_members(lowered.plan)
   let cancelled_matrix_jobs : Map[String, Bool] = {}
+  let evaluated_job_conditions : Map[String, Bool] = {}
+  let started_job_tasks : Map[String, Bool] = {}
   let started_jobs : Map[String, Bool] = {}
   let mut required_failed = false
 
@@ -2688,6 +2720,49 @@ pub async fn execute_lowered_native(
       let current_state = match plan_opt {
         Some(plan) => job_runtime_state(job_states, plan.job_id)
         None => empty_job_runtime_state()
+      }
+      let needs_outputs = match plan_opt {
+        Some(plan) =>
+          job_needs_outputs(lowered.plan, plan.job_id, completed_job_outputs)
+        None => {}
+      }
+      let needs_results = match plan_opt {
+        Some(plan) =>
+          job_needs_results(lowered.plan, plan.job_id, completed_job_results)
+        None => {}
+      }
+      let job_should_run = match plan_opt {
+        Some(plan) =>
+          match evaluated_job_conditions.get(plan.job_id) {
+            Some(value) => value
+            None => {
+              let github_ctx = github_context(
+                ir.name,
+                plan,
+                workspace_root,
+                push_event,
+              )
+              let runner_ctx = runner_context(plan, workspace_root)
+              let value = evaluate_if_condition(
+                lowered.plan.job_if_conditions
+                .get(plan.job_id)
+                .unwrap_or("success()"),
+                new_if_condition_context(
+                  step_outputs=current_state.step_outputs,
+                  github_context=github_ctx,
+                  runner_context=runner_ctx,
+                  needs_outputs~,
+                  needs_results~,
+                  success_value=job_if_success_value(needs_results),
+                  failure_value=job_if_failure_value(needs_results),
+                  cancelled_value=job_if_cancelled_value(needs_results),
+                ),
+              )
+              evaluated_job_conditions[plan.job_id] = value
+              value
+            }
+          }
+        None => true
       }
       let cancelled_by_matrix = match plan_opt {
         Some(plan) => cancelled_matrix_jobs.get(plan.job_id).unwrap_or(false)
@@ -2717,6 +2792,30 @@ pub async fn execute_lowered_native(
             })
         }
         success[task.id] = false
+      } else if not(job_should_run) {
+        match plan_opt {
+          Some(plan) => {
+            let message = "job if condition evaluated to false"
+            reports.push(task_report_skipped(plan, workspace_root, message))
+            steps.push({
+              id: task.id,
+              status: "skipped",
+              required: task.required,
+              message,
+            })
+            if plan.kind == "barrier" {
+              completed_job_results[plan.job_id] = "skipped"
+            }
+          }
+          None =>
+            steps.push({
+              id: task.id,
+              status: "skipped",
+              required: task.required,
+              message: "job if condition evaluated to false",
+            })
+        }
+        success[task.id] = true
       } else {
         let blocked_deps : Array[String] = []
         for dep in task.needs {
@@ -2727,10 +2826,15 @@ pub async fn execute_lowered_native(
             blocked_deps.push(dep)
           }
         }
+        let allow_blocked_needs = match plan_opt {
+          Some(plan) => not(started_job_tasks.get(plan.job_id).unwrap_or(false))
+          None => false
+        }
         if blocked_deps.length() > 0 &&
           not(
             match plan_opt {
-              Some(plan) => plan.if_condition == "always()"
+              Some(plan) =>
+                plan.if_condition == "always()" || allow_blocked_needs
               None => false
             },
           ) {
@@ -2752,16 +2856,6 @@ pub async fn execute_lowered_native(
         } else {
           match plan_opt {
             Some(plan) => {
-              let needs_outputs = job_needs_outputs(
-                lowered.plan,
-                plan.job_id,
-                completed_job_outputs,
-              )
-              let needs_results = job_needs_results(
-                lowered.plan,
-                plan.job_id,
-                completed_job_results,
-              )
               if plan.requires_action_started &&
                 not(action_scope_started(current_state, plan.action_scope)) {
                 reports.push(
@@ -2777,6 +2871,9 @@ pub async fn execute_lowered_native(
                 })
                 success[task.id] = true
                 continue
+              }
+              if plan.kind != "barrier" {
+                started_job_tasks[plan.job_id] = true
               }
               let result = execute_task_plan_native(
                 ir.name,

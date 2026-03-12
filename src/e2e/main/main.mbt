@@ -1028,7 +1028,33 @@ async fn run_job_failure_blocked() -> Unit {
   e2e_expect_contains(result.stdout, "workflow=e2e-failure", scenario)
   e2e_expect_contains(result.stdout, "state=partial_failed", scenario)
   e2e_expect_contains(result.stdout, "build/fail: failed", scenario)
-  e2e_expect_contains(result.stdout, "lint/wait: blocked", scenario)
+  e2e_expect_contains(result.stdout, "lint/wait: skipped", scenario)
+}
+
+///|
+#cfg(target="native")
+async fn run_job_if_always() -> Unit {
+  let scenario = "job-if-always"
+  let workspace = e2e_prepare_copied_dir(
+    "_build/e2e/workspaces",
+    scenario,
+    e2e_fixture_dir(scenario),
+  )
+  let result = e2e_run_cli([
+    e2e_join_path(workspace, "workflow.yml"),
+    "--event",
+    e2e_join_path(workspace, "event.json"),
+  ])
+  e2e_expect_fail(result, scenario)
+  e2e_expect_contains(result.stdout, "workflow=e2e-job-if-always", scenario)
+  e2e_expect_contains(result.stdout, "state=partial_failed", scenario)
+  e2e_expect_contains(result.stdout, "build/fail: failed", scenario)
+  e2e_expect_contains(result.stdout, "cleanup/finalize: success", scenario)
+  e2e_expect_eq(
+    e2e_read_text(e2e_join_path(workspace, "artifacts/cleanup.txt")),
+    "cleanup-ran",
+    scenario + " cleanup artifact",
+  )
 }
 
 ///|
@@ -3039,6 +3065,10 @@ async fn main {
   println("e2e: job-failure-blocked")
   run_job_failure_blocked()
   println("e2e: job-failure-blocked ok")
+
+  println("e2e: job-if-always")
+  run_job_if_always()
+  println("e2e: job-if-always ok")
 
   println("e2e: unsupported-uses")
   run_unsupported_uses()

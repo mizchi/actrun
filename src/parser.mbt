@@ -1017,6 +1017,11 @@ fn parse_job(id : String, value : YamlValue, errors : Array[String]) -> JobSpec 
       errors,
       ctx + ".name",
     ).unwrap_or(""),
+    if_condition=yaml_as_optional_string(
+      yaml_obj_get(fields, "if"),
+      errors,
+      ctx + ".if",
+    ).unwrap_or("success()"),
     needs=yaml_as_string_list(
       yaml_obj_get(fields, "needs"),
       errors,

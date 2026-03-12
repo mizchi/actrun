@@ -69,6 +69,24 @@ test "compat docs: lower defaults.run fixture" {
 }
 
 ///|
+test "compat docs: lower jobs if fixture" {
+  let (fixture, workflow, lowered) = compat_expect_lowered_docs_fixture(
+    "jobs-if-repository",
+  )
+
+  inspect(fixture.id, content="docs-jobs-if-repository")
+  inspect(
+    workflow.jobs[0].if_condition,
+    content="github.repository == 'mizchi/action_runner'",
+  )
+  inspect(lowered.errors, content="[]")
+  inspect(
+    lowered.plan.job_if_conditions.get("build").unwrap_or(""),
+    content="github.repository == 'mizchi/action_runner'",
+  )
+}
+
+///|
 test "compat docs: lower jobs needs fixture" {
   let (fixture, workflow, lowered) = compat_expect_lowered_docs_fixture(
     "jobs-needs",
@@ -552,6 +570,25 @@ async test "compat docs: github repository context is available in push workflow
   inspect(report.ok, content="true")
   inspect(task.status, content="success")
   inspect(task.stdout, content="<mizchi/action_runner|mizchi/action_runner>")
+}
+
+///|
+#cfg(target="native")
+async test "compat docs: job if can use github repository context" {
+  let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
+    "jobs-if-repository",
+  )
+  let report = execute_lowered_native(
+    lower_push_workflow(workflow),
+    workspace_root=workspace,
+    push_event=compat_push_event_fixture(fixture),
+  )
+  let task = compat_expect_task_report(report, "build/print")
+
+  inspect(fixture.id, content="docs-jobs-if-repository")
+  inspect(report.ok, content="true")
+  inspect(task.status, content="success")
+  inspect(task.stdout, content="<job-if-ok>")
 }
 
 ///|

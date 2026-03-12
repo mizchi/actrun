@@ -1,0 +1,22 @@
+name: e2e-job-if-always
+'on': push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: fail
+        shell: bash
+        run: |
+          printf '%s' 'boom' >&2
+          exit 1
+  cleanup:
+    if: always()
+    needs:
+      - build
+    runs-on: ubuntu-latest
+    steps:
+      - id: finalize
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          printf '%s' 'cleanup-ran' > artifacts/cleanup.txt

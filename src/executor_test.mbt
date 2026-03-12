@@ -1249,7 +1249,7 @@ async test "executor: GITHUB_STATE is scoped to local composite action inner ste
 
 ///|
 #cfg(target="native")
-async test "executor: failed dependency blocks downstream job" {
+async test "executor: failed dependency skips downstream job by default" {
   let workspace = prepare_workspace("executor-blocked")
 
   let workflow = new_workflow("ci", [
@@ -1282,13 +1282,73 @@ async test "executor: failed dependency blocks downstream job" {
   inspect(build_step.status, content="failed")
 
   let lint_step = expect_step_report(report, "lint/lint")
-  inspect(lint_step.status, content="blocked")
-  assert_eq(lint_step.message.has_prefix("blocked by dependency"), true)
+  inspect(lint_step.status, content="skipped")
+  inspect(lint_step.message, content="job if condition evaluated to false")
+  let lint_task = expect_task_report(report, "lint/lint")
+  inspect(lint_task.status, content="skipped")
+}
 
-  match find_task_run_report(report, "lint/lint") {
-    Some(_) => abort("lint/lint should not run")
-    None => ()
-  }
+///|
+#cfg(target="native")
+async test "executor: job if false skips entire job" {
+  let workspace = prepare_workspace("executor-job-if-false")
+
+  let workflow = new_workflow("ci", [
+    new_job(
+      "skip",
+      [new_run_step("nope", "printf '%s' should-not-run")],
+      defaults=new_run_defaults(shell=Some("bash")),
+      if_condition="false",
+    ),
+  ])
+
+  let report = execute_lowered_native(
+    lower_push_workflow(workflow),
+    workspace_root=workspace,
+  )
+
+  inspect(report.ok, content="true")
+  inspect(report.state, content="completed")
+
+  let step = expect_step_report(report, "skip/nope")
+  inspect(step.status, content="skipped")
+  let task = expect_task_report(report, "skip/nope")
+  inspect(task.status, content="skipped")
+}
+
+///|
+#cfg(target="native")
+async test "executor: job if always runs despite failed needs" {
+  let workspace = prepare_workspace("executor-job-if-always")
+
+  let workflow = new_workflow("ci", [
+    new_job(
+      "build",
+      [new_run_step("fail", "echo boom 1>&2; exit 7")],
+      defaults=new_run_defaults(shell=Some("bash")),
+    ),
+    new_job(
+      "cleanup",
+      [new_run_step("finalize", "printf '%s' cleanup-ran")],
+      needs=["build"],
+      defaults=new_run_defaults(shell=Some("bash")),
+      if_condition="always()",
+    ),
+  ])
+
+  let report = execute_lowered_native(
+    lower_push_workflow(workflow),
+    workspace_root=workspace,
+  )
+
+  inspect(report.ok, content="false")
+  inspect(report.state, content="partial_failed")
+
+  let build_task = expect_task_report(report, "build/fail")
+  inspect(build_task.status, content="failed")
+  let cleanup_task = expect_task_report(report, "cleanup/finalize")
+  inspect(cleanup_task.status, content="success")
+  inspect(cleanup_task.stdout, content="cleanup-ran")
 }
 
 ///|

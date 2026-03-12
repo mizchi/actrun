@@ -1,0 +1,9 @@
+name: jobs-if-repository
+on: push
+jobs:
+  build:
+    if: github.repository == 'mizchi/action_runner'
+    runs-on: ubuntu-latest
+    steps:
+      - id: print
+        run: printf '<job-if-ok>'

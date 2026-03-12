@@ -175,6 +175,26 @@ test "parser: parse push object form and multiline run" {
 }
 
 ///|
+test "parser: parse job level if condition" {
+  let src =
+    #|name: ci
+    #|on: push
+    #|jobs:
+    #|  build:
+    #|    if: github.repository == 'mizchi/action_runner'
+    #|    runs-on: ubuntu-latest
+    #|    steps:
+    #|      - run: echo ok
+  let parsed = parse_workflow_yaml(src)
+  let workflow = expect_workflow(parsed)
+
+  inspect(
+    workflow.jobs[0].if_condition,
+    content="github.repository == 'mizchi/action_runner'",
+  )
+}
+
+///|
 test "parser: parse checkout uses step" {
   let src =
     #|name: ci
