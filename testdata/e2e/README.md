@@ -19,6 +19,7 @@
 - `expression-string-functions`: `contains()` / `startsWith()` / `endsWith()` が script/env と `if:` で動く
 - `expression-json-functions`: `fromJSON()` / `toJSON()` と `contains(fromJSON(...), ...)` が script/env と `if:` で動く
 - `expression-hash-files`: `hashFiles()` が script/env と `if:` で動き、no match では空文字を返す
+- `expression-vars`: `${{ vars.* }}` が script/env と `if:` で動き、missing var は空文字になる
 - `matrix-include-basic`: `strategy.matrix.include` と `${{ matrix.* }}` の最小展開
 - `matrix-exclude-basic`: `strategy.matrix.exclude` が row を除外する
 - `matrix-mixed-include-basic`: `strategy.matrix` の axes と include を同時に展開する

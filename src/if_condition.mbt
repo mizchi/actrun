@@ -10,6 +10,7 @@ priv struct IfConditionContext {
   step_conclusions : Map[String, String]
   workspace_root : String
   env_context : Map[String, String]
+  vars_context : Map[String, String]
   github_context : Map[String, String]
   runner_context : Map[String, String]
   needs_outputs : Map[String, Map[String, String]]
@@ -26,6 +27,7 @@ fn new_if_condition_context(
   step_conclusions? : Map[String, String] = {},
   workspace_root? : String = "",
   env_context? : Map[String, String] = {},
+  vars_context? : Map[String, String] = {},
   github_context? : Map[String, String] = {},
   runner_context? : Map[String, String] = {},
   needs_outputs? : Map[String, Map[String, String]] = {},
@@ -40,6 +42,7 @@ fn new_if_condition_context(
     step_conclusions,
     workspace_root,
     env_context,
+    vars_context,
     github_context,
     runner_context,
     needs_outputs,
@@ -299,6 +302,16 @@ fn if_env_name(expression : String) -> String? {
 }
 
 ///|
+fn if_vars_name(expression : String) -> String? {
+  let trimmed = strip_if_outer_parens(expression)
+  if trimmed.has_prefix("vars.") && trimmed.length() > 5 {
+    Some(if_text_slice(trimmed, 5, trimmed.length()))
+  } else {
+    None
+  }
+}
+
+///|
 fn if_github_name(expression : String) -> String? {
   let trimmed = strip_if_outer_parens(expression)
   if trimmed.has_prefix("github.") && trimmed.length() > 7 {
@@ -515,6 +528,9 @@ fn if_condition_atom_supported(text : String) -> Bool {
     return true
   }
   if if_env_name(trimmed) is Some(_) {
+    return true
+  }
+  if if_vars_name(trimmed) is Some(_) {
     return true
   }
   if if_github_name(trimmed) is Some(_) {
@@ -802,6 +818,15 @@ fn if_condition_atom_value(
       return if_condition_value_from_json(
         Json::string(
           if_map_get_case_insensitive(ctx.env_context, name).unwrap_or(""),
+        ),
+      )
+    None => ()
+  }
+  match if_vars_name(trimmed) {
+    Some(name) =>
+      return if_condition_value_from_json(
+        Json::string(
+          if_map_get_case_insensitive(ctx.vars_context, name).unwrap_or(""),
         ),
       )
     None => ()

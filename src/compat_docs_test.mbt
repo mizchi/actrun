@@ -21,6 +21,21 @@ fn compat_docs_cache_store_root(workspace : String) -> String {
 }
 
 ///|
+fn compat_docs_set_env_var(key : String, value : String) -> String? {
+  let previous = @xsys.get_env_var(key)
+  @xsys.set_env_var(key, value)
+  previous
+}
+
+///|
+fn compat_docs_restore_env_var(key : String, previous : String?) -> Unit {
+  match previous {
+    Some(value) => @xsys.set_env_var(key, value)
+    None => @xsys.unset_env_var(key)
+  }
+}
+
+///|
 test "compat docs: parse push scalar fixture" {
   let (fixture, workflow) = compat_expect_docs_fixture("push-scalar")
 
@@ -825,6 +840,29 @@ async test "compat docs: hashFiles is available in step script and env" {
 
 ///|
 #cfg(target="native")
+async test "compat docs: vars context is available in step script and env" {
+  let previous_color = compat_docs_set_env_var(
+    "ACTION_RUNNER_VAR_COLOR", "ocean",
+  )
+  let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
+    "context-vars",
+  )
+  let report = execute_lowered_native(
+    lower_push_workflow(workflow),
+    workspace_root=workspace,
+    push_event=compat_push_event_fixture(fixture),
+  )
+  compat_docs_restore_env_var("ACTION_RUNNER_VAR_COLOR", previous_color)
+  let task = compat_expect_task_report(report, "build/show")
+
+  inspect(fixture.id, content="docs-context-vars")
+  inspect(report.ok, content="true")
+  inspect(task.status, content="success")
+  inspect(task.stdout, content="<ocean|ocean|yes|ocean>")
+}
+
+///|
+#cfg(target="native")
 async test "compat docs: github.action is available in step script and env" {
   let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
     "context-github-action",
@@ -1003,6 +1041,38 @@ async test "compat docs: step if hashFiles works in push workflow" {
   inspect(report.ok, content="true")
   inspect(
     compat_expect_task_report(report, "build/on_match").status,
+    content="success",
+  )
+  inspect(
+    compat_expect_task_report(report, "build/skip_missing").status,
+    content="skipped",
+  )
+  inspect(verify.stdout, content="<yes|no>")
+}
+
+///|
+#cfg(target="native")
+async test "compat docs: step if vars works in push workflow" {
+  let previous_enabled = compat_docs_set_env_var(
+    "ACTION_RUNNER_VAR_FEATURE_ENABLED", "true",
+  )
+  let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
+    "steps-if-vars",
+  )
+  let report = execute_lowered_native(
+    lower_push_workflow(workflow),
+    workspace_root=workspace,
+    push_event=compat_push_event_fixture(fixture),
+  )
+  compat_docs_restore_env_var(
+    "ACTION_RUNNER_VAR_FEATURE_ENABLED", previous_enabled,
+  )
+  let verify = compat_expect_task_report(report, "build/verify")
+
+  inspect(fixture.id, content="docs-steps-if-vars")
+  inspect(report.ok, content="true")
+  inspect(
+    compat_expect_task_report(report, "build/on_enabled").status,
     content="success",
   )
   inspect(

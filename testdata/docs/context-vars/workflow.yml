@@ -1,0 +1,17 @@
+name: vars-context
+'on': push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: show
+        shell: bash
+        env:
+          COLOR_FROM_ENV: ${{ vars.COLOR }}
+          MISSING_FROM_ENV: ${{ vars.MISSING }}
+        run: |
+          printf '<%s|%s|%s|%s>' \
+            "${{ vars.COLOR }}" \
+            "$COLOR_FROM_ENV" \
+            "$(test -z "$MISSING_FROM_ENV" && echo yes || echo no)" \
+            "${{ vars.color }}"

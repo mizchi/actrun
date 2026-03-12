@@ -19,6 +19,21 @@ fn executor_test_absolute_path(path : String) -> String {
 }
 
 ///|
+fn executor_test_set_env_var(key : String, value : String) -> String? {
+  let previous = @xsys.get_env_var(key)
+  @xsys.set_env_var(key, value)
+  previous
+}
+
+///|
+fn executor_test_restore_env_var(key : String, previous : String?) -> Unit {
+  match previous {
+    Some(value) => @xsys.set_env_var(key, value)
+    None => @xsys.unset_env_var(key)
+  }
+}
+
+///|
 fn prepare_workspace(name : String) -> String raise {
   ensure_dir("_build")
   ensure_dir("_build/test-workspaces")
@@ -2190,6 +2205,67 @@ async test "executor: hashFiles returns a stable hex digest and empty string on 
   )
   inspect(expect_task_report(report, "build/gate").status, content="success")
   inspect(expect_task_report(report, "build/gate").stdout, content="hash-ran")
+}
+
+///|
+#cfg(target="native")
+async test "executor: vars context resolves from ACTION_RUNNER_VAR prefix and missing vars are empty" {
+  let workspace = prepare_workspace("executor-vars-context")
+  let previous_color = executor_test_set_env_var(
+    "ACTION_RUNNER_VAR_COLOR", "ocean",
+  )
+  let previous_enabled = executor_test_set_env_var(
+    "ACTION_RUNNER_VAR_FEATURE_ENABLED", "true",
+  )
+
+  let workflow = new_workflow("ci", [
+    new_job(
+      "build",
+      [
+        new_run_step(
+          "show",
+          "printf '%s|%s|%s|%s' '${{ vars.COLOR }}' \"$COLOR_FROM_ENV\" \"$(test -z \"$MISSING_FROM_ENV\" && echo yes || echo no)\" '${{ vars.color }}'",
+          env={
+            "COLOR_FROM_ENV": "${{ vars.COLOR }}",
+            "MISSING_FROM_ENV": "${{ vars.MISSING }}",
+          },
+        ),
+        new_run_step(
+          "gate",
+          "printf '%s' vars-ran",
+          if_condition="vars.FEATURE_ENABLED == 'true'",
+        ),
+        new_run_step(
+          "skip_missing",
+          "printf '%s' no",
+          if_condition="vars.MISSING != ''",
+        ),
+      ],
+      defaults=new_run_defaults(shell=Some("bash")),
+    ),
+  ])
+
+  let report = execute_lowered_native(
+    lower_push_workflow(workflow),
+    workspace_root=workspace,
+  )
+
+  executor_test_restore_env_var("ACTION_RUNNER_VAR_COLOR", previous_color)
+  executor_test_restore_env_var(
+    "ACTION_RUNNER_VAR_FEATURE_ENABLED", previous_enabled,
+  )
+
+  inspect(report.ok, content="true")
+  inspect(
+    expect_task_report(report, "build/show").stdout,
+    content="ocean|ocean|yes|ocean",
+  )
+  inspect(expect_task_report(report, "build/gate").status, content="success")
+  inspect(expect_task_report(report, "build/gate").stdout, content="vars-ran")
+  inspect(
+    expect_task_report(report, "build/skip_missing").status,
+    content="skipped",
+  )
 }
 
 ///|

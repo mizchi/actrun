@@ -1,0 +1,22 @@
+name: steps-if-vars
+'on': push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: on_enabled
+        if: vars.FEATURE_ENABLED == 'true'
+        run: |
+          mkdir -p artifacts
+          printf '%s' yes > artifacts/enabled.txt
+      - id: skip_missing
+        if: vars.MISSING != ''
+        run: |
+          mkdir -p artifacts
+          printf '%s' no > artifacts/missing.txt
+      - id: verify
+        shell: bash
+        run: |
+          printf '<%s|%s>' \
+            "$(test -f artifacts/enabled.txt && echo yes || echo no)" \
+            "$(test -f artifacts/missing.txt && echo yes || echo no)"

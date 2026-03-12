@@ -650,6 +650,16 @@ fn runner_expr_name(expression : String) -> String? {
 }
 
 ///|
+fn vars_expr_name(expression : String) -> String? {
+  let trimmed = expression.trim(chars=" \t\n\r").to_string()
+  if trimmed.has_prefix("vars.") && trimmed.length() > 5 {
+    Some(exec_text_slice(trimmed, 5, trimmed.length()))
+  } else {
+    None
+  }
+}
+
+///|
 fn resolve_step_output(
   state : JobRuntimeState,
   step_id : String,
@@ -944,6 +954,18 @@ async fn runner_context(
 }
 
 ///|
+fn runner_vars_context() -> Map[String, String] {
+  let values : Map[String, String] = {}
+  let prefix = "ACTION_RUNNER_VAR_"
+  for key, value in @xsys.get_env_vars() {
+    if key.has_prefix(prefix) && key.length() > prefix.length() {
+      values[exec_text_slice(key, prefix.length(), key.length())] = value
+    }
+  }
+  values
+}
+
+///|
 fn substitute_runtime_text(
   text : String,
   state : JobRuntimeState,
@@ -954,6 +976,7 @@ fn substitute_runtime_text(
   needs_outputs : Map[String, Map[String, String]],
   needs_results : Map[String, String],
 ) -> String {
+  let vars_context = runner_vars_context()
   let chunks : Array[String] = []
   let mut idx = 0
   while idx < text.length() {
@@ -997,46 +1020,57 @@ fn substitute_runtime_text(
                                       ).unwrap_or(""),
                                     )
                                   None =>
-                                    match github_expr_name(expression) {
+                                    match vars_expr_name(expression) {
                                       Some(name) =>
                                         chunks.push(
                                           map_get_case_insensitive(
-                                            github_context, name,
+                                            vars_context, name,
                                           ).unwrap_or(""),
                                         )
                                       None =>
-                                        match runner_expr_name(expression) {
+                                        match github_expr_name(expression) {
                                           Some(name) =>
                                             chunks.push(
                                               map_get_case_insensitive(
-                                                runner_context, name,
+                                                github_context, name,
                                               ).unwrap_or(""),
                                             )
                                           None =>
-                                            match
-                                              evaluate_string_function_expression(
-                                                expression,
-                                                new_if_condition_context(
-                                                  step_outputs=state.step_outputs,
-                                                  step_outcomes=state.step_outcomes,
-                                                  step_conclusions=state.step_conclusions,
-                                                  workspace_root~,
-                                                  env_context~,
-                                                  github_context~,
-                                                  runner_context~,
-                                                  needs_outputs~,
-                                                  needs_results~,
-                                                ),
-                                              ) {
-                                              Some(value) => chunks.push(value)
-                                              None =>
+                                            match runner_expr_name(expression) {
+                                              Some(name) =>
                                                 chunks.push(
-                                                  exec_text_slice(
-                                                    text,
-                                                    open_idx,
-                                                    close_idx + 2,
-                                                  ),
+                                                  map_get_case_insensitive(
+                                                    runner_context, name,
+                                                  ).unwrap_or(""),
                                                 )
+                                              None =>
+                                                match
+                                                  evaluate_string_function_expression(
+                                                    expression,
+                                                    new_if_condition_context(
+                                                      step_outputs=state.step_outputs,
+                                                      step_outcomes=state.step_outcomes,
+                                                      step_conclusions=state.step_conclusions,
+                                                      workspace_root~,
+                                                      env_context~,
+                                                      vars_context~,
+                                                      github_context~,
+                                                      runner_context~,
+                                                      needs_outputs~,
+                                                      needs_results~,
+                                                    ),
+                                                  ) {
+                                                  Some(value) =>
+                                                    chunks.push(value)
+                                                  None =>
+                                                    chunks.push(
+                                                      exec_text_slice(
+                                                        text,
+                                                        open_idx,
+                                                        close_idx + 2,
+                                                      ),
+                                                    )
+                                                }
                                             }
                                         }
                                     }
@@ -3840,6 +3874,7 @@ pub async fn execute_lowered_native(
                 workspace_root,
                 push_event,
               )
+              let vars_ctx = runner_vars_context()
               let runner_ctx = runner_context(plan, workspace_root)
               let value = evaluate_if_condition(
                 lowered.plan.job_if_conditions
@@ -3850,6 +3885,7 @@ pub async fn execute_lowered_native(
                   step_outcomes=current_state.step_outcomes,
                   step_conclusions=current_state.step_conclusions,
                   workspace_root~,
+                  vars_context=vars_ctx,
                   github_context=github_ctx,
                   runner_context=runner_ctx,
                   needs_outputs~,
@@ -3939,6 +3975,7 @@ pub async fn execute_lowered_native(
               workspace_root,
               push_event,
             )
+            let vars_ctx = runner_vars_context()
             let runner_ctx = runner_context(plan, workspace_root)
             evaluate_if_condition(
               plan.if_condition,
@@ -3951,6 +3988,7 @@ pub async fn execute_lowered_native(
                   plan.env,
                   current_state.env_updates,
                 ),
+                vars_context=vars_ctx,
                 github_context=github_ctx,
                 runner_context=runner_ctx,
                 needs_outputs~,
@@ -4061,6 +4099,7 @@ pub async fn execute_lowered_native(
                 workspace_root,
                 push_event,
               )
+              let vars_ctx = runner_vars_context()
               let runner_ctx = runner_context(plan, workspace_root)
               let continue_on_error = if plan.kind == "barrier" {
                 false
@@ -4076,6 +4115,7 @@ pub async fn execute_lowered_native(
                       plan.env,
                       current_state.env_updates,
                     ),
+                    vars_context=vars_ctx,
                     github_context=github_ctx,
                     runner_context=runner_ctx,
                     needs_outputs~,

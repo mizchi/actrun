@@ -1,0 +1,34 @@
+name: e2e-expression-vars
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: show
+        shell: bash
+        env:
+          COLOR_FROM_ENV: ${{ vars.COLOR }}
+          MISSING_FROM_ENV: ${{ vars.MISSING }}
+        run: |
+          mkdir -p artifacts
+          printf '%s|%s|%s|%s' \
+            "${{ vars.COLOR }}" \
+            "$COLOR_FROM_ENV" \
+            "$(test -z "$MISSING_FROM_ENV" && echo yes || echo no)" \
+            "${{ vars.color }}" > artifacts/script.txt
+      - id: on_enabled
+        if: vars.FEATURE_ENABLED == 'true'
+        run: |
+          mkdir -p artifacts
+          printf '%s' yes > artifacts/enabled.txt
+      - id: skip_missing
+        if: vars.MISSING != ''
+        run: |
+          mkdir -p artifacts
+          printf '%s' no > artifacts/missing.txt
+      - id: collect
+        shell: bash
+        run: |
+          printf '%s|%s' \
+            "$(test -f artifacts/enabled.txt && echo yes || echo no)" \
+            "$(test -f artifacts/missing.txt && echo yes || echo no)" > artifacts/result.txt

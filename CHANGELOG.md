@@ -9,6 +9,8 @@
 - expression function の最小 subset (`contains`, `startsWith`, `endsWith`, `fromJSON`, `toJSON`, `hashFiles`)
 - docs/E2E coverage for `fromJSON()` / `toJSON()` and `contains(fromJSON(...), ...)`
 - docs/E2E coverage for `hashFiles()` in script/env and step `if:`
+- minimal `${{ vars.* }}` support backed by `ACTION_RUNNER_VAR_<NAME>`
+- docs/E2E coverage for `${{ vars.* }}` in script/env and step `if:`
 
 - `push` trigger matcher for MVP CI workflows
 - workflow YAML subset parser for `on.push`, `jobs`, `steps`, `env`, and `defaults.run`

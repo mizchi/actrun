@@ -1296,6 +1296,44 @@ async fn run_expression_hash_files() -> Unit {
 
 ///|
 #cfg(target="native")
+async fn run_expression_vars() -> Unit {
+  let scenario = "expression-vars"
+  let workspace = e2e_prepare_copied_dir(
+    "_build/e2e/workspaces",
+    scenario,
+    e2e_fixture_dir(scenario),
+  )
+  let result = e2e_run_cli(
+    [
+      e2e_join_path(workspace, "workflow.yml"),
+      "--event",
+      e2e_join_path(workspace, "event.json"),
+    ],
+    env={
+      "ACTION_RUNNER_VAR_COLOR": "ocean",
+      "ACTION_RUNNER_VAR_FEATURE_ENABLED": "true",
+    },
+  )
+  e2e_expect_ok(result, scenario)
+  e2e_expect_contains(result.stdout, "workflow=e2e-expression-vars", scenario)
+  e2e_expect_contains(result.stdout, "state=completed", scenario)
+  e2e_expect_contains(result.stdout, "build/show: success", scenario)
+  e2e_expect_contains(result.stdout, "build/on_enabled: success", scenario)
+  e2e_expect_contains(result.stdout, "build/skip_missing: skipped", scenario)
+  e2e_expect_eq(
+    e2e_read_text(e2e_join_path(workspace, "artifacts/script.txt")),
+    "ocean|ocean|yes|ocean",
+    scenario + " script artifact",
+  )
+  e2e_expect_eq(
+    e2e_read_text(e2e_join_path(workspace, "artifacts/result.txt")),
+    "yes|no",
+    scenario + " result artifact",
+  )
+}
+
+///|
+#cfg(target="native")
 async fn run_matrix_include_basic() -> Unit {
   let scenario = "matrix-include-basic"
   let workspace = e2e_prepare_copied_dir(
@@ -3688,6 +3726,10 @@ async fn main {
   println("e2e: expression-hash-files")
   run_expression_hash_files()
   println("e2e: expression-hash-files ok")
+
+  println("e2e: expression-vars")
+  run_expression_vars()
+  println("e2e: expression-vars ok")
 
   println("e2e: matrix-include-basic")
   run_matrix_include_basic()
