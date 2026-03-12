@@ -3,12 +3,11 @@ name: e2e-unsupported-matrix
 jobs:
   build:
     strategy:
+      max-parallel: 0
       matrix:
         os:
           - ubuntu-latest
-    outputs:
-      value: ${{ steps.emit.outputs.value }}
     runs-on: ubuntu-latest
     steps:
       - id: emit
-        run: printf '%s=%s\n' value nope >> "$GITHUB_OUTPUT"
+        run: printf '%s' ok

@@ -1099,8 +1099,17 @@ fn job_needs_outputs(
   outputs : Map[String, Map[String, String]],
 ) -> Map[String, Map[String, String]] {
   let values : Map[String, Map[String, String]] = {}
+  let targets = plan.job_need_targets.get(job_id).unwrap_or({})
   for need in plan.job_needs.get(job_id).unwrap_or([]) {
-    values[need] = outputs.get(need).unwrap_or({})
+    let merged : Map[String, String] = {}
+    for target in targets.get(need).unwrap_or([need]) {
+      for key, value in outputs.get(target).unwrap_or({}) {
+        if value.length() > 0 {
+          merged[key] = value
+        }
+      }
+    }
+    values[need] = merged
   }
   values
 }
@@ -1112,8 +1121,32 @@ fn job_needs_results(
   results : Map[String, String],
 ) -> Map[String, String] {
   let values : Map[String, String] = {}
+  let targets = plan.job_need_targets.get(job_id).unwrap_or({})
   for need in plan.job_needs.get(job_id).unwrap_or([]) {
-    values[need] = results.get(need).unwrap_or("")
+    let mut has_failure = false
+    let mut has_cancelled = false
+    let mut has_skipped = false
+    let mut has_success = false
+    for target in targets.get(need).unwrap_or([need]) {
+      match results.get(target).unwrap_or("") {
+        "failure" => has_failure = true
+        "cancelled" => has_cancelled = true
+        "skipped" => has_skipped = true
+        "success" => has_success = true
+        _ => ()
+      }
+    }
+    values[need] = if has_failure {
+      "failure"
+    } else if has_cancelled {
+      "cancelled"
+    } else if has_skipped {
+      "skipped"
+    } else if has_success {
+      "success"
+    } else {
+      ""
+    }
   }
   values
 }

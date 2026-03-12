@@ -1,0 +1,8 @@
+id=docs-strategy-matrix-needs
+source=docs
+mode=supported
+kind=lower
+url=https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax
+docs_urls=https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax
+added_at=2026-03-13
+notes=jobs that need a matrix job fan in on all expanded matrix rows while preserving logical needs names for contexts

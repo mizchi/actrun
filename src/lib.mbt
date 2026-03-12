@@ -249,6 +249,7 @@ pub struct ExecutionPlan {
   tasks : Array[TaskPlan]
   job_outputs : Map[String, Map[String, String]]
   job_needs : Map[String, Array[String]]
+  job_need_targets : Map[String, Map[String, Array[String]]]
   job_matrix_groups : Map[String, String]
   job_matrix_fail_fast : Map[String, Bool]
 }

@@ -10,6 +10,7 @@ MVP の GitHub Actions 互換 push CI ランナー向けコア API。
 - `ActionRef` / resolver
 - `bitflow` IR への lowering
 - `strategy.matrix` の最小対応 (`axes` / `include` / `exclude` / mixed `axes + include` / `fail-fast` / `max-parallel`)
+- matrix job に対する `needs` fan-in と aggregated `${{ needs.<job>.result }}` / `${{ needs.<job>.outputs.* }}`
 - native host executor
 - `bit` repo から push commit を materialize する runtime
 - `uses: actions/checkout@*` と `uses: builtin://checkout` の最小 no-op 対応
@@ -86,7 +87,6 @@ test {
 
 - `${{ ... }}` の広い context (`github` / `runner` の残り, matrix advanced, `vars`, `secrets` など)
 - `pwsh` binary が存在しない環境での PowerShell workflow 実行
-- matrix outputs / matrix `needs` semantics
 - reusable workflow
 - job container / services
 - step `if` の `success()` 以外

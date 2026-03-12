@@ -298,6 +298,26 @@ test "compat docs: lower matrix max parallel fixture" {
 }
 
 ///|
+test "compat docs: lower matrix needs fixture" {
+  let (fixture, workflow, lowered) = compat_expect_lowered_docs_fixture(
+    "strategy-matrix-needs",
+  )
+  let consume = flow_task_by_id(lowered.ir, "consume/read")
+
+  inspect(fixture.id, content="docs-strategy-matrix-needs")
+  inspect(workflow.jobs[1].needs, content="[\"build\"]")
+  inspect(lowered.errors, content="[]")
+  inspect(
+    consume.needs,
+    content="[\"build__matrix_1/__finish\", \"build__matrix_2/__finish\"]",
+  )
+  inspect(
+    lowered.plan.job_needs.get("consume").unwrap_or([]),
+    content="[\"build\"]",
+  )
+}
+
+///|
 #cfg(target="native")
 async test "compat docs: matrix fail-fast cancels later rows" {
   let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
@@ -608,6 +628,25 @@ async test "compat docs: needs result is available in dependent job" {
   inspect(report.ok, content="true")
   inspect(task.status, content="success")
   inspect(task.stdout, content="<success>")
+}
+
+///|
+#cfg(target="native")
+async test "compat docs: matrix needs aggregate result and outputs" {
+  let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
+    "context-needs-matrix-output",
+  )
+  let report = execute_lowered_native(
+    lower_push_workflow(workflow),
+    workspace_root=workspace,
+    push_event=compat_push_event_fixture(fixture),
+  )
+  let task = compat_expect_task_report(report, "consume/read")
+
+  inspect(fixture.id, content="docs-context-needs-matrix-output")
+  inspect(report.ok, content="true")
+  inspect(task.status, content="success")
+  inspect(task.stdout, content="<success|native|js>")
 }
 
 ///|

@@ -1416,6 +1416,59 @@ async test "executor: matrix fail-fast false keeps later siblings running" {
 
 ///|
 #cfg(target="native")
+async test "executor: matrix needs aggregate result and outputs for downstream job" {
+  let workspace = prepare_workspace("executor-matrix-needs-output")
+
+  let workflow = new_workflow("ci", [
+    new_job(
+      "build",
+      [
+        new_run_step(
+          "produce",
+          "printf '%s=%s\\n' '${{ matrix.target }}' '${{ matrix.target }}' >> \"$GITHUB_OUTPUT\"",
+          shell=Some("bash"),
+        ),
+      ],
+      defaults=new_run_defaults(shell=Some("bash")),
+      outputs={
+        "native": "${{ steps.produce.outputs.native }}",
+        "js": "${{ steps.produce.outputs.js }}",
+      },
+      matrix=Some(new_job_matrix([{ "target": "native" }, { "target": "js" }])),
+    ),
+    new_job(
+      "consume",
+      [
+        new_run_step(
+          "read",
+          "printf '%s|%s|%s' " +
+          "\"${{ needs.build.result }}\" " +
+          "\"${{ needs.build.outputs.native }}\" " +
+          "\"${{ needs.build.outputs.js }}\"",
+          shell=Some("bash"),
+        ),
+      ],
+      needs=["build"],
+      defaults=new_run_defaults(shell=Some("bash")),
+    ),
+  ])
+
+  let report = execute_lowered_native(
+    lower_push_workflow(workflow),
+    workspace_root=workspace,
+  )
+
+  inspect(report.ok, content="true")
+  inspect(report.state, content="completed")
+  inspect(expect_step_report(report, "consume/read").status, content="success")
+  inspect(
+    expect_task_report(report, "consume/read").stdout,
+    content="success|native|js",
+  )
+}
+
+///|
+#cfg(target="native")
 async test "executor: docker actions run via docker adapter" {
   let workspace = prepare_workspace("executor-docker-action")
   let log_path = workspace + "/docker.log"

@@ -1,0 +1,19 @@
+name: ci-matrix-needs
+on: push
+jobs:
+  build:
+    strategy:
+      matrix:
+        target:
+          - native
+          - js
+    runs-on: ubuntu-latest
+    steps:
+      - id: emit
+        run: printf '%s' '${{ matrix.target }}'
+  consume:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - id: read
+        run: printf '%s' ok

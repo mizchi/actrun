@@ -1,0 +1,29 @@
+name: ci-needs-matrix-output
+on: push
+jobs:
+  build:
+    strategy:
+      matrix:
+        target:
+          - native
+          - js
+    runs-on: ubuntu-latest
+    outputs:
+      native: ${{ steps.produce.outputs.native }}
+      js: ${{ steps.produce.outputs.js }}
+    steps:
+      - id: produce
+        shell: bash
+        run: |
+          printf '%s=%s\n' '${{ matrix.target }}' '${{ matrix.target }}' >> "$GITHUB_OUTPUT"
+  consume:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - id: read
+        shell: bash
+        run: |
+          printf '<%s|%s|%s>' \
+            "${{ needs.build.result }}" \
+            "${{ needs.build.outputs.native }}" \
+            "${{ needs.build.outputs.js }}"

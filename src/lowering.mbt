@@ -66,6 +66,8 @@ fn lifecycle_step_id(step_id : String, phase : String) -> String {
 ///|
 priv struct ExpandedJob {
   job : JobSpec
+  visible_needs : Array[String]
+  need_targets : Map[String, Array[String]]
   matrix_group : String?
   matrix_fail_fast : Bool
 }
@@ -472,42 +474,45 @@ fn matrix_job_id(logical_id : String, index : Int) -> String {
 }
 
 ///|
-fn expand_matrix_jobs(
-  jobs : Array[JobSpec],
-  errors : Array[String],
-) -> Array[ExpandedJob] {
-  let expanded : Array[ExpandedJob] = []
-  let matrix_job_ids : Map[String, Bool] = {}
+fn expanded_job_ids(jobs : Array[JobSpec]) -> Map[String, Array[String]] {
+  let result : Map[String, Array[String]] = {}
   for job in jobs {
-    if job.matrix is Some(_) {
-      matrix_job_ids[job.id] = true
-    }
-  }
-  for job in jobs {
-    let mut invalid = false
-    for need in job.needs {
-      if matrix_job_ids.get(need) is Some(_) {
-        errors.push(
-          "job '\{job.id}' needs matrix job '\{need}' is not supported in P0",
-        )
-        invalid = true
-      }
-    }
-    if invalid {
-      continue
-    }
     match job.matrix {
       Some(matrix) => {
-        if job.outputs.length() > 0 {
-          errors.push("job '\{job.id}' matrix outputs are not supported in P0")
-          continue
+        let ids : Array[String] = []
+        let mut row_index = 0
+        while row_index < matrix.rows.length() {
+          ids.push(matrix_job_id(job.id, row_index))
+          row_index += 1
         }
+        result[job.id] = ids
+      }
+      None => result[job.id] = [job.id]
+    }
+  }
+  result
+}
+
+///|
+fn expand_matrix_jobs(jobs : Array[JobSpec]) -> Array[ExpandedJob] {
+  let expanded : Array[ExpandedJob] = []
+  let job_ids = expanded_job_ids(jobs)
+  for job in jobs {
+    match job.matrix {
+      Some(matrix) => {
         let limit = matrix.max_parallel.unwrap_or(matrix.rows.length())
         let mut row_index = 0
         for row in matrix.rows {
           let actual_needs : Array[String] = []
+          let need_targets : Map[String, Array[String]] = {}
           for need in job.needs {
-            actual_needs.push(need)
+            let targets = job_ids.get(need).unwrap_or([need])
+            let target_ids : Array[String] = []
+            for target in targets {
+              actual_needs.push(target)
+              target_ids.push(target)
+            }
+            need_targets[need] = target_ids
           }
           if row_index >= limit {
             actual_needs.push(matrix_job_id(job.id, row_index - limit))
@@ -519,14 +524,46 @@ fn expand_matrix_jobs(
               actual_needs,
               row,
             ),
+            visible_needs: job.needs,
+            need_targets,
             matrix_group: Some(job.id),
             matrix_fail_fast: matrix.fail_fast,
           })
           row_index += 1
         }
       }
-      None =>
-        expanded.push({ job, matrix_group: None, matrix_fail_fast: false })
+      None => {
+        let actual_needs : Array[String] = []
+        let need_targets : Map[String, Array[String]] = {}
+        for need in job.needs {
+          let targets = job_ids.get(need).unwrap_or([need])
+          let target_ids : Array[String] = []
+          for target in targets {
+            actual_needs.push(target)
+            target_ids.push(target)
+          }
+          need_targets[need] = target_ids
+        }
+        expanded.push({
+          job: new_job(
+            job.id,
+            job.steps,
+            name=job.name,
+            needs=actual_needs,
+            outputs=job.outputs,
+            runs_on=job.runs_on,
+            env=job.env,
+            defaults=job.defaults,
+            matrix=None,
+            reusable_workflow=job.reusable_workflow,
+            container_image=job.container_image,
+          ),
+          visible_needs: job.needs,
+          need_targets,
+          matrix_group: None,
+          matrix_fail_fast: false,
+        })
+      }
     }
   }
   expanded
@@ -1374,11 +1411,12 @@ pub fn lower_push_workflow_in_workspace(
   let task_plans : Array[TaskPlan] = []
   let job_outputs : Map[String, Map[String, String]] = {}
   let job_needs : Map[String, Array[String]] = {}
+  let job_need_targets : Map[String, Map[String, Array[String]]] = {}
   let job_matrix_groups : Map[String, String] = {}
   let job_matrix_fail_fast : Map[String, Bool] = {}
   let entry_targets : Array[String] = []
   let seen_jobs : Map[String, Bool] = {}
-  let expanded_jobs = expand_matrix_jobs(workflow.jobs, errors)
+  let expanded_jobs = expand_matrix_jobs(workflow.jobs)
   let expanded_specs : Array[JobSpec] = []
   for expanded in expanded_jobs {
     expanded_specs.push(expanded.job)
@@ -1402,7 +1440,8 @@ pub fn lower_push_workflow_in_workspace(
   for expanded in expanded_jobs {
     let job = expanded.job
     job_outputs[job.id] = job.outputs
-    job_needs[job.id] = job.needs
+    job_needs[job.id] = expanded.visible_needs
+    job_need_targets[job.id] = expanded.need_targets
     match expanded.matrix_group {
       Some(group) => {
         job_matrix_groups[job.id] = group
@@ -1582,6 +1621,7 @@ pub fn lower_push_workflow_in_workspace(
       tasks: task_plans,
       job_outputs,
       job_needs,
+      job_need_targets,
       job_matrix_groups,
       job_matrix_fail_fast,
     },

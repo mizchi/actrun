@@ -983,6 +983,35 @@ async fn run_matrix_fail_fast_basic() -> Unit {
 
 ///|
 #cfg(target="native")
+async fn run_matrix_needs_output_basic() -> Unit {
+  let scenario = "matrix-needs-output-basic"
+  let workspace = e2e_prepare_copied_dir(
+    "_build/e2e/workspaces",
+    scenario,
+    e2e_fixture_dir(scenario),
+  )
+  let result = e2e_run_cli([
+    e2e_join_path(workspace, "workflow.yml"),
+    "--event",
+    e2e_join_path(workspace, "event.json"),
+  ])
+  e2e_expect_ok(result, scenario)
+  e2e_expect_contains(
+    result.stdout,
+    "workflow=e2e-matrix-needs-output",
+    scenario,
+  )
+  e2e_expect_contains(result.stdout, "state=completed", scenario)
+  e2e_expect_contains(result.stdout, "consume/read: success", scenario)
+  e2e_expect_eq(
+    e2e_read_text(e2e_join_path(workspace, "artifacts/result.txt")),
+    "success|native|js",
+    scenario + " result artifact",
+  )
+}
+
+///|
+#cfg(target="native")
 async fn run_job_failure_blocked() -> Unit {
   let scenario = "job-failure-blocked"
   let workspace = e2e_prepare_copied_dir(
@@ -1033,7 +1062,7 @@ async fn run_unsupported_matrix() -> Unit {
   e2e_expect_fail(result, scenario)
   e2e_expect_contains(
     result.stdout,
-    "error: job 'build' matrix outputs are not supported in P0",
+    "error: jobs.build.strategy.max-parallel must be positive",
     scenario,
   )
 }
@@ -3002,6 +3031,10 @@ async fn main {
   println("e2e: matrix-fail-fast-basic")
   run_matrix_fail_fast_basic()
   println("e2e: matrix-fail-fast-basic ok")
+
+  println("e2e: matrix-needs-output-basic")
+  run_matrix_needs_output_basic()
+  println("e2e: matrix-needs-output-basic ok")
 
   println("e2e: job-failure-blocked")
   run_job_failure_blocked()

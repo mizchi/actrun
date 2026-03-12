@@ -1152,21 +1152,83 @@ test "lowering: local composite action rejects unsupported nested uses" {
 }
 
 ///|
-test "lowering: matrix outputs are rejected in P0" {
+test "lowering: matrix job fan-in expands downstream needs" {
   let workflow = new_workflow("ci", [
     new_job(
-      "test",
-      [new_run_step("always", "echo ok", if_condition="always()")],
-      outputs={ "artifact": "${{ steps.always.outputs.name }}" },
-      matrix=Some(new_job_matrix([{ "target": "native" }])),
+      "build",
+      [new_run_step("emit", "printf '%s' '${{ matrix.target }}'")],
+      matrix=Some(new_job_matrix([{ "target": "native" }, { "target": "js" }])),
+    ),
+    new_job("consume", [new_run_step("read", "printf '%s' ok")], needs=["build"]),
+  ])
+
+  let result = lower_push_workflow(workflow)
+  let consume = flow_task_by_id(result.ir, "consume/read")
+
+  inspect(result.errors, content="[]")
+  inspect(
+    consume.needs,
+    content="[\"build__matrix_1/__finish\", \"build__matrix_2/__finish\"]",
+  )
+  inspect(
+    result.plan.job_needs.get("consume").unwrap_or([]),
+    content="[\"build\"]",
+  )
+  inspect(
+    result.plan.job_need_targets
+    .get("consume")
+    .unwrap_or({})
+    .get("build")
+    .unwrap_or([]),
+    content="[\"build__matrix_1\", \"build__matrix_2\"]",
+  )
+}
+
+///|
+test "lowering: matrix outputs are carried into execution plan" {
+  let workflow = new_workflow("ci", [
+    new_job(
+      "build",
+      [
+        new_run_step(
+          "produce", "printf '%s=%s\\n' '${{ matrix.target }}' '${{ matrix.target }}' >> \"$GITHUB_OUTPUT\"",
+        ),
+      ],
+      outputs={
+        "native": "${{ steps.produce.outputs.native }}",
+        "js": "${{ steps.produce.outputs.js }}",
+      },
+      matrix=Some(new_job_matrix([{ "target": "native" }, { "target": "js" }])),
+    ),
+    new_job(
+      "consume",
+      [
+        new_run_step(
+          "read", "printf '%s' \"${{ needs.build.outputs.native }}\"",
+        ),
+      ],
+      needs=["build"],
     ),
   ])
 
   let result = lower_push_workflow(workflow)
 
+  inspect(result.errors, content="[]")
   inspect(
-    result.errors,
-    content="[\"job 'test' matrix outputs are not supported in P0\"]",
+    result.plan.job_outputs
+    .get("build__matrix_1")
+    .unwrap_or({})
+    .get("native")
+    .unwrap_or(""),
+    content="${{ steps.produce.outputs.native }}",
+  )
+  inspect(
+    result.plan.job_outputs
+    .get("build__matrix_2")
+    .unwrap_or({})
+    .get("js")
+    .unwrap_or(""),
+    content="${{ steps.produce.outputs.js }}",
   )
 }
 
