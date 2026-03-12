@@ -2108,6 +2108,46 @@ async test "executor: continue-on-error keeps workflow green and runs later step
 
 ///|
 #cfg(target="native")
+async test "executor: fromJSON can drive continue-on-error expression" {
+  let workspace = prepare_workspace("executor-continue-on-error-fromjson")
+
+  let workflow = new_workflow("ci", [
+    new_job(
+      "build",
+      [
+        new_run_step(
+          "fail_soft",
+          "echo boom 1>&2; exit 4",
+          continue_on_error="${{ fromJSON(env.SOFT_FAIL) }}",
+        ),
+        new_run_step("after", "printf '%s' after-ran"),
+      ],
+      env={ "SOFT_FAIL": "true" },
+      defaults=new_run_defaults(shell=Some("bash")),
+    ),
+  ])
+
+  let report = execute_lowered_native(
+    lower_push_workflow(workflow),
+    workspace_root=workspace,
+  )
+
+  inspect(report.ok, content="true")
+  inspect(report.state, content="completed")
+  inspect(
+    expect_task_report(report, "build/fail_soft").status,
+    content="failed",
+  )
+  inspect(
+    expect_step_report(report, "build/fail_soft").status,
+    content="success",
+  )
+  inspect(expect_task_report(report, "build/after").status, content="success")
+  inspect(expect_task_report(report, "build/after").stdout, content="after-ran")
+}
+
+///|
+#cfg(target="native")
 async test "executor: steps outcome and conclusion are available to later steps and if" {
   let workspace = prepare_workspace("executor-step-status-context")
 

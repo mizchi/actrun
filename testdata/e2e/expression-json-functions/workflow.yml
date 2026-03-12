@@ -1,0 +1,43 @@
+name: e2e-expression-json-functions
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      BOOL_TEXT: 'true'
+      EVENTS_JSON: '["push","pull_request"]'
+    steps:
+      - id: show
+        shell: bash
+        env:
+          BOOL_JSON: ${{ toJSON(fromJSON(env.BOOL_TEXT)) }}
+          REPO_JSON: ${{ toJSON(github.repository) }}
+        run: |
+          mkdir -p artifacts
+          printf '%s|%s|%s|%s' \
+            "${{ fromJSON(env.BOOL_TEXT) }}" \
+            "${{ contains(fromJSON(env.EVENTS_JSON), github.event_name) }}" \
+            "$BOOL_JSON" \
+            "$REPO_JSON" > artifacts/script.txt
+      - id: on_enabled
+        if: fromJSON(env.BOOL_TEXT)
+        run: |
+          mkdir -p artifacts
+          printf '%s' enabled > artifacts/enabled.txt
+      - id: on_event
+        if: contains(fromJSON(env.EVENTS_JSON), github.event_name)
+        run: |
+          mkdir -p artifacts
+          printf '%s' event > artifacts/event.txt
+      - id: skip_false
+        if: fromJSON('false')
+        run: |
+          mkdir -p artifacts
+          printf '%s' false > artifacts/false.txt
+      - id: collect
+        shell: bash
+        run: |
+          printf '%s|%s|%s' \
+            "$(test -f artifacts/enabled.txt && echo yes || echo no)" \
+            "$(test -f artifacts/event.txt && echo yes || echo no)" \
+            "$(test -f artifacts/false.txt && echo yes || echo no)" > artifacts/result.txt

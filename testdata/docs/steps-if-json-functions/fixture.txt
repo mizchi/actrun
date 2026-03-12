@@ -1,0 +1,8 @@
+id=docs-steps-if-json-functions
+source=docs
+mode=supported
+kind=run
+url=https://docs.github.com/en/actions/reference/workflows-and-actions/expressions
+docs_urls=https://docs.github.com/en/actions/reference/workflows-and-actions/expressions;https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax
+added_at=2026-03-13
+notes=step-level if supports fromJSON() and array values from fromJSON()

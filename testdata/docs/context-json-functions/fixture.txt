@@ -1,0 +1,8 @@
+id=docs-context-json-functions
+source=docs
+mode=supported
+kind=run
+url=https://docs.github.com/en/actions/reference/workflows-and-actions/expressions
+docs_urls=https://docs.github.com/en/actions/reference/workflows-and-actions/expressions;https://docs.github.com/en/actions/reference/workflows-and-actions/contexts
+added_at=2026-03-13
+notes=fromJSON() and toJSON() are available in step script and env

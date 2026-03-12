@@ -1,0 +1,20 @@
+name: json-functions
+'on': push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      BOOL_TEXT: 'true'
+      EVENTS_JSON: '["push","pull_request"]'
+    steps:
+      - id: show
+        shell: bash
+        env:
+          BOOL_JSON: ${{ toJSON(fromJSON(env.BOOL_TEXT)) }}
+          REPO_JSON: ${{ toJSON(github.repository) }}
+        run: |
+          printf '<%s|%s|%s|%s>' \
+            "${{ fromJSON(env.BOOL_TEXT) }}" \
+            "${{ contains(fromJSON(env.EVENTS_JSON), github.event_name) }}" \
+            "$BOOL_JSON" \
+            "$REPO_JSON"

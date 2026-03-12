@@ -1,7 +1,6 @@
 ///|
 priv enum ConditionValue {
-  Bool(Bool)
-  String(String)
+  JsonValue(Json)
 }
 
 ///|
@@ -449,7 +448,7 @@ fn condition_expression_has_status_check(text : String) -> Bool {
 }
 
 ///|
-fn if_string_function_supported(text : String) -> Bool {
+fn if_expression_function_supported(text : String) -> Bool {
   match if_function_arguments(text, "contains", 2) {
     Some(args) =>
       return if_condition_supported(args[0]) && if_condition_supported(args[1])
@@ -465,6 +464,14 @@ fn if_string_function_supported(text : String) -> Bool {
       return if_condition_supported(args[0]) && if_condition_supported(args[1])
     None => ()
   }
+  match if_function_arguments(text, "fromJSON", 1) {
+    Some(args) => return if_condition_supported(args[0])
+    None => ()
+  }
+  match if_function_arguments(text, "toJSON", 1) {
+    Some(args) => return if_condition_supported(args[0])
+    None => ()
+  }
   false
 }
 
@@ -476,7 +483,7 @@ fn if_condition_atom_supported(text : String) -> Bool {
   if if_quoted_string(text) is Some(_) {
     return true
   }
-  if if_string_function_supported(text) {
+  if if_expression_function_supported(text) {
     return true
   }
   let trimmed = strip_if_outer_parens(text)
@@ -560,28 +567,39 @@ fn if_condition_supported(text : String) -> Bool {
 ///|
 fn if_condition_value_truthy(value : ConditionValue) -> Bool {
   match value {
-    Bool(flag) => flag
-    String(text) => text.length() > 0
+    JsonValue(json) =>
+      match json {
+        False => false
+        Null => false
+        String(text) => text.length() > 0
+        Number(value, repr=_) => value != 0.0
+        _ => true
+      }
   }
 }
 
 ///|
 fn if_condition_value_eq(left : ConditionValue, right : ConditionValue) -> Bool {
   match left {
-    Bool(left_flag) => {
-      let left_text = if left_flag { "true" } else { "false" }
+    JsonValue(left_json) =>
       match right {
-        Bool(right_flag) => left_flag == right_flag
-        String(right_text) => left_text == right_text
-      }
-    }
-    String(left_text) =>
-      match right {
-        Bool(right_flag) => {
-          let right_text = if right_flag { "true" } else { "false" }
-          left_text == right_text
+        JsonValue(right_json) => {
+          if Json::equal(left_json, right_json) {
+            return true
+          }
+          match left_json {
+            Array(_) => false
+            Object(_) => false
+            _ =>
+              match right_json {
+                Array(_) => false
+                Object(_) => false
+                _ =>
+                  if_condition_value_to_string(left) ==
+                  if_condition_value_to_string(right)
+              }
+          }
         }
-        String(right_text) => left_text == right_text
       }
   }
 }
@@ -589,22 +607,61 @@ fn if_condition_value_eq(left : ConditionValue, right : ConditionValue) -> Bool 
 ///|
 fn if_condition_value_to_string(value : ConditionValue) -> String {
   match value {
-    Bool(flag) => if flag { "true" } else { "false" }
-    String(text) => text
+    JsonValue(json) =>
+      match json {
+        True => "true"
+        False => "false"
+        Null => ""
+        String(text) => text
+        Number(value, repr~) =>
+          match repr {
+            Some(text) => text
+            None => value.to_string()
+          }
+        Array(_) => Json::stringify(json)
+        Object(_) => Json::stringify(json)
+      }
   }
 }
 
 ///|
-fn if_string_function_value(text : String, ctx : IfConditionContext) -> Bool? {
+fn if_condition_value_json(value : ConditionValue) -> Json {
+  match value {
+    JsonValue(json) => json
+  }
+}
+
+///|
+fn if_condition_value_from_json(json : Json) -> ConditionValue {
+  JsonValue(json)
+}
+
+///|
+fn if_expression_function_value(
+  text : String,
+  ctx : IfConditionContext,
+) -> ConditionValue? {
   match if_function_arguments(text, "contains", 2) {
     Some(args) => {
-      let haystack = if_condition_value_to_string(
-        if_condition_atom_value(args[0], ctx),
-      )
-      let needle = if_condition_value_to_string(
-        if_condition_atom_value(args[1], ctx),
-      )
-      return Some(haystack.contains(needle))
+      let haystack = if_condition_atom_value(args[0], ctx)
+      let needle = if_condition_atom_value(args[1], ctx)
+      let matched = match if_condition_value_json(haystack) {
+        Array(items) => {
+          let mut found = false
+          for item in items {
+            if if_condition_value_eq(if_condition_value_from_json(item), needle) {
+              found = true
+              break
+            }
+          }
+          found
+        }
+        _ =>
+          if_condition_value_to_string(haystack).contains(
+            if_condition_value_to_string(needle),
+          )
+      }
+      return Some(if_condition_value_from_json(Json::boolean(matched)))
     }
     None => ()
   }
@@ -616,7 +673,11 @@ fn if_string_function_value(text : String, ctx : IfConditionContext) -> Bool? {
       let prefix = if_condition_value_to_string(
         if_condition_atom_value(args[1], ctx),
       )
-      return Some(text_value.has_prefix(prefix))
+      return Some(
+        if_condition_value_from_json(
+          Json::boolean(text_value.has_prefix(prefix)),
+        ),
+      )
     }
     None => ()
   }
@@ -628,7 +689,29 @@ fn if_string_function_value(text : String, ctx : IfConditionContext) -> Bool? {
       let suffix = if_condition_value_to_string(
         if_condition_atom_value(args[1], ctx),
       )
-      return Some(text_value.has_suffix(suffix))
+      return Some(
+        if_condition_value_from_json(
+          Json::boolean(text_value.has_suffix(suffix)),
+        ),
+      )
+    }
+    None => ()
+  }
+  match if_function_arguments(text, "fromJSON", 1) {
+    Some(args) => {
+      let source = if_condition_value_to_string(
+        if_condition_atom_value(args[0], ctx),
+      )
+      let json = @json.parse(source) catch { _ => Json::null() }
+      return Some(if_condition_value_from_json(json))
+    }
+    None => ()
+  }
+  match if_function_arguments(text, "toJSON", 1) {
+    Some(args) => {
+      let value = if_condition_atom_value(args[0], ctx)
+      let json_text = Json::stringify(if_condition_value_json(value))
+      return Some(if_condition_value_from_json(Json::string(json_text)))
     }
     None => ()
   }
@@ -641,81 +724,97 @@ fn if_condition_atom_value(
   ctx : IfConditionContext,
 ) -> ConditionValue {
   match if_bool_literal(text) {
-    Some(value) => return Bool(value)
+    Some(value) => return if_condition_value_from_json(Json::boolean(value))
     None => ()
   }
   match if_quoted_string(text) {
-    Some(value) => return String(value)
+    Some(value) => return if_condition_value_from_json(Json::string(value))
     None => ()
   }
-  match if_string_function_value(text, ctx) {
-    Some(value) => return Bool(value)
+  match if_expression_function_value(text, ctx) {
+    Some(value) => return value
     None => ()
   }
   let trimmed = strip_if_outer_parens(text)
   if trimmed == "success()" {
-    return Bool(ctx.success_value)
+    return if_condition_value_from_json(Json::boolean(ctx.success_value))
   }
   if trimmed == "always()" {
-    return Bool(true)
+    return if_condition_value_from_json(Json::boolean(true))
   }
   if trimmed == "failure()" {
-    return Bool(ctx.failure_value)
+    return if_condition_value_from_json(Json::boolean(ctx.failure_value))
   }
   if trimmed == "cancelled()" {
-    return Bool(ctx.cancelled_value)
+    return if_condition_value_from_json(Json::boolean(ctx.cancelled_value))
   }
   match if_step_output_name(trimmed) {
     Some((step_id, output_name)) =>
-      return String(
-        resolve_if_step_output(ctx.step_outputs, step_id, output_name),
+      return if_condition_value_from_json(
+        Json::string(
+          resolve_if_step_output(ctx.step_outputs, step_id, output_name),
+        ),
       )
     None => ()
   }
   match if_step_status_name(trimmed, ".outcome") {
     Some(step_id) =>
-      return String(resolve_if_step_status(ctx.step_outcomes, step_id))
+      return if_condition_value_from_json(
+        Json::string(resolve_if_step_status(ctx.step_outcomes, step_id)),
+      )
     None => ()
   }
   match if_step_status_name(trimmed, ".conclusion") {
     Some(step_id) =>
-      return String(resolve_if_step_status(ctx.step_conclusions, step_id))
+      return if_condition_value_from_json(
+        Json::string(resolve_if_step_status(ctx.step_conclusions, step_id)),
+      )
     None => ()
   }
   match if_needs_output_name(trimmed) {
     Some((job_id, output_name)) =>
-      return String(
-        resolve_if_needs_output(ctx.needs_outputs, job_id, output_name),
+      return if_condition_value_from_json(
+        Json::string(
+          resolve_if_needs_output(ctx.needs_outputs, job_id, output_name),
+        ),
       )
     None => ()
   }
   match if_needs_result_name(trimmed) {
     Some(job_id) =>
-      return String(resolve_if_needs_result(ctx.needs_results, job_id))
+      return if_condition_value_from_json(
+        Json::string(resolve_if_needs_result(ctx.needs_results, job_id)),
+      )
     None => ()
   }
   match if_env_name(trimmed) {
     Some(name) =>
-      return String(
-        if_map_get_case_insensitive(ctx.env_context, name).unwrap_or(""),
+      return if_condition_value_from_json(
+        Json::string(
+          if_map_get_case_insensitive(ctx.env_context, name).unwrap_or(""),
+        ),
       )
     None => ()
   }
   match if_github_name(trimmed) {
     Some(name) =>
-      return String(
-        if_map_get_case_insensitive(ctx.github_context, name).unwrap_or(""),
+      return if_condition_value_from_json(
+        Json::string(
+          if_map_get_case_insensitive(ctx.github_context, name).unwrap_or(""),
+        ),
       )
     None => ()
   }
   match if_runner_name(trimmed) {
     Some(name) =>
-      return String(
-        if_map_get_case_insensitive(ctx.runner_context, name).unwrap_or(""),
+      return if_condition_value_from_json(
+        Json::string(
+          if_map_get_case_insensitive(ctx.runner_context, name).unwrap_or(""),
+        ),
       )
     None => ()
   }
-  String("")
+  if_condition_value_from_json(Json::string(""))
 }
 
 ///|
@@ -723,8 +822,8 @@ fn evaluate_string_function_expression(
   text : String,
   ctx : IfConditionContext,
 ) -> String? {
-  match if_string_function_value(text, ctx) {
-    Some(value) => Some(if value { "true" } else { "false" })
+  match if_expression_function_value(text, ctx) {
+    Some(value) => Some(if_condition_value_to_string(value))
     None => None
   }
 }

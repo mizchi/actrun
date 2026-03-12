@@ -785,6 +785,25 @@ async test "compat docs: string functions are available in step script and env" 
 
 ///|
 #cfg(target="native")
+async test "compat docs: json functions are available in step script and env" {
+  let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
+    "context-json-functions",
+  )
+  let report = execute_lowered_native(
+    lower_push_workflow(workflow),
+    workspace_root=workspace,
+    push_event=compat_push_event_fixture(fixture),
+  )
+  let task = compat_expect_task_report(report, "build/show")
+
+  inspect(fixture.id, content="docs-context-json-functions")
+  inspect(report.ok, content="true")
+  inspect(task.status, content="success")
+  inspect(task.stdout, content="<true|true|true|\"mizchi/action_runner\">")
+}
+
+///|
+#cfg(target="native")
 async test "compat docs: github.action is available in step script and env" {
   let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
     "context-github-action",
@@ -912,6 +931,36 @@ async test "compat docs: step if string functions work in push workflow" {
     content="skipped",
   )
   inspect(verify.stdout, content="<yes|yes|yes|no>")
+}
+
+///|
+#cfg(target="native")
+async test "compat docs: step if json functions work in push workflow" {
+  let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
+    "steps-if-json-functions",
+  )
+  let report = execute_lowered_native(
+    lower_push_workflow(workflow),
+    workspace_root=workspace,
+    push_event=compat_push_event_fixture(fixture),
+  )
+  let verify = compat_expect_task_report(report, "build/verify")
+
+  inspect(fixture.id, content="docs-steps-if-json-functions")
+  inspect(report.ok, content="true")
+  inspect(
+    compat_expect_task_report(report, "build/on_enabled").status,
+    content="success",
+  )
+  inspect(
+    compat_expect_task_report(report, "build/on_event").status,
+    content="success",
+  )
+  inspect(
+    compat_expect_task_report(report, "build/skip_false").status,
+    content="skipped",
+  )
+  inspect(verify.stdout, content="<yes|yes|no>")
 }
 
 ///|

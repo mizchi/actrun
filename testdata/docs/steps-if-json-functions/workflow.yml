@@ -1,0 +1,31 @@
+name: steps-if-json-functions
+'on': push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      ENABLED_JSON: 'true'
+      EVENTS_JSON: '["push","pull_request"]'
+    steps:
+      - id: on_enabled
+        if: fromJSON(env.ENABLED_JSON)
+        run: |
+          mkdir -p artifacts
+          printf '%s' enabled > artifacts/enabled.txt
+      - id: on_event
+        if: contains(fromJSON(env.EVENTS_JSON), github.event_name)
+        run: |
+          mkdir -p artifacts
+          printf '%s' event > artifacts/event.txt
+      - id: skip_false
+        if: fromJSON('false')
+        run: |
+          mkdir -p artifacts
+          printf '%s' false > artifacts/false.txt
+      - id: verify
+        shell: bash
+        run: |
+          printf '<%s|%s|%s>' \
+            "$(test -f artifacts/enabled.txt && echo yes || echo no)" \
+            "$(test -f artifacts/event.txt && echo yes || echo no)" \
+            "$(test -f artifacts/false.txt && echo yes || echo no)"

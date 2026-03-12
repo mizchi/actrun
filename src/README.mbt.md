@@ -13,7 +13,7 @@ MVP の GitHub Actions 互換 push CI ランナー向けコア API。
 - matrix job に対する `needs` fan-in と aggregated `${{ needs.<job>.result }}` / `${{ needs.<job>.outputs.* }}`
 - minimal job-level `if:` (`success()` default, `always()` / `failure()` / `cancelled()`, simple `github.*` / `needs.*` comparison)
 - minimal step-level `if:` (`success()` default, `always()` / `failure()` / `cancelled()`)
-- minimal expression functions (`contains`, `startsWith`, `endsWith`)
+- minimal expression functions (`contains`, `startsWith`, `endsWith`, `fromJSON`, `toJSON`)
 - step-level `continue-on-error`
 - `${{ steps.<id>.outcome }}` / `${{ steps.<id>.conclusion }}` の最小対応
 - native host executor

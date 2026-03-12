@@ -1223,6 +1223,43 @@ async fn run_expression_string_functions() -> Unit {
 
 ///|
 #cfg(target="native")
+async fn run_expression_json_functions() -> Unit {
+  let scenario = "expression-json-functions"
+  let workspace = e2e_prepare_copied_dir(
+    "_build/e2e/workspaces",
+    scenario,
+    e2e_fixture_dir(scenario),
+  )
+  let result = e2e_run_cli([
+    e2e_join_path(workspace, "workflow.yml"),
+    "--event",
+    e2e_join_path(workspace, "event.json"),
+  ])
+  e2e_expect_ok(result, scenario)
+  e2e_expect_contains(
+    result.stdout,
+    "workflow=e2e-expression-json-functions",
+    scenario,
+  )
+  e2e_expect_contains(result.stdout, "state=completed", scenario)
+  e2e_expect_contains(result.stdout, "build/show: success", scenario)
+  e2e_expect_contains(result.stdout, "build/on_enabled: success", scenario)
+  e2e_expect_contains(result.stdout, "build/on_event: success", scenario)
+  e2e_expect_contains(result.stdout, "build/skip_false: skipped", scenario)
+  e2e_expect_eq(
+    e2e_read_text(e2e_join_path(workspace, "artifacts/script.txt")),
+    "true|true|true|\"mizchi/action_runner\"",
+    scenario + " script artifact",
+  )
+  e2e_expect_eq(
+    e2e_read_text(e2e_join_path(workspace, "artifacts/result.txt")),
+    "yes|yes|no",
+    scenario + " result artifact",
+  )
+}
+
+///|
+#cfg(target="native")
 async fn run_matrix_include_basic() -> Unit {
   let scenario = "matrix-include-basic"
   let workspace = e2e_prepare_copied_dir(
@@ -3607,6 +3644,10 @@ async fn main {
   println("e2e: expression-string-functions")
   run_expression_string_functions()
   println("e2e: expression-string-functions ok")
+
+  println("e2e: expression-json-functions")
+  run_expression_json_functions()
+  println("e2e: expression-json-functions ok")
 
   println("e2e: matrix-include-basic")
   run_matrix_include_basic()

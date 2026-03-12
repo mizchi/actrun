@@ -17,6 +17,7 @@
 - `setup-node-basic`: `actions/setup-node` の `node-version` と `registry-url` を確認する
 - `setup-node-cache-npm`: `actions/setup-node` の `cache: npm` が deferred save 後の次 job restore で hit する
 - `expression-string-functions`: `contains()` / `startsWith()` / `endsWith()` が script/env と `if:` で動く
+- `expression-json-functions`: `fromJSON()` / `toJSON()` と `contains(fromJSON(...), ...)` が script/env と `if:` で動く
 - `matrix-include-basic`: `strategy.matrix.include` と `${{ matrix.* }}` の最小展開
 - `matrix-exclude-basic`: `strategy.matrix.exclude` が row を除外する
 - `matrix-mixed-include-basic`: `strategy.matrix` の axes と include を同時に展開する
