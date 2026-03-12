@@ -1,0 +1,8 @@
+id=docs-strategy-matrix-fail-fast
+source=docs
+mode=supported
+kind=run
+url=https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax
+docs_urls=https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax
+added_at=2026-03-13
+notes=matrix fail-fast cancels queued rows in the same matrix after a required failure

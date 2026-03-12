@@ -1169,3 +1169,39 @@ test "lowering: matrix outputs are rejected in P0" {
     content="[\"job 'test' matrix outputs are not supported in P0\"]",
   )
 }
+
+///|
+test "lowering: matrix jobs retain fail-fast metadata" {
+  let workflow = new_workflow("ci", [
+    new_job(
+      "build",
+      [new_run_step("emit", "printf '%s' '${{ matrix.variant }}'")],
+      matrix=Some(
+        new_job_matrix(
+          [{ "variant": "ok" }, { "variant": "fail" }, { "variant": "late" }],
+          fail_fast=true,
+        ),
+      ),
+    ),
+  ])
+
+  let result = lower_push_workflow(workflow)
+
+  inspect(result.errors, content="[]")
+  inspect(
+    result.plan.job_matrix_groups.get("build__matrix_1").unwrap_or(""),
+    content="build",
+  )
+  inspect(
+    result.plan.job_matrix_groups.get("build__matrix_3").unwrap_or(""),
+    content="build",
+  )
+  inspect(
+    result.plan.job_matrix_fail_fast.get("build__matrix_1").unwrap_or(false),
+    content="true",
+  )
+  inspect(
+    result.plan.job_matrix_fail_fast.get("build__matrix_3").unwrap_or(false),
+    content="true",
+  )
+}

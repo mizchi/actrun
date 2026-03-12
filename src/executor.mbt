@@ -1119,6 +1119,17 @@ fn job_needs_results(
 }
 
 ///|
+fn matrix_group_members(plan : ExecutionPlan) -> Map[String, Array[String]] {
+  let groups : Map[String, Array[String]] = {}
+  for job_id, group in plan.job_matrix_groups {
+    let jobs = groups.get(group).unwrap_or([])
+    jobs.push(job_id)
+    groups[group] = jobs
+  }
+  groups
+}
+
+///|
 fn evaluate_job_outputs(
   output_defs : Map[String, String],
   state : JobRuntimeState,
@@ -1204,6 +1215,26 @@ fn task_report_skipped(
     kind: plan.kind,
     status: "skipped",
     code: 0,
+    shell: plan.shell,
+    script: plan.script,
+    cwd: resolve_task_cwd(workspace_root, plan.working_directory),
+    stdout: "",
+    stderr: message,
+    summary: "",
+  }
+}
+
+///|
+fn task_report_cancelled(
+  plan : TaskPlan,
+  workspace_root : String,
+  message : String,
+) -> TaskRunReport {
+  {
+    id: plan.id,
+    kind: plan.kind,
+    status: "cancelled",
+    code: 1,
     shell: plan.shell,
     script: plan.script,
     cwd: resolve_task_cwd(workspace_root, plan.working_directory),
@@ -2599,6 +2630,9 @@ pub async fn execute_lowered_native(
   let job_states : Map[String, JobRuntimeState] = {}
   let completed_job_outputs : Map[String, Map[String, String]] = {}
   let completed_job_results : Map[String, String] = {}
+  let matrix_groups = matrix_group_members(lowered.plan)
+  let cancelled_matrix_jobs : Map[String, Bool] = {}
+  let started_jobs : Map[String, Bool] = {}
   let mut required_failed = false
 
   while ready_idx < ready_queue.length() {
@@ -2614,139 +2648,187 @@ pub async fn execute_lowered_native(
       order.push(id)
       guard task_map.get(id) is Some(task) else { continue }
       let plan_opt = find_task_plan(lowered.plan, task.id)
+      match plan_opt {
+        Some(plan) => started_jobs[plan.job_id] = true
+        None => ()
+      }
       let current_state = match plan_opt {
         Some(plan) => job_runtime_state(job_states, plan.job_id)
         None => empty_job_runtime_state()
       }
-      let blocked_deps : Array[String] = []
-      for dep in task.needs {
-        if selected.get(dep) is None {
-          continue
-        }
-        if not(success.get(dep).unwrap_or(false)) {
-          blocked_deps.push(dep)
-        }
+      let cancelled_by_matrix = match plan_opt {
+        Some(plan) => cancelled_matrix_jobs.get(plan.job_id).unwrap_or(false)
+        None => false
       }
-      if blocked_deps.length() > 0 &&
-        not(
-          match plan_opt {
-            Some(plan) => plan.if_condition == "always()"
-            None => false
-          },
-        ) {
-        steps.push({
-          id: task.id,
-          status: "blocked",
-          required: task.required,
-          message: "blocked by dependency: " + blocked_deps.join(", "),
-        })
-        match plan_opt {
-          Some(plan) if plan.kind == "barrier" =>
-            completed_job_results[plan.job_id] = "failure"
-          _ => ()
-        }
-        success[task.id] = false
-        if task.required {
-          required_failed = true
-        }
-      } else {
+      if cancelled_by_matrix {
         match plan_opt {
           Some(plan) => {
-            let needs_outputs = job_needs_outputs(
-              lowered.plan,
-              plan.job_id,
-              completed_job_outputs,
-            )
-            let needs_results = job_needs_results(
-              lowered.plan,
-              plan.job_id,
-              completed_job_results,
-            )
-            if plan.requires_action_started &&
-              not(action_scope_started(current_state, plan.action_scope)) {
-              reports.push(
-                task_report_skipped(
-                  plan, workspace_root, "action lifecycle was not started",
-                ),
-              )
-              steps.push({
-                id: task.id,
-                status: "skipped",
-                required: task.required,
-                message: "action lifecycle was not started",
-              })
-              success[task.id] = true
-              continue
+            let message = "cancelled by matrix fail-fast"
+            reports.push(task_report_cancelled(plan, workspace_root, message))
+            steps.push({
+              id: task.id,
+              status: "cancelled",
+              required: task.required,
+              message,
+            })
+            if plan.kind == "barrier" {
+              completed_job_results[plan.job_id] = "cancelled"
             }
-            let result = execute_task_plan_native(
-              ir.name,
-              plan,
-              workspace_root,
-              current_state,
-              needs_outputs,
-              needs_results,
-              push_event,
-            )
-            let report = result.report
-            reports.push(report)
-            let next_state = apply_job_runtime_updates(
-              current_state,
-              plan.step_id,
-              plan.action_scope,
-              result.env_updates,
-              result.path_entries,
-              result.output_values,
-              result.state_updates,
-            )
-            job_states[plan.job_id] = next_state
-            if report.code == 0 {
-              if plan.kind == "barrier" {
-                completed_job_outputs[plan.job_id] = evaluate_job_outputs(
-                  lowered.plan.job_outputs.get(plan.job_id).unwrap_or({}),
-                  next_state,
+          }
+          None =>
+            steps.push({
+              id: task.id,
+              status: "cancelled",
+              required: task.required,
+              message: "cancelled by matrix fail-fast",
+            })
+        }
+        success[task.id] = false
+      } else {
+        let blocked_deps : Array[String] = []
+        for dep in task.needs {
+          if selected.get(dep) is None {
+            continue
+          }
+          if not(success.get(dep).unwrap_or(false)) {
+            blocked_deps.push(dep)
+          }
+        }
+        if blocked_deps.length() > 0 &&
+          not(
+            match plan_opt {
+              Some(plan) => plan.if_condition == "always()"
+              None => false
+            },
+          ) {
+          steps.push({
+            id: task.id,
+            status: "blocked",
+            required: task.required,
+            message: "blocked by dependency: " + blocked_deps.join(", "),
+          })
+          match plan_opt {
+            Some(plan) if plan.kind == "barrier" =>
+              completed_job_results[plan.job_id] = "failure"
+            _ => ()
+          }
+          success[task.id] = false
+          if task.required {
+            required_failed = true
+          }
+        } else {
+          match plan_opt {
+            Some(plan) => {
+              let needs_outputs = job_needs_outputs(
+                lowered.plan,
+                plan.job_id,
+                completed_job_outputs,
+              )
+              let needs_results = job_needs_results(
+                lowered.plan,
+                plan.job_id,
+                completed_job_results,
+              )
+              if plan.requires_action_started &&
+                not(action_scope_started(current_state, plan.action_scope)) {
+                reports.push(
+                  task_report_skipped(
+                    plan, workspace_root, "action lifecycle was not started",
+                  ),
                 )
-                completed_job_results[plan.job_id] = "success"
+                steps.push({
+                  id: task.id,
+                  status: "skipped",
+                  required: task.required,
+                  message: "action lifecycle was not started",
+                })
+                success[task.id] = true
+                continue
               }
-              steps.push({
-                id: task.id,
-                status: "success",
-                required: task.required,
-                message: report.stdout,
-              })
-              success[task.id] = true
-            } else {
-              if plan.kind == "barrier" {
-                completed_job_results[plan.job_id] = "failure"
-              }
-              let message = if report.stderr.length() > 0 {
-                report.stderr
-              } else if report.stdout.length() > 0 {
-                report.stdout
+              let result = execute_task_plan_native(
+                ir.name,
+                plan,
+                workspace_root,
+                current_state,
+                needs_outputs,
+                needs_results,
+                push_event,
+              )
+              let report = result.report
+              reports.push(report)
+              let next_state = apply_job_runtime_updates(
+                current_state,
+                plan.step_id,
+                plan.action_scope,
+                result.env_updates,
+                result.path_entries,
+                result.output_values,
+                result.state_updates,
+              )
+              job_states[plan.job_id] = next_state
+              if report.code == 0 {
+                if plan.kind == "barrier" {
+                  completed_job_outputs[plan.job_id] = evaluate_job_outputs(
+                    lowered.plan.job_outputs.get(plan.job_id).unwrap_or({}),
+                    next_state,
+                  )
+                  completed_job_results[plan.job_id] = "success"
+                }
+                steps.push({
+                  id: task.id,
+                  status: "success",
+                  required: task.required,
+                  message: report.stdout,
+                })
+                success[task.id] = true
               } else {
-                "task failed"
+                if plan.kind == "barrier" {
+                  completed_job_results[plan.job_id] = "failure"
+                }
+                let message = if report.stderr.length() > 0 {
+                  report.stderr
+                } else if report.stdout.length() > 0 {
+                  report.stdout
+                } else {
+                  "task failed"
+                }
+                steps.push({
+                  id: task.id,
+                  status: "failed",
+                  required: task.required,
+                  message,
+                })
+                success[task.id] = false
+                if task.required {
+                  required_failed = true
+                  let group = lowered.plan.job_matrix_groups
+                    .get(plan.job_id)
+                    .unwrap_or("")
+                  if group.length() > 0 &&
+                    lowered.plan.job_matrix_fail_fast
+                    .get(plan.job_id)
+                    .unwrap_or(false) {
+                    for job_member in matrix_groups.get(group).unwrap_or([]) {
+                      if job_member != plan.job_id &&
+                        not(started_jobs.get(job_member).unwrap_or(false)) {
+                        cancelled_matrix_jobs[job_member] = true
+                      }
+                    }
+                  }
+                }
               }
+            }
+            None => {
               steps.push({
                 id: task.id,
                 status: "failed",
                 required: task.required,
-                message,
+                message: "missing task plan",
               })
               success[task.id] = false
               if task.required {
                 required_failed = true
               }
-            }
-          }
-          None => {
-            steps.push({
-              id: task.id,
-              status: "failed",
-              required: task.required,
-              message: "missing task plan",
-            })
-            success[task.id] = false
-            if task.required {
-              required_failed = true
             }
           }
         }

@@ -66,6 +66,8 @@ fn lifecycle_step_id(step_id : String, phase : String) -> String {
 ///|
 priv struct ExpandedJob {
   job : JobSpec
+  matrix_group : String?
+  matrix_fail_fast : Bool
 }
 
 ///|
@@ -517,11 +519,14 @@ fn expand_matrix_jobs(
               actual_needs,
               row,
             ),
+            matrix_group: Some(job.id),
+            matrix_fail_fast: matrix.fail_fast,
           })
           row_index += 1
         }
       }
-      None => expanded.push({ job, })
+      None =>
+        expanded.push({ job, matrix_group: None, matrix_fail_fast: false })
     }
   }
   expanded
@@ -1369,6 +1374,8 @@ pub fn lower_push_workflow_in_workspace(
   let task_plans : Array[TaskPlan] = []
   let job_outputs : Map[String, Map[String, String]] = {}
   let job_needs : Map[String, Array[String]] = {}
+  let job_matrix_groups : Map[String, String] = {}
+  let job_matrix_fail_fast : Map[String, Bool] = {}
   let entry_targets : Array[String] = []
   let seen_jobs : Map[String, Bool] = {}
   let expanded_jobs = expand_matrix_jobs(workflow.jobs, errors)
@@ -1396,6 +1403,13 @@ pub fn lower_push_workflow_in_workspace(
     let job = expanded.job
     job_outputs[job.id] = job.outputs
     job_needs[job.id] = job.needs
+    match expanded.matrix_group {
+      Some(group) => {
+        job_matrix_groups[job.id] = group
+        job_matrix_fail_fast[job.id] = expanded.matrix_fail_fast
+      }
+      None => ()
+    }
     if job.reusable_workflow is Some(path) {
       errors.push(
         "job '\{job.id}' reusable workflow is not supported in MVP: \{path}",
@@ -1562,7 +1576,17 @@ pub fn lower_push_workflow_in_workspace(
   for issue in @wf.ir_issues(ir) {
     errors.push(issue)
   }
-  { ir, plan: { tasks: task_plans, job_outputs, job_needs }, errors }
+  {
+    ir,
+    plan: {
+      tasks: task_plans,
+      job_outputs,
+      job_needs,
+      job_matrix_groups,
+      job_matrix_fail_fast,
+    },
+    errors,
+  }
 }
 
 ///|

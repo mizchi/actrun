@@ -1293,6 +1293,129 @@ async test "executor: failed dependency blocks downstream job" {
 
 ///|
 #cfg(target="native")
+async test "executor: matrix fail-fast cancels later siblings" {
+  let workspace = prepare_workspace("executor-matrix-fail-fast")
+
+  let workflow = new_workflow("ci", [
+    new_job(
+      "build",
+      [
+        new_run_step(
+          "emit",
+          "mkdir -p artifacts\n" +
+          "printf '%s' '${{ matrix.variant }}' > artifacts/${{ matrix.variant }}.txt\n" +
+          "if [ '${{ matrix.variant }}' = 'fail' ]; then\n" +
+          "  echo boom 1>&2\n" +
+          "  exit 7\n" +
+          "fi",
+          shell=Some("bash"),
+        ),
+      ],
+      defaults=new_run_defaults(shell=Some("bash")),
+      matrix=Some(
+        new_job_matrix(
+          [{ "variant": "ok" }, { "variant": "fail" }, { "variant": "late" }],
+          fail_fast=true,
+        ),
+      ),
+    ),
+  ])
+
+  let report = execute_lowered_native(
+    lower_push_workflow(workflow),
+    workspace_root=workspace,
+  )
+
+  inspect(report.ok, content="false")
+  inspect(report.state, content="partial_failed")
+  inspect(
+    expect_task_report(report, "build__matrix_1/emit").status,
+    content="success",
+  )
+  inspect(
+    expect_task_report(report, "build__matrix_2/emit").status,
+    content="failed",
+  )
+  inspect(
+    expect_task_report(report, "build__matrix_3/emit").status,
+    content="cancelled",
+  )
+  inspect(
+    expect_step_report(report, "build__matrix_3/emit").status,
+    content="cancelled",
+  )
+  inspect(
+    @xfs.read_file_to_string(workspace + "/artifacts/ok.txt"),
+    content="ok",
+  )
+  inspect(
+    @xfs.read_file_to_string(workspace + "/artifacts/fail.txt"),
+    content="fail",
+  )
+  inspect(@xfs.path_exists(workspace + "/artifacts/late.txt"), content="false")
+}
+
+///|
+#cfg(target="native")
+async test "executor: matrix fail-fast false keeps later siblings running" {
+  let workspace = prepare_workspace("executor-matrix-no-fail-fast")
+
+  let workflow = new_workflow("ci", [
+    new_job(
+      "build",
+      [
+        new_run_step(
+          "emit",
+          "mkdir -p artifacts\n" +
+          "printf '%s' '${{ matrix.variant }}' > artifacts/${{ matrix.variant }}.txt\n" +
+          "if [ '${{ matrix.variant }}' = 'fail' ]; then\n" +
+          "  echo boom 1>&2\n" +
+          "  exit 7\n" +
+          "fi",
+          shell=Some("bash"),
+        ),
+      ],
+      defaults=new_run_defaults(shell=Some("bash")),
+      matrix=Some(
+        new_job_matrix(
+          [{ "variant": "ok" }, { "variant": "fail" }, { "variant": "late" }],
+          fail_fast=false,
+        ),
+      ),
+    ),
+  ])
+
+  let report = execute_lowered_native(
+    lower_push_workflow(workflow),
+    workspace_root=workspace,
+  )
+
+  inspect(report.ok, content="false")
+  inspect(report.state, content="partial_failed")
+  inspect(
+    expect_task_report(report, "build__matrix_1/emit").status,
+    content="success",
+  )
+  inspect(
+    expect_task_report(report, "build__matrix_2/emit").status,
+    content="failed",
+  )
+  inspect(
+    expect_task_report(report, "build__matrix_3/emit").status,
+    content="success",
+  )
+  inspect(
+    expect_step_report(report, "build__matrix_3/emit").status,
+    content="success",
+  )
+  inspect(
+    @xfs.read_file_to_string(workspace + "/artifacts/late.txt"),
+    content="late",
+  )
+}
+
+///|
+#cfg(target="native")
 async test "executor: docker actions run via docker adapter" {
   let workspace = prepare_workspace("executor-docker-action")
   let log_path = workspace + "/docker.log"

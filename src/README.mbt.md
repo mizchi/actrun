@@ -9,7 +9,7 @@ MVP の GitHub Actions 互換 push CI ランナー向けコア API。
 - workflow/job/step 契約型
 - `ActionRef` / resolver
 - `bitflow` IR への lowering
-- `strategy.matrix` の最小対応 (`axes` / `include` / `exclude` / mixed `axes + include` / `max-parallel`)
+- `strategy.matrix` の最小対応 (`axes` / `include` / `exclude` / mixed `axes + include` / `fail-fast` / `max-parallel`)
 - native host executor
 - `bit` repo から push commit を materialize する runtime
 - `uses: actions/checkout@*` と `uses: builtin://checkout` の最小 no-op 対応

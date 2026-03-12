@@ -1,0 +1,25 @@
+name: e2e-matrix-fail-fast
+'on':
+  push:
+    paths:
+      - workflow.yml
+jobs:
+  build:
+    strategy:
+      fail-fast: true
+      matrix:
+        variant:
+          - ok
+          - fail
+          - late
+    runs-on: ubuntu-latest
+    steps:
+      - id: emit
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          printf '%s' '${{ matrix.variant }}' > artifacts/${{ matrix.variant }}.txt
+          if [ '${{ matrix.variant }}' = 'fail' ]; then
+            echo boom 1>&2
+            exit 7
+          fi

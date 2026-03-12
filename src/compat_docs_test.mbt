@@ -299,6 +299,69 @@ test "compat docs: lower matrix max parallel fixture" {
 
 ///|
 #cfg(target="native")
+async test "compat docs: matrix fail-fast cancels later rows" {
+  let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
+    "strategy-matrix-fail-fast",
+  )
+  let report = execute_lowered_native(
+    lower_push_workflow(workflow),
+    workspace_root=workspace,
+    push_event=compat_push_event_fixture(fixture),
+  )
+
+  inspect(fixture.id, content="docs-strategy-matrix-fail-fast")
+  inspect(report.ok, content="false")
+  inspect(report.state, content="partial_failed")
+  inspect(
+    compat_expect_task_report(report, "build__matrix_1/emit").status,
+    content="success",
+  )
+  inspect(
+    compat_expect_task_report(report, "build__matrix_2/emit").status,
+    content="failed",
+  )
+  inspect(
+    compat_expect_task_report(report, "build__matrix_3/emit").status,
+    content="cancelled",
+  )
+  inspect(@xfs.path_exists(workspace + "/artifacts/late.txt"), content="false")
+}
+
+///|
+#cfg(target="native")
+async test "compat docs: matrix fail-fast false keeps later rows running" {
+  let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
+    "strategy-matrix-fail-fast-false",
+  )
+  let report = execute_lowered_native(
+    lower_push_workflow(workflow),
+    workspace_root=workspace,
+    push_event=compat_push_event_fixture(fixture),
+  )
+
+  inspect(fixture.id, content="docs-strategy-matrix-fail-fast-false")
+  inspect(report.ok, content="false")
+  inspect(report.state, content="partial_failed")
+  inspect(
+    compat_expect_task_report(report, "build__matrix_1/emit").status,
+    content="success",
+  )
+  inspect(
+    compat_expect_task_report(report, "build__matrix_2/emit").status,
+    content="failed",
+  )
+  inspect(
+    compat_expect_task_report(report, "build__matrix_3/emit").status,
+    content="success",
+  )
+  inspect(
+    @xfs.read_file_to_string(workspace + "/artifacts/late.txt"),
+    content="late",
+  )
+}
+
+///|
+#cfg(target="native")
 async test "compat docs: missing env property evaluates to empty string" {
   let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
     "context-missing-env",

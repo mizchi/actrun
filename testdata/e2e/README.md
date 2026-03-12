@@ -14,6 +14,7 @@
 - `matrix-exclude-basic`: `strategy.matrix.exclude` が row を除外する
 - `matrix-mixed-include-basic`: `strategy.matrix` の axes と include を同時に展開する
 - `matrix-max-parallel-basic`: `strategy.matrix.max-parallel` が expanded row を段階的に throttle しても全 row が実行される
+- `matrix-fail-fast-basic`: `strategy.matrix.fail-fast` が sibling row failure 後の未実行 row を cancel する
 - `job-failure-blocked`: required step failure と downstream `blocked`
 - `unsupported-uses`: unsupported `uses:` を CLI error として reject
 - `unsupported-matrix`: matrix outputs のような未対応 matrix 構文を CLI error として reject
