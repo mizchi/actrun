@@ -4,6 +4,9 @@
 
 ### Added
 
+- `actions/setup-node@*` の最小 builtin emulator (`node-version`, `cache: npm`, `registry-url`)
+- `compat-setup-node-cache-npm.yml` と `gha-compat-*` script の live compare 導線
+
 - `push` trigger matcher for MVP CI workflows
 - workflow YAML subset parser for `on.push`, `jobs`, `steps`, `env`, and `defaults.run`
 - workflow/job/step contract types
@@ -97,6 +100,12 @@
 - Added minimal `strategy.matrix` support for axes-only, include-only, exclude filtering, mixed axes+include workflows, `fail-fast`, `max-parallel` throttling, matrix-job `needs` fan-in, and aggregated matrix `needs.<job>.result` / `needs.<job>.outputs.*`, plus docs/E2E coverage for `${{ matrix.* }}` substitution
 - Added minimal job-level `if:` support with status functions and simple `github.*` / `needs.*` comparisons, plus docs/E2E coverage for default skip and `if: always()`
 - Added minimal step-level `if:` support for `always()` / `failure()` / `cancelled()`, plus docs/E2E coverage for default skip after failure
+- Added minimal step-level `continue-on-error` support, preserving failed task outcome while letting later steps run and the workflow stay green
+- Added minimal `${{ steps.<id>.outcome }}` / `${{ steps.<id>.conclusion }}` support for later step script/env/if expressions, and upgraded act `steps-context-*` fixtures to supported
+- Added minimal builtin `actions/checkout` `fetch-depth` support, plus docs/E2E coverage for shallow default and `fetch-depth: 0`
+- Added minimal builtin `actions/checkout` `ref` support, with branch-selection coverage in docs and E2E scenarios
+- Added minimal builtin `actions/checkout` `clean` support, preserving untracked files on `clean: false` while keeping default cleanup semantics, plus docs/E2E coverage
+- Added minimal builtin `actions/checkout` `submodules` support for `true` and `recursive`, plus docs/E2E coverage for direct vs nested submodule initialization
 - Added `gha-compat-compare` to replay dispatchable compat workflows locally and compare downloaded GitHub-hosted artifacts against local emulator output
 - Added `gha-compat-live` to dispatch a GitHub-hosted compat workflow, wait for completion, download artifacts, and compare against local emulator output in one step
 - Fixed builtin `actions/checkout` sparse-checkout to match default cone-mode semantics on GitHub-hosted runners, and added `sparse-checkout-cone-mode: false` regression coverage

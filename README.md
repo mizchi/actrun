@@ -13,15 +13,18 @@
 - native host executor
 - `bit` repo から push commit を materialize する runtime
 - `ActionRef` / resolver による `uses:` 解決
-- `uses: actions/checkout@*` と `uses: builtin://checkout` の最小 no-op 対応
-- `actions/checkout` の `path` / `sparse-checkout` / `sparse-checkout-cone-mode` の最小 builtin 対応
+- `uses: actions/checkout@*` と `uses: builtin://checkout` の最小 builtin 対応
+- `actions/checkout` の `path` / `sparse-checkout` / `sparse-checkout-cone-mode` / `fetch-depth` / `ref` / `clean` / `submodules` の最小 builtin 対応
 - `strategy.matrix` の最小対応 (`axes` / `include` / `exclude` / mixed `axes + include` / `fail-fast` / `max-parallel`, `${{ matrix.* }}` の `runs-on` / `run` / `env` / `with`)
 - matrix job に対する `needs` fan-in と aggregated `${{ needs.<job>.result }}` / `${{ needs.<job>.outputs.* }}`
 - minimal job-level `if:` (`success()` default, `always()` / `failure()` / `cancelled()`, simple `github.*` / `needs.*` comparison)
 - minimal step-level `if:` (`success()` default, `always()` / `failure()` / `cancelled()`)
+- step-level `continue-on-error`
+- `${{ steps.<id>.outcome }}` / `${{ steps.<id>.conclusion }}` の最小対応
 - `uses: actions/upload-artifact@*` / `uses: actions/download-artifact@*` の最小 builtin emulator
 - `uses: actions/cache/save@*` / `uses: actions/cache/restore@*` の最小 builtin emulator
 - `uses: actions/cache@*` の restore + deferred post-save builtin emulator
+- `uses: actions/setup-node@*` の最小 builtin emulator (`node-version`, `cache: npm`, `registry-url`)
 - native prefetch による `owner/repo[/path]@ref` GitHub repo action の remote fetch / cache fill
 - cache 済み `owner/repo[/path]@ref` GitHub repo composite action の workspace-aware 展開
 - cache 済み / prefetched `owner/repo[/path]@ref` GitHub repo `node*` action の最小実行
@@ -56,7 +59,7 @@
 
 ## まだないもの
 
-- `${{ ... }}` の広い context (`github` / `runner` の残り, matrix advanced, `vars`, `secrets` など)
+- `${{ ... }}` の広い context (`github` / `runner` の残り, `vars`, `secrets` など)
 - `pwsh` binary が存在しない環境での PowerShell workflow 実行
 - Wasm backend
 
@@ -66,11 +69,11 @@
 - local path (`./action`), `docker://image`, custom registry (`bit://std/cache@v1`) も `ActionRef` として parse
 - `./local-action` は workspace 上の `action.yml` / `action.yaml` を読んで composite step に展開し、`with` を `${{ inputs.* }}` に流し込む
 - `owner/repo[/path]@ref` は native prefetch が repo を cache root に clone し、manifest が composite なら local action と同様に展開する
-- 現在の resolver は `actions/checkout@*`, `actions/upload-artifact@*`, `actions/download-artifact@*`, `actions/cache@*`, `actions/cache/save@*`, `actions/cache/restore@*`, `builtin://checkout`, `docker://...` を action task に変換する
+- 現在の resolver は `actions/checkout@*`, `actions/upload-artifact@*`, `actions/download-artifact@*`, `actions/cache@*`, `actions/cache/save@*`, `actions/cache/restore@*`, `actions/setup-node@*`, `builtin://checkout`, `docker://...` を action task に変換する
 - native executor が実際に実行できるのは `builtin` backend、local / cached GitHub composite action 展開後の `run` task、`docker://...` action、cache 済み / prefetched GitHub repo `node*` action、cache 済み / prefetched GitHub repo `runs.using: docker` action です。GitHub repo `node*` action では `pre` / `main` / `post`、GitHub repo `runs.using: docker` action では `pre-entrypoint` / `entrypoint` / `post-entrypoint` が job の最後に post cleanup をぶら下げる形で走ります
 - backend は namespace と分離していて、今の checkout は `builtin` backend の no-op step として扱う
 - GitHub action cache root は既定で `_build/action_runner/github_actions`、`ACTION_RUNNER_GITHUB_ACTION_CACHE_ROOT` で上書きできる
-- prefetch が使う `git` binary は `ACTION_RUNNER_GIT_BIN`、native executor が使う `node` / `docker` binary は `ACTION_RUNNER_NODE_BIN` / `ACTION_RUNNER_DOCKER_BIN`、GitHub host は `ACTION_RUNNER_GITHUB_BASE_URL` で上書きできる
+- prefetch が使う `git` binary は `ACTION_RUNNER_GIT_BIN`、native executor が使う `node` / `docker` binary は `ACTION_RUNNER_NODE_BIN` / `ACTION_RUNNER_DOCKER_BIN`、`setup-node` builtin が使う binary は `ACTION_RUNNER_SETUP_NODE_BIN`、GitHub host は `ACTION_RUNNER_GITHUB_BASE_URL` で上書きできる
 
 ## Quick Commands
 
@@ -92,9 +95,9 @@ just info      # generate type definition files
 
 `--event` を渡すと GitHub の push webhook payload JSON から `ref` / `before` / `after` / `repository` / `sender` / changed paths を読みます。CLI の `--ref` / `--before` / `--after` / `--changed` / `--repository` は event JSON より優先されます。`--repo` mode では `bit` runtime が `after_sha` の tree を workspace に materialize してから workflow を実行します。lowering 前には GitHub repo action の native prefetch も走ります。`--changed` を省略した場合は `bit` diff で changed paths を自動計算します。正確な push range を使いたい場合は `--before` を渡します。`${{ github.repository }}` / `GITHUB_REPOSITORY` は、`--repository` があればそれを使い、未指定なら repo root の `origin` remote URL から自動推測します。
 
-`just e2e` は build 済み CLI 実行ファイルを直接叩いて、`testdata/e2e` の black-box scenario を順に流します。現時点では local push workflow、local composite action、trigger skip、file commands、artifact action roundtrip、cache action roundtrip、cache auto-save roundtrip、checkout `path + sparse-checkout`、matrix include、matrix exclude、matrix mixed include、matrix max-parallel、matrix fail-fast、matrix needs/output aggregation、failure 後の downstream job skip、job-level `if: always()`、step-level `if: always()/failure()/cancelled()`、invalid / unsupported matrix reject、`--event` に対する CLI override、`head_commit` fallback、direct `docker://...` action、remote composite prefetch、nested remote composite prefetch、nested remote composite cache hit、remote composite cache hit、remote `node` / `docker` lifecycle、remote `node` / `docker` failure cleanup、cache 済み remote `node` / `docker` failure cleanup、nested remote `node` / `docker` prefetch、nested remote `node` / `docker` cache hit、cache 済み remote `node` / `docker` action、`bit` repo materialization、repo mode の `needs.outputs`、repo mode の job-scoped file commands、repo mode の multi-job summary、repo mode の `needs.outputs + GITHUB_STEP_SUMMARY`、repo mode の remote `node` / `docker` failure cleanup、repo mode の cache 済み remote `node` / `docker` failure cleanup、`--repo + --event` の実行経路、repo mode の `head_commit` fallback、repo origin からの repository auto-detect、event payload に repository が無い場合の repo auto-detect、repo mode での `head_commit` fallback + repository auto-detect を確認します。
+`just e2e` は build 済み CLI 実行ファイルを直接叩いて、`testdata/e2e` の black-box scenario を順に流します。現時点では local push workflow、local composite action、trigger skip、file commands、artifact action roundtrip、cache action roundtrip、cache auto-save roundtrip、checkout `path + sparse-checkout`、checkout `fetch-depth`、checkout `ref`、checkout `clean`、checkout `submodules`、`setup-node` の `node-version + registry-url`、`setup-node cache: npm`、matrix include、matrix exclude、matrix mixed include、matrix max-parallel、matrix fail-fast、matrix needs/output aggregation、failure 後の downstream job skip、job-level `if: always()`、step-level `if: always()/failure()/cancelled()`、step-level `continue-on-error`、`${{ steps.<id>.outcome }}` / `${{ steps.<id>.conclusion }}`、invalid / unsupported matrix reject、`--event` に対する CLI override、`head_commit` fallback、direct `docker://...` action、remote composite prefetch、nested remote composite prefetch、nested remote composite cache hit、remote composite cache hit、remote `node` / `docker` lifecycle、remote `node` / `docker` failure cleanup、cache 済み remote `node` / `docker` failure cleanup、nested remote `node` / `docker` prefetch、nested remote `node` / `docker` cache hit、cache 済み remote `node` / `docker` action、`bit` repo materialization、repo mode の `needs.outputs`、repo mode の job-scoped file commands、repo mode の multi-job summary、repo mode の `needs.outputs + GITHUB_STEP_SUMMARY`、repo mode の remote `node` / `docker` failure cleanup、repo mode の cache 済み remote `node` / `docker` failure cleanup、`--repo + --event` の実行経路、repo mode の `head_commit` fallback、repo origin からの repository auto-detect、event payload に repository が無い場合の repo auto-detect、repo mode での `head_commit` fallback + repository auto-detect を確認します。
 
-GitHub hosted runner との実値比較用に [compat-checkout-artifact.yml](/Users/mz/ghq/github.com/mizchi/action_runner/.github/workflows/compat-checkout-artifact.yml)、[compat-checkout-sparse.yml](/Users/mz/ghq/github.com/mizchi/action_runner/.github/workflows/compat-checkout-sparse.yml)、[compat-artifact-multi-job.yml](/Users/mz/ghq/github.com/mizchi/action_runner/.github/workflows/compat-artifact-multi-job.yml)、[compat-cache-roundtrip.yml](/Users/mz/ghq/github.com/mizchi/action_runner/.github/workflows/compat-cache-roundtrip.yml)、[compat-cache-auto-save.yml](/Users/mz/ghq/github.com/mizchi/action_runner/.github/workflows/compat-cache-auto-save.yml) を追加しています。どれも `workflow_dispatch` で起動でき、観測値を artifact に保存します。`just gha-compat-dispatch <workflow>` で起動して、run id が分かったら `just gha-compat-download <run_id>` で artifact を回収し、`just gha-compat-compare <workflow> <download-dir>` で local emulator と比較できます。repo を push 済みなら `just gha-compat-live <workflow>` で `dispatch -> wait -> download -> compare` をまとめて実行できます。
+GitHub hosted runner との実値比較用に [compat-checkout-artifact.yml](/Users/mz/ghq/github.com/mizchi/action_runner/.github/workflows/compat-checkout-artifact.yml)、[compat-checkout-sparse.yml](/Users/mz/ghq/github.com/mizchi/action_runner/.github/workflows/compat-checkout-sparse.yml)、[compat-checkout-fetch-depth.yml](/Users/mz/ghq/github.com/mizchi/action_runner/.github/workflows/compat-checkout-fetch-depth.yml)、[compat-checkout-clean.yml](/Users/mz/ghq/github.com/mizchi/action_runner/.github/workflows/compat-checkout-clean.yml)、[compat-setup-node-basic.yml](/Users/mz/ghq/github.com/mizchi/action_runner/.github/workflows/compat-setup-node-basic.yml)、[compat-setup-node-cache-npm.yml](/Users/mz/ghq/github.com/mizchi/action_runner/.github/workflows/compat-setup-node-cache-npm.yml)、[compat-artifact-multi-job.yml](/Users/mz/ghq/github.com/mizchi/action_runner/.github/workflows/compat-artifact-multi-job.yml)、[compat-cache-roundtrip.yml](/Users/mz/ghq/github.com/mizchi/action_runner/.github/workflows/compat-cache-roundtrip.yml)、[compat-cache-auto-save.yml](/Users/mz/ghq/github.com/mizchi/action_runner/.github/workflows/compat-cache-auto-save.yml) を追加しています。どれも `workflow_dispatch` で起動でき、観測値を artifact に保存します。`just gha-compat-dispatch <workflow>` で起動して、run id が分かったら `just gha-compat-download <run_id>` で artifact を回収し、`just gha-compat-compare <workflow> <download-dir>` で local emulator と比較できます。repo を push 済みなら `just gha-compat-live <workflow>` で `dispatch -> wait -> download -> compare` をまとめて実行できます。
 
 ## 設計メモ
 

@@ -55,7 +55,8 @@ priv struct JobRuntimeState {
   env_updates : Map[String, String]
   path_entries : Array[String]
   step_outputs : Map[String, Map[String, String]]
-  step_results : Map[String, String]
+  step_outcomes : Map[String, String]
+  step_conclusions : Map[String, String]
   action_states : Map[String, Map[String, String]]
   started_action_scopes : Map[String, Bool]
 }
@@ -85,7 +86,8 @@ fn empty_job_runtime_state() -> JobRuntimeState {
     env_updates: {},
     path_entries: [],
     step_outputs: {},
-    step_results: {},
+    step_outcomes: {},
+    step_conclusions: {},
     action_states: {},
     started_action_scopes: {},
   }
@@ -152,7 +154,8 @@ fn append_paths(newer : Array[String], older : Array[String]) -> Array[String] {
 fn apply_job_runtime_updates(
   state : JobRuntimeState,
   step_id : String,
-  step_result : String?,
+  step_outcome : String?,
+  step_conclusion : String?,
   action_scope : String?,
   env_updates : Map[String, String],
   path_entries : Array[String],
@@ -165,15 +168,23 @@ fn apply_job_runtime_updates(
   for key, value in state.step_outputs {
     updated_outputs[key] = value
   }
-  let updated_results : Map[String, String] = {}
-  for key, value in state.step_results {
-    updated_results[key] = value
+  let updated_outcomes : Map[String, String] = {}
+  for key, value in state.step_outcomes {
+    updated_outcomes[key] = value
+  }
+  let updated_conclusions : Map[String, String] = {}
+  for key, value in state.step_conclusions {
+    updated_conclusions[key] = value
   }
   if step_id.length() > 0 && output_values.length() > 0 {
     updated_outputs[step_id] = output_values
   }
-  match step_result {
-    Some(value) if step_id.length() > 0 => updated_results[step_id] = value
+  match step_outcome {
+    Some(value) if step_id.length() > 0 => updated_outcomes[step_id] = value
+    _ => ()
+  }
+  match step_conclusion {
+    Some(value) if step_id.length() > 0 => updated_conclusions[step_id] = value
     _ => ()
   }
   let updated_env = if updated_paths.length() > 0 {
@@ -215,7 +226,8 @@ fn apply_job_runtime_updates(
     env_updates: updated_env,
     path_entries: updated_paths,
     step_outputs: updated_outputs,
-    step_results: updated_results,
+    step_outcomes: updated_outcomes,
+    step_conclusions: updated_conclusions,
     action_states: updated_action_states,
     started_action_scopes: updated_started_action_scopes,
   }
@@ -562,6 +574,20 @@ fn step_output_expr_name(expression : String) -> (String, String)? {
 }
 
 ///|
+fn step_status_expr_name(expression : String, suffix : String) -> String? {
+  let trimmed = expression.trim(chars=" \t\n\r").to_string()
+  guard trimmed.has_prefix("steps.") && trimmed.has_suffix(suffix) else {
+    return None
+  }
+  let step_id = exec_text_slice(trimmed, 6, trimmed.length() - suffix.length())
+  if step_id.length() == 0 {
+    None
+  } else {
+    Some(step_id)
+  }
+}
+
+///|
 fn needs_output_expr_name(expression : String) -> (String, String)? {
   let trimmed = expression.trim(chars=" \t\n\r").to_string()
   guard trimmed.has_prefix("needs.") && trimmed.length() > 6 else {
@@ -634,6 +660,16 @@ fn resolve_step_output(
       map_get_case_insensitive(outputs, output_name).unwrap_or("")
     None => ""
   }
+}
+
+///|
+fn resolve_step_outcome(state : JobRuntimeState, step_id : String) -> String {
+  map_get_case_insensitive(state.step_outcomes, step_id).unwrap_or("")
+}
+
+///|
+fn resolve_step_conclusion(state : JobRuntimeState, step_id : String) -> String {
+  map_get_case_insensitive(state.step_conclusions, step_id).unwrap_or("")
 }
 
 ///|
@@ -930,47 +966,61 @@ fn substitute_runtime_text(
               Some((step_id, output_name)) =>
                 chunks.push(resolve_step_output(state, step_id, output_name))
               None =>
-                match needs_output_expr_name(expression) {
-                  Some((job_id, output_name)) =>
-                    chunks.push(
-                      resolve_needs_output(needs_outputs, job_id, output_name),
-                    )
+                match step_status_expr_name(expression, ".outcome") {
+                  Some(step_id) =>
+                    chunks.push(resolve_step_outcome(state, step_id))
                   None =>
-                    match needs_result_expr_name(expression) {
-                      Some(job_id) =>
-                        chunks.push(resolve_needs_result(needs_results, job_id))
+                    match step_status_expr_name(expression, ".conclusion") {
+                      Some(step_id) =>
+                        chunks.push(resolve_step_conclusion(state, step_id))
                       None =>
-                        match env_expr_name(expression) {
-                          Some(name) =>
+                        match needs_output_expr_name(expression) {
+                          Some((job_id, output_name)) =>
                             chunks.push(
-                              map_get_case_insensitive(env_context, name).unwrap_or(
-                                "",
+                              resolve_needs_output(
+                                needs_outputs, job_id, output_name,
                               ),
                             )
                           None =>
-                            match github_expr_name(expression) {
-                              Some(name) =>
+                            match needs_result_expr_name(expression) {
+                              Some(job_id) =>
                                 chunks.push(
-                                  map_get_case_insensitive(github_context, name).unwrap_or(
-                                    "",
-                                  ),
+                                  resolve_needs_result(needs_results, job_id),
                                 )
                               None =>
-                                match runner_expr_name(expression) {
+                                match env_expr_name(expression) {
                                   Some(name) =>
                                     chunks.push(
                                       map_get_case_insensitive(
-                                        runner_context, name,
+                                        env_context, name,
                                       ).unwrap_or(""),
                                     )
                                   None =>
-                                    chunks.push(
-                                      exec_text_slice(
-                                        text,
-                                        open_idx,
-                                        close_idx + 2,
-                                      ),
-                                    )
+                                    match github_expr_name(expression) {
+                                      Some(name) =>
+                                        chunks.push(
+                                          map_get_case_insensitive(
+                                            github_context, name,
+                                          ).unwrap_or(""),
+                                        )
+                                      None =>
+                                        match runner_expr_name(expression) {
+                                          Some(name) =>
+                                            chunks.push(
+                                              map_get_case_insensitive(
+                                                runner_context, name,
+                                              ).unwrap_or(""),
+                                            )
+                                          None =>
+                                            chunks.push(
+                                              exec_text_slice(
+                                                text,
+                                                open_idx,
+                                                close_idx + 2,
+                                              ),
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -1195,8 +1245,8 @@ fn job_if_cancelled_value(needs_results : Map[String, String]) -> Bool {
 
 ///|
 fn step_if_success_value(state : JobRuntimeState) -> Bool {
-  for _, value in state.step_results {
-    if value == "failed" || value == "cancelled" {
+  for _, value in state.step_conclusions {
+    if value == "failure" || value == "cancelled" {
       return false
     }
   }
@@ -1205,8 +1255,8 @@ fn step_if_success_value(state : JobRuntimeState) -> Bool {
 
 ///|
 fn step_if_failure_value(state : JobRuntimeState) -> Bool {
-  for _, value in state.step_results {
-    if value == "failed" {
+  for _, value in state.step_conclusions {
+    if value == "failure" {
       return true
     }
   }
@@ -1215,12 +1265,38 @@ fn step_if_failure_value(state : JobRuntimeState) -> Bool {
 
 ///|
 fn step_if_cancelled_value(state : JobRuntimeState) -> Bool {
-  for _, value in state.step_results {
+  for _, value in state.step_conclusions {
     if value == "cancelled" {
       return true
     }
   }
   false
+}
+
+///|
+fn task_outcome(report : TaskRunReport) -> String {
+  if report.status == "skipped" || report.status == "cancelled" {
+    return report.status
+  }
+  if report.code == 0 {
+    "success"
+  } else {
+    "failure"
+  }
+}
+
+///|
+fn task_conclusion(outcome : String, continue_on_error : Bool) -> String {
+  if outcome == "failure" && continue_on_error {
+    "success"
+  } else {
+    outcome
+  }
+}
+
+///|
+fn task_conclusion_allows_dependents(conclusion : String) -> Bool {
+  conclusion == "success" || conclusion == "skipped"
 }
 
 ///|
@@ -1476,6 +1552,42 @@ fn exec_copy_tree(src : String, dst : String) -> Bool {
 }
 
 ///|
+fn exec_clear_dir_contents(path : String) -> Bool {
+  if not(ensure_exec_dir_recursive(path)) {
+    return false
+  }
+  let entries = try @xfs.read_dir(path) catch {
+    _ => []
+  } noraise {
+    value => value
+  }
+  for entry in entries {
+    if not(exec_remove_tree(path + "/" + entry)) {
+      return false
+    }
+  }
+  true
+}
+
+///|
+fn exec_copy_dir_contents(src : String, dst : String) -> Bool {
+  if not(exec_clear_dir_contents(dst)) {
+    return false
+  }
+  let entries = try @xfs.read_dir(src) catch {
+    _ => []
+  } noraise {
+    value => value
+  }
+  for entry in entries {
+    if not(exec_copy_tree(src + "/" + entry, dst + "/" + entry)) {
+      return false
+    }
+  }
+  true
+}
+
+///|
 fn checkout_wildcard_match(pattern : String, text : String) -> Bool {
   let mut p = 0
   let mut t = 0
@@ -1647,6 +1759,462 @@ fn parse_checkout_cone_mode(value : String) -> Bool {
 }
 
 ///|
+fn parse_checkout_fetch_depth(value : String) -> Int? {
+  let trimmed = value.trim(chars=" \t\r\n").to_string()
+  if trimmed.length() == 0 {
+    return Some(1)
+  }
+  let parsed = @strconv.parse_int64(trimmed) catch { _ => return None }
+  if parsed < 0 {
+    None
+  } else {
+    Some(parsed.to_int())
+  }
+}
+
+///|
+fn parse_checkout_clean(value : String) -> Bool {
+  let normalized = value.trim(chars=" \t\r\n").to_lower()
+  normalized != "false" && normalized != "0" && normalized != "no"
+}
+
+///|
+fn parse_checkout_submodules(value : String) -> String {
+  let normalized = value.trim(chars=" \t\r\n").to_lower()
+  if normalized == "recursive" {
+    "recursive"
+  } else if normalized == "true" || normalized == "1" || normalized == "yes" {
+    "true"
+  } else {
+    ""
+  }
+}
+
+///|
+fn parse_checkout_ref(value : String) -> String {
+  value.trim(chars=" \t\r\n").to_string()
+}
+
+///|
+fn normalize_setup_node_registry_url(value : String) -> String {
+  let trimmed = value.trim(chars=" \t\r\n").to_string()
+  if trimmed.length() == 0 {
+    ""
+  } else if trimmed.has_suffix("/") {
+    trimmed
+  } else {
+    trimmed + "/"
+  }
+}
+
+///|
+fn normalize_setup_node_version(
+  value : String,
+  current_version : String,
+) -> String {
+  let trimmed = value.trim(chars=" \t\r\n").to_string()
+  if trimmed.length() == 0 {
+    return current_version
+  }
+  let bare = if trimmed.has_prefix("v") {
+    exec_text_slice(trimmed, 1, trimmed.length())
+  } else {
+    trimmed
+  }
+  let first = bare.split(".").next().unwrap_or("").to_string()
+  let mut digits = ""
+  for c in first {
+    if c >= '0' && c <= '9' {
+      digits += c.to_string()
+    } else {
+      break
+    }
+  }
+  if digits.length() == 0 {
+    return current_version
+  }
+  let parts : Array[String] = []
+  for part_view in bare.split(".") {
+    let part = part_view.to_string()
+    if part.length() == 0 {
+      continue
+    }
+    if part == "x" || part == "*" {
+      break
+    }
+    let mut numeric = ""
+    for c in part {
+      if c >= '0' && c <= '9' {
+        numeric += c.to_string()
+      } else {
+        break
+      }
+    }
+    if numeric.length() == 0 {
+      break
+    }
+    parts.push(numeric)
+  }
+  let major = parts.get(0).unwrap_or(digits)
+  let minor = parts.get(1).unwrap_or("0")
+  let patch = parts.get(2).unwrap_or("0")
+  "v" + major + "." + minor + "." + patch
+}
+
+///|
+fn checkout_temp_root(workspace_root : String, task_id : String) -> String {
+  ignore(ensure_exec_dir_recursive("_build/action_runner/checkouts"))
+  let workspace_key = sanitize_task_id(
+    absolute_exec_path(resolve_task_cwd(workspace_root, "")),
+  )
+  let root = absolute_exec_path(
+    "_build/action_runner/checkouts/" +
+    workspace_key +
+    "/" +
+    sanitize_task_id(task_id),
+  )
+  ignore(exec_remove_tree(root))
+  ignore(ensure_exec_dir_recursive(root))
+  root
+}
+
+///|
+fn exec_has_git_repo(path : String) -> Bool {
+  @xfs.path_exists(path + "/.git")
+}
+
+///|
+async fn exec_git_command_text(
+  git_bin : String,
+  args : Array[String],
+  cwd : String,
+) -> (Int, String, String) {
+  let (code, stdout, stderr) = @process.collect_output(git_bin, args, cwd~)
+  (code, stdout.text(), stderr.text())
+}
+
+///|
+async fn exec_git_list_files(git_bin : String, cwd : String) -> String? {
+  let (code, stdout, _) = exec_git_command_text(git_bin, ["ls-files"], cwd)
+  if code == 0 {
+    Some(stdout)
+  } else {
+    None
+  }
+}
+
+///|
+fn exec_command_message(
+  stdout : String,
+  stderr : String,
+  fallback : String,
+) -> String {
+  if stderr.length() > 0 {
+    stderr
+  } else if stdout.length() > 0 {
+    stdout
+  } else {
+    fallback
+  }
+}
+
+///|
+async fn exec_git_clone_into(
+  git_bin : String,
+  source_root : String,
+  temp_root : String,
+  fetch_depth : Int,
+  ref_name? : String = "",
+) -> (Int, String, String) {
+  let args : Array[String] = ["clone", "--quiet", "--no-local"]
+  if fetch_depth > 0 {
+    args.push("--depth")
+    args.push(fetch_depth.to_string())
+  }
+  if ref_name.length() > 0 {
+    args.push("--branch")
+    args.push(ref_name)
+  }
+  args.push("file://" + absolute_exec_path(source_root))
+  args.push(temp_root)
+  exec_git_command_text(git_bin, args, ".")
+}
+
+///|
+async fn exec_git_update_submodules(
+  git_bin : String,
+  repo_root : String,
+  submodules_mode : String,
+) -> (Int, String, String) {
+  if submodules_mode.length() == 0 {
+    return (0, "", "")
+  }
+  let sync_args : Array[String] = [
+    "-c", "protocol.file.allow=always", "submodule", "sync", "--recursive",
+  ]
+  let (sync_code, sync_stdout, sync_stderr) = exec_git_command_text(
+    git_bin, sync_args, repo_root,
+  )
+  if sync_code != 0 {
+    return (sync_code, sync_stdout, sync_stderr)
+  }
+  let update_args : Array[String] = [
+    "-c", "protocol.file.allow=always", "submodule", "update", "--init",
+  ]
+  if submodules_mode == "recursive" {
+    update_args.push("--recursive")
+  }
+  exec_git_command_text(git_bin, update_args, repo_root)
+}
+
+///|
+fn exec_remove_missing_tracked_files(
+  destination : String,
+  current_tracked : String,
+  next_tracked : String,
+) -> Bool {
+  let next_map : Map[String, Bool] = {}
+  for relative in split_nonempty_lines(next_tracked) {
+    next_map[relative] = true
+  }
+  for relative in split_nonempty_lines(current_tracked) {
+    if next_map.get(relative).unwrap_or(false) {
+      continue
+    }
+    if not(exec_remove_tree(destination + "/" + relative)) {
+      return false
+    }
+  }
+  true
+}
+
+///|
+fn exec_copy_dir_contents_preserving_untracked(
+  src : String,
+  dst : String,
+  current_tracked : String,
+  next_tracked : String,
+) -> Bool {
+  if not(ensure_exec_dir_recursive(dst)) {
+    return false
+  }
+  if not(exec_remove_tree(dst + "/.git")) {
+    return false
+  }
+  if not(exec_copy_tree(src + "/.git", dst + "/.git")) {
+    return false
+  }
+  if not(exec_remove_missing_tracked_files(dst, current_tracked, next_tracked)) {
+    return false
+  }
+  let entries = try @xfs.read_dir(src) catch {
+    _ => []
+  } noraise {
+    value => value
+  }
+  for entry in entries {
+    if entry == ".git" {
+      continue
+    }
+    if not(exec_copy_tree(src + "/" + entry, dst + "/" + entry)) {
+      return false
+    }
+  }
+  true
+}
+
+///|
+async fn exec_git_clone_checkout(
+  plan : TaskPlan,
+  workspace_root : String,
+  source_root : String,
+  checkout_root : String,
+  fetch_depth : Int,
+  clean : Bool,
+  resolved_plan_env : Map[String, String],
+) -> TaskRunReport? {
+  let temp_root = checkout_temp_root(workspace_root, plan.id)
+  let git_bin = configured_exec_bin(
+    "ACTION_RUNNER_GIT_BIN", resolved_plan_env, "git",
+  )
+  let checkout_ref = parse_checkout_ref(
+    resolved_plan_env.get("INPUT_REF").unwrap_or(""),
+  )
+  let submodules_mode = parse_checkout_submodules(
+    resolved_plan_env.get("INPUT_SUBMODULES").unwrap_or(""),
+  )
+  let mut clone_ready = false
+  if checkout_ref.length() > 0 {
+    let (branch_code, branch_stdout, branch_stderr) = exec_git_clone_into(
+      git_bin,
+      source_root,
+      temp_root,
+      fetch_depth,
+      ref_name=checkout_ref,
+    )
+    if branch_code == 0 {
+      clone_ready = true
+    } else {
+      ignore(exec_remove_tree(temp_root))
+      let branch_message = exec_command_message(
+        branch_stdout, branch_stderr, "git clone failed",
+      )
+      if fetch_depth == 0 {
+        let (fallback_code, fallback_stdout, fallback_stderr) = exec_git_clone_into(
+          git_bin, source_root, temp_root, 0,
+        )
+        if fallback_code != 0 {
+          return Some(
+            task_report_failure(
+              plan,
+              workspace_root,
+              exec_command_message(
+                fallback_stdout, fallback_stderr, branch_message,
+              ),
+            ),
+          )
+        }
+        let (checkout_code, checkout_stdout, checkout_stderr) = exec_git_command_text(
+          git_bin,
+          ["checkout", "--quiet", checkout_ref],
+          temp_root,
+        )
+        if checkout_code != 0 {
+          return Some(
+            task_report_failure(
+              plan,
+              workspace_root,
+              exec_command_message(
+                checkout_stdout, checkout_stderr, branch_message,
+              ),
+            ),
+          )
+        }
+        clone_ready = true
+      }
+    }
+  }
+  if not(clone_ready) {
+    let (clone_code, clone_stdout, clone_stderr) = exec_git_clone_into(
+      git_bin, source_root, temp_root, fetch_depth,
+    )
+    if clone_code != 0 {
+      return Some(
+        task_report_failure(
+          plan,
+          workspace_root,
+          exec_command_message(clone_stdout, clone_stderr, "git clone failed"),
+        ),
+      )
+    }
+    if checkout_ref.length() > 0 {
+      let (checkout_code, checkout_stdout, checkout_stderr) = exec_git_command_text(
+        git_bin,
+        ["checkout", "--quiet", checkout_ref],
+        temp_root,
+      )
+      if checkout_code != 0 {
+        if fetch_depth > 0 {
+          ignore(exec_remove_tree(temp_root))
+          let (full_clone_code, full_clone_stdout, full_clone_stderr) = exec_git_clone_into(
+            git_bin, source_root, temp_root, 0,
+          )
+          if full_clone_code != 0 {
+            return Some(
+              task_report_failure(
+                plan,
+                workspace_root,
+                exec_command_message(
+                  full_clone_stdout, full_clone_stderr, "git clone failed",
+                ),
+              ),
+            )
+          }
+          let (full_checkout_code, full_checkout_stdout, full_checkout_stderr) = exec_git_command_text(
+            git_bin,
+            ["checkout", "--quiet", checkout_ref],
+            temp_root,
+          )
+          if full_checkout_code != 0 {
+            return Some(
+              task_report_failure(
+                plan,
+                workspace_root,
+                exec_command_message(
+                  full_checkout_stdout, full_checkout_stderr, "git checkout failed",
+                ),
+              ),
+            )
+          }
+        } else {
+          return Some(
+            task_report_failure(
+              plan,
+              workspace_root,
+              exec_command_message(
+                checkout_stdout, checkout_stderr, "git checkout failed",
+              ),
+            ),
+          )
+        }
+      }
+    }
+  }
+  if submodules_mode.length() > 0 {
+    let (submodule_code, submodule_stdout, submodule_stderr) = exec_git_update_submodules(
+      git_bin, temp_root, submodules_mode,
+    )
+    if submodule_code != 0 {
+      return Some(
+        task_report_failure(
+          plan,
+          workspace_root,
+          exec_command_message(
+            submodule_stdout, submodule_stderr, "git submodule update failed",
+          ),
+        ),
+      )
+    }
+  }
+  if not(clean) && checkout_root == source_root {
+    guard exec_git_list_files(git_bin, source_root) is Some(current_tracked) else {
+      return Some(
+        task_report_failure(
+          plan, workspace_root, "failed to inspect tracked files before checkout",
+        ),
+      )
+    }
+    guard exec_git_list_files(git_bin, temp_root) is Some(next_tracked) else {
+      return Some(
+        task_report_failure(
+          plan, workspace_root, "failed to inspect tracked files after checkout clone",
+        ),
+      )
+    }
+    if not(
+        exec_copy_dir_contents_preserving_untracked(
+          temp_root, checkout_root, current_tracked, next_tracked,
+        ),
+      ) {
+      return Some(
+        task_report_failure(
+          plan, workspace_root, "failed to materialize checkout contents",
+        ),
+      )
+    }
+    return None
+  }
+  if not(exec_copy_dir_contents(temp_root, checkout_root)) {
+    return Some(
+      task_report_failure(
+        plan, workspace_root, "failed to materialize checkout contents",
+      ),
+    )
+  }
+  None
+}
+
+///|
 fn artifact_store_root(workspace_root : String) -> String {
   ignore(ensure_exec_dir_recursive("_build/action_runner/artifacts"))
   let workspace_key = sanitize_task_id(
@@ -1668,6 +2236,180 @@ fn cache_store_root(workspace_root : String) -> String {
   let root = absolute_exec_path("_build/action_runner/cache/" + workspace_key)
   ignore(ensure_exec_dir_recursive(root))
   root
+}
+
+///|
+fn setup_node_store_root(workspace_root : String) -> String {
+  ignore(ensure_exec_dir_recursive("_build/action_runner/setup_node"))
+  let workspace_key = sanitize_task_id(
+    absolute_exec_path(resolve_task_cwd(workspace_root, "")),
+  )
+  let root = absolute_exec_path(
+    "_build/action_runner/setup_node/" + workspace_key,
+  )
+  ignore(ensure_exec_dir_recursive(root))
+  root
+}
+
+///|
+async fn exec_make_executable(path : String) -> Bool {
+  let (code, _, _) = @process.collect_output("chmod", ["+x", path], cwd=".")
+  code == 0
+}
+
+///|
+async fn write_setup_node_shim(
+  workspace_root : String,
+  task_id : String,
+  node_bin : String,
+  node_version : String,
+) -> String? {
+  let shim_root = setup_node_store_root(workspace_root) +
+    "/" +
+    sanitize_task_id(task_id)
+  let shim_dir = shim_root + "/bin"
+  if not(ensure_exec_dir_recursive(shim_dir)) {
+    return None
+  }
+  let shim_path = shim_dir + "/node"
+  let script = "#!/bin/sh\n" +
+    "set -eu\n" +
+    "if [ \"${1:-}\" = \"--version\" ] || [ \"${1:-}\" = \"-v\" ]; then\n" +
+    "  printf '%s\\n' '" +
+    node_version +
+    "'\n" +
+    "  exit 0\n" +
+    "fi\n" +
+    "exec '" +
+    node_bin.replace_all(old="'", new="'\"'\"'") +
+    "' \"$@\"\n"
+  if not(write_exec_text(shim_path, script)) {
+    return None
+  }
+  if not(exec_make_executable(shim_path)) {
+    return None
+  }
+  Some(shim_dir)
+}
+
+///|
+fn write_setup_node_npmrc(path : String, registry_url : String) -> Bool {
+  let stripped = if registry_url.has_prefix("https://") {
+    "//" + exec_text_slice(registry_url, 8, registry_url.length())
+  } else if registry_url.has_prefix("http://") {
+    "//" + exec_text_slice(registry_url, 7, registry_url.length())
+  } else {
+    registry_url
+  }
+  write_exec_text(
+    path,
+    stripped + ":_authToken=${NODE_AUTH_TOKEN}\n" + "registry=" + registry_url,
+  )
+}
+
+///|
+fn setup_node_cache_relative_path(cache_name : String) -> String {
+  ".setup-node/" + cache_name + "-cache"
+}
+
+///|
+fn setup_node_default_dependency_paths(cache_name : String) -> Array[String] {
+  if cache_name == "npm" {
+    ["package-lock.json", "npm-shrinkwrap.json"]
+  } else {
+    []
+  }
+}
+
+///|
+priv enum SetupNodeDependencyResolution {
+  Ok(Array[String])
+  Err(String)
+}
+
+///|
+fn resolve_setup_node_dependency_paths(
+  workspace_root : String,
+  cache_name : String,
+  dependency_input : String,
+) -> SetupNodeDependencyResolution {
+  let candidates = if dependency_input.trim(chars=" \t\r\n").length() > 0 {
+    split_nonempty_lines(dependency_input)
+  } else {
+    setup_node_default_dependency_paths(cache_name)
+  }
+  if candidates.length() == 0 {
+    return Err(
+      "setup-node cache '\{cache_name}' requires cache-dependency-path or a default lockfile",
+    )
+  }
+  let resolved : Array[String] = []
+  let explicit = dependency_input.trim(chars=" \t\r\n").length() > 0
+  for candidate in candidates {
+    let resolved_path = resolve_task_cwd(workspace_root, candidate)
+    if explicit && not(@xfs.path_exists(resolved_path)) {
+      return Err(
+        "setup-node cache dependency path '\{candidate}' does not exist",
+      )
+    }
+    if not(@xfs.path_exists(resolved_path)) {
+      continue
+    }
+    guard workspace_relative_store_path(workspace_root, resolved_path)
+      is Some(relative_path) else {
+      return Err(
+        "setup-node cache dependency path '\{candidate}' must stay within the workspace",
+      )
+    }
+    resolved.push(relative_path)
+  }
+  if resolved.length() == 0 {
+    Err("setup-node cache '\{cache_name}' found no dependency files")
+  } else {
+    Ok(resolved)
+  }
+}
+
+///|
+fn setup_node_cache_key_text(
+  workspace_root : String,
+  cache_name : String,
+  dependency_paths : Array[String],
+) -> String? {
+  let parts : Array[String] = []
+  parts.push("cache=" + cache_name)
+  for relative_path in dependency_paths {
+    let resolved_path = resolve_task_cwd(workspace_root, relative_path)
+    guard read_exec_text(resolved_path) is Some(content) else { return None }
+    parts.push("--")
+    parts.push(relative_path)
+    parts.push(content)
+  }
+  Some(parts.join("\n"))
+}
+
+///|
+fn stable_setup_node_hash(text : String) -> String {
+  let mut hash = 7
+  let mut idx = 0
+  while idx < text.length() {
+    hash = (hash * 131 + text.unsafe_get(idx).to_int()) % 2147483647
+    idx += 1
+  }
+  hash.to_string()
+}
+
+///|
+fn compute_setup_node_cache_key(
+  workspace_root : String,
+  cache_name : String,
+  dependency_paths : Array[String],
+) -> String? {
+  guard setup_node_cache_key_text(workspace_root, cache_name, dependency_paths)
+    is Some(key_text) else {
+    return None
+  }
+  Some("setup-node-" + cache_name + "-" + stable_setup_node_hash(key_text))
 }
 
 ///|
@@ -1714,7 +2456,7 @@ fn builtin_task_result(report : TaskRunReport) -> TaskExecutionResult {
 
 ///|
 #cfg(target="native")
-fn execute_builtin_checkout_native(
+async fn execute_builtin_checkout_native(
   action : ResolvedAction,
   plan : TaskPlan,
   workspace_root : String,
@@ -1731,15 +2473,37 @@ fn execute_builtin_checkout_native(
   let sparse_input = resolved_plan_env
     .get("INPUT_SPARSE_CHECKOUT")
     .unwrap_or("")
+  let clean = parse_checkout_clean(
+    resolved_plan_env.get("INPUT_CLEAN").unwrap_or("true"),
+  )
+  let fetch_depth = match
+    parse_checkout_fetch_depth(
+      resolved_plan_env.get("INPUT_FETCH_DEPTH").unwrap_or(""),
+    ) {
+    Some(value) => value
+    None =>
+      return task_report_failure(
+        plan, workspace_root, "checkout fetch-depth must be a non-negative integer",
+      )
+  }
   let cone_mode = parse_checkout_cone_mode(
     resolved_plan_env.get("INPUT_SPARSE_CHECKOUT_CONE_MODE").unwrap_or("true"),
   )
+  let source_root = resolve_task_cwd(workspace_root, "")
   let checkout_root = if path_input.length() > 0 {
     resolve_task_cwd(workspace_root, path_input)
   } else {
-    resolve_task_cwd(workspace_root, "")
+    source_root
   }
-  if path_input.length() > 0 &&
+  if exec_has_git_repo(source_root) {
+    match
+      exec_git_clone_checkout(
+        plan, workspace_root, source_root, checkout_root, fetch_depth, clean, resolved_plan_env,
+      ) {
+      Some(report) => return report
+      None => ()
+    }
+  } else if path_input.length() > 0 &&
     not(exec_copy_workspace_snapshot(workspace_root, checkout_root)) {
     return task_report_failure(
       plan,
@@ -1759,6 +2523,244 @@ fn execute_builtin_checkout_native(
     )
   }
   task_report_success(plan, workspace_root)
+}
+
+///|
+#cfg(target="native")
+async fn execute_setup_node_native(
+  plan : TaskPlan,
+  workspace_root : String,
+  resolved_plan_env : Map[String, String],
+) -> TaskExecutionResult {
+  let cache_input = resolved_plan_env.get("INPUT_CACHE").unwrap_or("")
+  let normalized_cache_input = cache_input.trim(chars=" \t\r\n").to_string()
+  let requested_node_file = resolved_plan_env
+    .get("INPUT_NODE_VERSION_FILE")
+    .unwrap_or("")
+  if requested_node_file.trim(chars=" \t\r\n").length() > 0 {
+    return {
+      report: task_report_failure(
+        plan, workspace_root, "setup-node node-version-file is not supported yet",
+      ),
+      env_updates: {},
+      path_entries: [],
+      output_values: {},
+      state_updates: {},
+    }
+  }
+  let configured_node_fallback = resolved_plan_env
+    .get("ACTION_RUNNER_NODE_BIN")
+    .unwrap_or(@xsys.get_env_var("ACTION_RUNNER_NODE_BIN").unwrap_or("node"))
+  let fallback_node_bin = resolve_exec_bin_for_workspace(
+    configured_node_fallback, workspace_root,
+  )
+  let configured_setup_node_bin = resolved_plan_env
+    .get("ACTION_RUNNER_SETUP_NODE_BIN")
+    .unwrap_or(
+      @xsys.get_env_var("ACTION_RUNNER_SETUP_NODE_BIN").unwrap_or(
+        fallback_node_bin,
+      ),
+    )
+  let node_bin = resolve_exec_bin_for_workspace(
+    configured_setup_node_bin, workspace_root,
+  )
+  let (version_code, version_stdout, version_stderr) = @process.collect_output(
+    node_bin,
+    ["--version"],
+    cwd=resolve_task_cwd(workspace_root, ""),
+  )
+  if version_code != 0 {
+    return {
+      report: task_report_failure(
+        plan,
+        workspace_root,
+        exec_command_message(
+          version_stdout.text(),
+          version_stderr.text(),
+          "failed to inspect node version",
+        ),
+      ),
+      env_updates: {},
+      path_entries: [],
+      output_values: {},
+      state_updates: {},
+    }
+  }
+  let actual_version = version_stdout.text().trim(chars=" \t\r\n").to_string()
+  let node_version = normalize_setup_node_version(
+    resolved_plan_env.get("INPUT_NODE_VERSION").unwrap_or(""),
+    actual_version,
+  )
+  guard write_setup_node_shim(workspace_root, plan.id, node_bin, node_version)
+    is Some(shim_dir) else {
+    return {
+      report: task_report_failure(
+        plan, workspace_root, "failed to prepare setup-node shim",
+      ),
+      env_updates: {},
+      path_entries: [],
+      output_values: {},
+      state_updates: {},
+    }
+  }
+  let env_updates : Map[String, String] = {}
+  let output_values : Map[String, String] = { "node-version": node_version }
+  let state_updates : Map[String, String] = {}
+  if normalized_cache_input.length() > 0 {
+    if normalized_cache_input != "npm" {
+      return {
+        report: task_report_failure(
+          plan,
+          workspace_root,
+          "setup-node cache '\{normalized_cache_input}' is not supported yet",
+        ),
+        env_updates: {},
+        path_entries: [],
+        output_values: {},
+        state_updates: {},
+      }
+    }
+    let dependency_input = resolved_plan_env
+      .get("INPUT_CACHE_DEPENDENCY_PATH")
+      .unwrap_or("")
+    let dependency_paths = match
+      resolve_setup_node_dependency_paths(
+        workspace_root, normalized_cache_input, dependency_input,
+      ) {
+      Ok(paths) => paths
+      Err(message) =>
+        return {
+          report: task_report_failure(plan, workspace_root, message),
+          env_updates: {},
+          path_entries: [],
+          output_values: {},
+          state_updates: {},
+        }
+    }
+    guard compute_setup_node_cache_key(
+        workspace_root, normalized_cache_input, dependency_paths,
+      )
+      is Some(cache_key) else {
+      return {
+        report: task_report_failure(
+          plan, workspace_root, "failed to compute setup-node cache key",
+        ),
+        env_updates: {},
+        path_entries: [],
+        output_values: {},
+        state_updates: {},
+      }
+    }
+    let cache_relative_path = setup_node_cache_relative_path(
+      normalized_cache_input,
+    )
+    let cache_abs_path = resolve_task_cwd(workspace_root, cache_relative_path)
+    if not(ensure_exec_dir_recursive(cache_abs_path)) {
+      return {
+        report: task_report_failure(
+          plan, workspace_root, "failed to prepare setup-node cache directory",
+        ),
+        env_updates: {},
+        path_entries: [],
+        output_values: {},
+        state_updates: {},
+      }
+    }
+    let cache_result = execute_restore_cache_native(plan, workspace_root, {
+      "INPUT_KEY": cache_key,
+      "INPUT_PATH": cache_relative_path,
+    })
+    if cache_result.report.status != "success" {
+      return cache_result
+    }
+    let cache_hit = cache_result.output_values
+      .get("cache-hit")
+      .unwrap_or("false")
+    env_updates["NPM_CONFIG_CACHE"] = cache_abs_path
+    env_updates["npm_config_cache"] = cache_abs_path
+    output_values["cache-hit"] = cache_hit
+    state_updates["SETUP_NODE_CACHE_NAME"] = normalized_cache_input
+    state_updates["SETUP_NODE_CACHE_KEY"] = cache_key
+    state_updates["SETUP_NODE_CACHE_PATH"] = cache_relative_path
+    state_updates["SETUP_NODE_CACHE_HIT"] = cache_hit
+  }
+  let registry_url = normalize_setup_node_registry_url(
+    resolved_plan_env.get("INPUT_REGISTRY_URL").unwrap_or(""),
+  )
+  if registry_url.length() > 0 {
+    let npmrc_path = prepare_runner_temp_dir(plan.job_id, workspace_root) +
+      "/.npmrc"
+    if not(write_setup_node_npmrc(npmrc_path, registry_url)) {
+      return {
+        report: task_report_failure(
+          plan, workspace_root, "failed to write setup-node npm auth config",
+        ),
+        env_updates: {},
+        path_entries: [],
+        output_values: {},
+        state_updates: {},
+      }
+    }
+    let node_auth_token = resolved_plan_env
+      .get("NODE_AUTH_TOKEN")
+      .unwrap_or(
+        @xsys.get_env_var("NODE_AUTH_TOKEN").unwrap_or(
+          "XXXXX-XXXXX-XXXXX-XXXXX",
+        ),
+      )
+    env_updates["NPM_CONFIG_USERCONFIG"] = npmrc_path
+    env_updates["NODE_AUTH_TOKEN"] = node_auth_token
+  }
+  {
+    report: task_report_success(plan, workspace_root),
+    env_updates,
+    path_entries: [shim_dir],
+    output_values,
+    state_updates,
+  }
+}
+
+///|
+#cfg(target="native")
+fn execute_setup_node_cache_post_native(
+  plan : TaskPlan,
+  workspace_root : String,
+  resolved_plan_env : Map[String, String],
+  state : JobRuntimeState,
+) -> TaskRunReport {
+  let saved_state = action_scope_state(state, plan.action_scope)
+  if saved_state.length() == 0 {
+    return task_report_success(plan, workspace_root)
+  }
+  if saved_state.get("SETUP_NODE_CACHE_HIT").unwrap_or("") == "true" {
+    return task_report_success(plan, workspace_root)
+  }
+  let cache_name = saved_state
+    .get("SETUP_NODE_CACHE_NAME")
+    .unwrap_or(resolved_plan_env.get("INPUT_CACHE").unwrap_or(""))
+  let path_input = saved_state
+    .get("SETUP_NODE_CACHE_PATH")
+    .unwrap_or(
+      setup_node_cache_relative_path(
+        cache_name.trim(chars=" \t\r\n").to_string(),
+      ),
+    )
+  let key = saved_state.get("SETUP_NODE_CACHE_KEY").unwrap_or("")
+  if key.length() == 0 {
+    return task_report_success(plan, workspace_root)
+  }
+  let resolved_path = resolve_task_cwd(workspace_root, path_input)
+  if not(@xfs.path_exists(resolved_path)) {
+    return task_report_success(plan, workspace_root)
+  }
+  return execute_save_cache_native(
+    plan,
+    workspace_root,
+    merge_runner_env(resolved_plan_env, {
+      "INPUT_KEY": key,
+      "INPUT_PATH": path_input,
+    }),
+  )
 }
 
 ///|
@@ -2183,6 +3185,23 @@ fn configured_exec_bin(
 
 ///|
 #cfg(target="native")
+fn resolve_exec_bin_for_workspace(
+  configured : String,
+  workspace_root : String,
+) -> String {
+  if configured.contains("/") {
+    if configured.has_prefix("/") {
+      configured
+    } else {
+      resolve_task_cwd(workspace_root, configured)
+    }
+  } else {
+    configured
+  }
+}
+
+///|
+#cfg(target="native")
 async fn execute_node_action_native(
   workflow_name : String,
   plan : TaskPlan,
@@ -2433,6 +3452,16 @@ async fn execute_action_plan_native(
       return builtin_task_result(
         execute_builtin_checkout_native(
           action, plan, workspace_root, resolved_plan_env,
+        ),
+      )
+    }
+    if action.kind == "setup-node" {
+      return execute_setup_node_native(plan, workspace_root, resolved_plan_env)
+    }
+    if action.kind == "setup-node-cache-post" {
+      return builtin_task_result(
+        execute_setup_node_cache_post_native(
+          plan, workspace_root, resolved_plan_env, state,
         ),
       )
     }
@@ -2791,6 +3820,8 @@ pub async fn execute_lowered_native(
                 .unwrap_or("success()"),
                 new_if_condition_context(
                   step_outputs=current_state.step_outputs,
+                  step_outcomes=current_state.step_outcomes,
+                  step_conclusions=current_state.step_conclusions,
                   github_context=github_ctx,
                   runner_context=runner_ctx,
                   needs_outputs~,
@@ -2885,6 +3916,8 @@ pub async fn execute_lowered_native(
               plan.if_condition,
               new_if_condition_context(
                 step_outputs=current_state.step_outputs,
+                step_outcomes=current_state.step_outcomes,
+                step_conclusions=current_state.step_conclusions,
                 env_context=merge_runner_env(
                   plan.env,
                   current_state.env_updates,
@@ -2906,6 +3939,17 @@ pub async fn execute_lowered_native(
             Some(plan) => {
               let message = "step if condition evaluated to false"
               reports.push(task_report_skipped(plan, workspace_root, message))
+              job_states[plan.job_id] = apply_job_runtime_updates(
+                current_state,
+                plan.step_id,
+                Some("skipped"),
+                Some("skipped"),
+                None,
+                {},
+                [],
+                {},
+                {},
+              )
               steps.push({
                 id: task.id,
                 status: "skipped",
@@ -2948,6 +3992,17 @@ pub async fn execute_lowered_native(
                     plan, workspace_root, "action lifecycle was not started",
                   ),
                 )
+                job_states[plan.job_id] = apply_job_runtime_updates(
+                  current_state,
+                  plan.step_id,
+                  Some("skipped"),
+                  Some("skipped"),
+                  None,
+                  {},
+                  [],
+                  {},
+                  {},
+                )
                 steps.push({
                   id: task.id,
                   status: "skipped",
@@ -2971,10 +4026,43 @@ pub async fn execute_lowered_native(
               )
               let report = result.report
               reports.push(report)
+              let github_ctx = github_context(
+                ir.name,
+                plan,
+                workspace_root,
+                push_event,
+              )
+              let runner_ctx = runner_context(plan, workspace_root)
+              let continue_on_error = if plan.kind == "barrier" {
+                false
+              } else {
+                evaluate_boolean_condition(
+                  plan.continue_on_error,
+                  new_if_condition_context(
+                    step_outputs=current_state.step_outputs,
+                    step_outcomes=current_state.step_outcomes,
+                    step_conclusions=current_state.step_conclusions,
+                    env_context=merge_runner_env(
+                      plan.env,
+                      current_state.env_updates,
+                    ),
+                    github_context=github_ctx,
+                    runner_context=runner_ctx,
+                    needs_outputs~,
+                    needs_results~,
+                    success_value=step_if_success_value(current_state),
+                    failure_value=step_if_failure_value(current_state),
+                    cancelled_value=step_if_cancelled_value(current_state),
+                  ),
+                )
+              }
+              let outcome = task_outcome(report)
+              let conclusion = task_conclusion(outcome, continue_on_error)
               let next_state = apply_job_runtime_updates(
                 current_state,
                 plan.step_id,
-                Some(report.status),
+                Some(outcome),
+                Some(conclusion),
                 plan.action_scope,
                 result.env_updates,
                 result.path_entries,
@@ -2982,7 +4070,7 @@ pub async fn execute_lowered_native(
                 result.state_updates,
               )
               job_states[plan.job_id] = next_state
-              if report.code == 0 {
+              if conclusion == "success" {
                 if plan.kind == "barrier" {
                   completed_job_outputs[plan.job_id] = evaluate_job_outputs(
                     lowered.plan.job_outputs.get(plan.job_id).unwrap_or({}),
@@ -2997,6 +4085,45 @@ pub async fn execute_lowered_native(
                   message: report.stdout,
                 })
                 success[task.id] = true
+              } else if conclusion == "skipped" {
+                if plan.kind == "barrier" {
+                  completed_job_results[plan.job_id] = "skipped"
+                }
+                let message = if report.stderr.length() > 0 {
+                  report.stderr
+                } else if report.stdout.length() > 0 {
+                  report.stdout
+                } else {
+                  "task skipped"
+                }
+                steps.push({
+                  id: task.id,
+                  status: "skipped",
+                  required: task.required,
+                  message,
+                })
+                success[task.id] = true
+              } else if conclusion == "cancelled" {
+                if plan.kind == "barrier" {
+                  completed_job_results[plan.job_id] = "cancelled"
+                }
+                let message = if report.stderr.length() > 0 {
+                  report.stderr
+                } else if report.stdout.length() > 0 {
+                  report.stdout
+                } else {
+                  "task cancelled"
+                }
+                steps.push({
+                  id: task.id,
+                  status: "cancelled",
+                  required: task.required,
+                  message,
+                })
+                success[task.id] = false
+                if task.required {
+                  required_failed = true
+                }
               } else {
                 if plan.kind == "barrier" {
                   completed_job_results[plan.job_id] = "failure"
@@ -3014,7 +4141,7 @@ pub async fn execute_lowered_native(
                   required: task.required,
                   message,
                 })
-                success[task.id] = false
+                success[task.id] = task_conclusion_allows_dependents(conclusion)
                 if task.required {
                   required_failed = true
                   let group = lowered.plan.job_matrix_groups

@@ -1,0 +1,22 @@
+name: docs-setup-node-basic
+'on': push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      ACTION_RUNNER_SETUP_NODE_BIN: bin/node
+    steps:
+      - id: setup
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.19.5
+          registry-url: https://registry.npmjs.org
+      - id: verify
+        shell: bash
+        run: |
+          printf '<%s|%s|%s|%s|%s>' \
+            "${{ steps.setup.outputs.node-version }}" \
+            "$(node --version)" \
+            "$NODE_AUTH_TOKEN" \
+            "$(test -f "$NPM_CONFIG_USERCONFIG" && echo yes || echo no)" \
+            "$(tr '\n' ';' < "$NPM_CONFIG_USERCONFIG")"

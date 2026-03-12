@@ -1,0 +1,14 @@
+name: docs-checkout-clean-false
+'on': push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: checkout
+        uses: actions/checkout@v4
+        with:
+          clean: false
+      - id: verify
+        shell: bash
+        run: |
+          printf '<%s|%s|%s>' "$(cat tracked.txt)" "$(test -f scratch.txt && echo yes || echo no)" "$(test -f .git/shallow && echo yes || echo no)"

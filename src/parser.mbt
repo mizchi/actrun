@@ -952,6 +952,11 @@ fn parse_step(
       errors,
       ctx + ".if",
     ).unwrap_or("success()"),
+    continue_on_error: yaml_as_optional_string(
+      yaml_obj_get(fields, "continue-on-error"),
+      errors,
+      ctx + ".continue-on-error",
+    ).unwrap_or("false"),
   }
 }
 

@@ -1,0 +1,26 @@
+name: ci-context-step-status
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: first
+        shell: bash
+        run: exit 0
+      - id: second
+        shell: bash
+        continue-on-error: true
+        run: exit 1
+      - id: consume
+        shell: bash
+        env:
+          SECOND_OUTCOME: ${{ steps.second.outcome }}
+          SECOND_CONCLUSION: ${{ steps.second.conclusion }}
+        run: |
+          printf '<%s|%s|%s|%s|%s|%s>' \
+            "${{ steps.first.outcome }}" \
+            "${{ steps.first.conclusion }}" \
+            "${{ steps.second.outcome }}" \
+            "${{ steps.second.conclusion }}" \
+            "$SECOND_OUTCOME" \
+            "$SECOND_CONCLUSION"

@@ -10,6 +10,12 @@
 - `cache-actions-roundtrip`: `actions/cache/save` / `actions/cache/restore` の roundtrip
 - `cache-auto-save-roundtrip`: `actions/cache` 本体の miss -> deferred save -> next job hit
 - `checkout-sparse-path`: `actions/checkout` の `path` と `sparse-checkout`
+- `checkout-fetch-depth`: `actions/checkout` の default shallow clone と `fetch-depth: 0`
+- `checkout-ref`: `actions/checkout` の `ref` で非 default branch を shallow checkout する
+- `checkout-clean`: `actions/checkout` の default clean と `clean: false` の差を root workspace 再 checkout で確認する
+- `checkout-submodules`: `actions/checkout` の `submodules: true` と `submodules: recursive` の差を確認する
+- `setup-node-basic`: `actions/setup-node` の `node-version` と `registry-url` を確認する
+- `setup-node-cache-npm`: `actions/setup-node` の `cache: npm` が deferred save 後の次 job restore で hit する
 - `matrix-include-basic`: `strategy.matrix.include` と `${{ matrix.* }}` の最小展開
 - `matrix-exclude-basic`: `strategy.matrix.exclude` が row を除外する
 - `matrix-mixed-include-basic`: `strategy.matrix` の axes と include を同時に展開する
@@ -19,6 +25,8 @@
 - `job-failure-blocked`: required step failure 後に downstream job が default `success()` で `skipped` になる
 - `job-if-always`: failed `needs` の後でも job-level `if: always()` が downstream job を実行する
 - `step-if-status-functions`: step-level `if: always()/failure()/cancelled()` が prior step failure に応じて動く
+- `step-continue-on-error-basic`: failed step が `continue-on-error: true` なら workflow は green のまま後続 step が動く
+- `step-status-context`: `steps.<id>.outcome` / `steps.<id>.conclusion` が later step の script と `if:` から見える
 - `unsupported-uses`: unsupported `uses:` を CLI error として reject
 - `unsupported-matrix`: invalid / unsupported な matrix 設定を CLI error として reject
 - `event-cli-overrides`: `--event` より CLI flag (`--ref` / `--repository` / `--after` / `--changed`) が優先される

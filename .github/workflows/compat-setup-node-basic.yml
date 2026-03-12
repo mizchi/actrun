@@ -1,0 +1,44 @@
+name: Compat Setup Node Basic
+
+on:
+  workflow_dispatch:
+    inputs:
+      compat_node_version:
+        description: Exact Node.js version to install
+        required: true
+        type: string
+  push:
+    paths:
+      - .github/workflows/__compat_setup_node_basic__.trigger
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+      - id: setup
+        name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.compat_node_version }}
+          registry-url: https://registry.npmjs.org
+      - name: Build report
+        shell: bash
+        run: |
+          mkdir -p report
+          printf '%s|%s|%s|%s|%s' \
+            "${{ steps.setup.outputs.node-version }}" \
+            "$(node --version)" \
+            "$NODE_AUTH_TOKEN" \
+            "$(test -f "$NPM_CONFIG_USERCONFIG" && echo yes || echo no)" \
+            "$(tr '\n' ';' < "$NPM_CONFIG_USERCONFIG")" > report/result.txt
+      - name: Upload report
+        uses: actions/upload-artifact@v4
+        with:
+          name: compat-setup-node-basic-report
+          path: report/result.txt

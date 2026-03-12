@@ -1,0 +1,25 @@
+name: e2e-checkout-clean
+'on': push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: keep_dirty
+        uses: actions/checkout@v4
+        with:
+          clean: false
+      - id: verify_keep
+        shell: bash
+        run: |
+          printf 'preserved=%s\n' "$(test -f scratch-before.txt && echo yes || echo no)" >> "$GITHUB_OUTPUT"
+      - id: create_dirty
+        shell: bash
+        run: |
+          printf '%s' 'remove-me' > scratch-after.txt
+      - id: clean_checkout
+        uses: actions/checkout@v4
+      - id: verify_clean
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          printf '%s|%s|%s' "${{ steps.verify_keep.outputs.preserved }}" "$(test -f scratch-before.txt && echo yes || echo no)" "$(test -f scratch-after.txt && echo yes || echo no)" > artifacts/clean.txt

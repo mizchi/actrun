@@ -1,0 +1,16 @@
+name: e2e-checkout-ref
+'on': push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: checkout
+        uses: actions/checkout@v4
+        with:
+          path: repo
+          ref: feature
+      - id: verify
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          printf '%s|%s|%s|%s' "$(cat repo/tracked.txt)" "$(git -C repo branch --show-current)" "$(git -C repo rev-list --count HEAD)" "$(test -f repo/.git/shallow && echo yes || echo no)" > artifacts/result.txt

@@ -63,6 +63,7 @@ pub struct StepSpec {
   env : Map[String, String]
   with_values : Map[String, String]
   if_condition : String
+  continue_on_error : String
 }
 
 ///|
@@ -75,6 +76,7 @@ pub fn new_run_step(
   env? : Map[String, String] = {},
   if_condition? : String = "success()",
   with_values? : Map[String, String] = {},
+  continue_on_error? : String = "false",
 ) -> StepSpec {
   {
     id,
@@ -86,6 +88,7 @@ pub fn new_run_step(
     env,
     with_values,
     if_condition,
+    continue_on_error,
   }
 }
 
@@ -97,6 +100,7 @@ pub fn new_uses_step(
   env? : Map[String, String] = {},
   if_condition? : String = "success()",
   with_values? : Map[String, String] = {},
+  continue_on_error? : String = "false",
 ) -> StepSpec {
   {
     id,
@@ -108,6 +112,7 @@ pub fn new_uses_step(
     env,
     with_values,
     if_condition,
+    continue_on_error,
   }
 }
 
@@ -210,6 +215,7 @@ pub struct TaskPlan {
   action : ResolvedAction?
   action_scope : String?
   requires_action_started : Bool
+  continue_on_error : String
 }
 
 ///|
@@ -228,6 +234,7 @@ pub fn new_task_plan(
   action? : ResolvedAction? = None,
   action_scope? : String? = None,
   requires_action_started? : Bool = false,
+  continue_on_error? : String = "false",
 ) -> TaskPlan {
   {
     id,
@@ -244,6 +251,7 @@ pub fn new_task_plan(
     action,
     action_scope,
     requires_action_started,
+    continue_on_error,
   }
 }
 

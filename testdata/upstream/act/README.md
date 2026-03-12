@@ -27,7 +27,7 @@ known diff:
 - `steps-context-outcome`
 - `steps-context-conclusion`
   - upstream は `continue-on-error` と `steps.*.outcome` / `steps.*.conclusion` を前提に通る
-  - `action_runner` MVP では `continue-on-error` と outcome/conclusion context が未対応なので、失敗 step 以降は blocked になる
+  - `action_runner` でも同じ前提で supported として回す
 - `shells-custom`
   - `action_runner` でも `{0}` 付き custom shell template 自体は実行できる
   - ただしこの upstream fixture は `pwsh` binary を前提にしており、host 環境に `pwsh` が無いと失敗する

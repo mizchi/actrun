@@ -7,6 +7,8 @@ priv enum ConditionValue {
 ///|
 priv struct IfConditionContext {
   step_outputs : Map[String, Map[String, String]]
+  step_outcomes : Map[String, String]
+  step_conclusions : Map[String, String]
   env_context : Map[String, String]
   github_context : Map[String, String]
   runner_context : Map[String, String]
@@ -20,6 +22,8 @@ priv struct IfConditionContext {
 ///|
 fn new_if_condition_context(
   step_outputs? : Map[String, Map[String, String]] = {},
+  step_outcomes? : Map[String, String] = {},
+  step_conclusions? : Map[String, String] = {},
   env_context? : Map[String, String] = {},
   github_context? : Map[String, String] = {},
   runner_context? : Map[String, String] = {},
@@ -31,6 +35,8 @@ fn new_if_condition_context(
 ) -> IfConditionContext {
   {
     step_outputs,
+    step_outcomes,
+    step_conclusions,
     env_context,
     github_context,
     runner_context,
@@ -235,6 +241,20 @@ fn if_step_output_name(expression : String) -> (String, String)? {
 }
 
 ///|
+fn if_step_status_name(expression : String, suffix : String) -> String? {
+  let trimmed = strip_if_outer_parens(expression)
+  guard trimmed.has_prefix("steps.") && trimmed.has_suffix(suffix) else {
+    return None
+  }
+  let step_id = if_text_slice(trimmed, 6, trimmed.length() - suffix.length())
+  if step_id.length() == 0 {
+    None
+  } else {
+    Some(step_id)
+  }
+}
+
+///|
 fn if_needs_output_name(expression : String) -> (String, String)? {
   let trimmed = strip_if_outer_parens(expression)
   guard trimmed.has_prefix("needs.") && trimmed.length() > 6 else {
@@ -326,6 +346,14 @@ fn resolve_if_step_output(
 }
 
 ///|
+fn resolve_if_step_status(
+  values : Map[String, String],
+  step_id : String,
+) -> String {
+  if_map_get_case_insensitive(values, step_id).unwrap_or("")
+}
+
+///|
 fn resolve_if_needs_output(
   needs_outputs : Map[String, Map[String, String]],
   job_id : String,
@@ -371,6 +399,12 @@ fn if_condition_atom_supported(text : String) -> Bool {
     return true
   }
   if if_step_output_name(trimmed) is Some(_) {
+    return true
+  }
+  if if_step_status_name(trimmed, ".outcome") is Some(_) {
+    return true
+  }
+  if if_step_status_name(trimmed, ".conclusion") is Some(_) {
     return true
   }
   if if_needs_output_name(trimmed) is Some(_) {
@@ -497,6 +531,16 @@ fn if_condition_atom_value(
       )
     None => ()
   }
+  match if_step_status_name(trimmed, ".outcome") {
+    Some(step_id) =>
+      return String(resolve_if_step_status(ctx.step_outcomes, step_id))
+    None => ()
+  }
+  match if_step_status_name(trimmed, ".conclusion") {
+    Some(step_id) =>
+      return String(resolve_if_step_status(ctx.step_conclusions, step_id))
+    None => ()
+  }
   match if_needs_output_name(trimmed) {
     Some((job_id, output_name)) =>
       return String(
@@ -600,4 +644,13 @@ fn evaluate_if_condition(text : String, ctx : IfConditionContext) -> Bool {
   } else {
     ctx.success_value && eval_if_condition_bool(trimmed, ctx)
   }
+}
+
+///|
+fn evaluate_boolean_condition(text : String, ctx : IfConditionContext) -> Bool {
+  let trimmed = unwrap_if_expression(text)
+  if trimmed.length() == 0 {
+    return false
+  }
+  eval_if_condition_bool(trimmed, ctx)
 }

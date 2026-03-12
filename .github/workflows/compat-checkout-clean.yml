@@ -1,0 +1,50 @@
+name: Compat Checkout Clean
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/compat-checkout-clean.yml
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baseline checkout
+        uses: actions/checkout@v5
+      - name: Create untracked before clean false
+        shell: bash
+        run: |
+          printf '%s' 'keep-me' > scratch-before.txt
+      - name: Checkout clean false
+        uses: actions/checkout@v5
+        with:
+          clean: false
+      - id: keep_report
+        name: Record clean false result
+        shell: bash
+        run: |
+          printf 'preserved=%s\n' "$(test -f scratch-before.txt && echo yes || echo no)" >> "$GITHUB_OUTPUT"
+      - name: Create untracked before default clean
+        shell: bash
+        run: |
+          printf '%s' 'remove-me' > scratch-after.txt
+      - name: Checkout default clean
+        uses: actions/checkout@v5
+      - name: Build report
+        shell: bash
+        run: |
+          mkdir -p report
+          printf '%s|%s|%s' \
+            "${{ steps.keep_report.outputs.preserved }}" \
+            "$(test -f scratch-before.txt && echo yes || echo no)" \
+            "$(test -f scratch-after.txt && echo yes || echo no)" > report/result.txt
+      - name: Upload report
+        uses: actions/upload-artifact@v4
+        with:
+          name: compat-checkout-clean-report
+          path: report/result.txt

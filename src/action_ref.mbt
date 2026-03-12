@@ -190,6 +190,20 @@ pub fn resolve_action_ref(action : ActionRef) -> ActionResolutionResult {
         }),
         errors: [],
       }
+    GitHubRepo("actions", "setup-node", _, None) =>
+      {
+        action: Some({
+          uses: action_ref_text(action),
+          action_ref: action,
+          kind: "setup-node",
+          backend: "builtin",
+          action_path: None,
+          entrypoint: None,
+          image: None,
+          args: [],
+        }),
+        errors: [],
+      }
     GitHubRepo("actions", "cache", _, None) =>
       {
         action: Some({

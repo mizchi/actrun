@@ -1,0 +1,26 @@
+name: e2e-checkout-submodules
+'on': push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: direct
+        uses: actions/checkout@v4
+        with:
+          path: repo-direct
+          submodules: true
+      - id: direct_verify
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          printf '%s|%s' "$(test -f repo-direct/deps/child/child.txt && echo yes || echo no)" "$(test -f repo-direct/deps/child/vendor/grand/grand.txt && echo yes || echo no)" > artifacts/direct.txt
+      - id: recursive
+        uses: actions/checkout@v4
+        with:
+          path: repo-recursive
+          submodules: recursive
+      - id: recursive_verify
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          printf '%s|%s' "$(test -f repo-recursive/deps/child/child.txt && echo yes || echo no)" "$(test -f repo-recursive/deps/child/vendor/grand/grand.txt && echo yes || echo no)" > artifacts/recursive.txt

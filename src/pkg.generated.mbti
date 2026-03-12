@@ -41,11 +41,11 @@ pub fn new_push_trigger(branches? : Array[String], branches_ignore? : Array[Stri
 
 pub fn new_run_defaults(shell? : String?, working_directory? : String?) -> RunDefaults
 
-pub fn new_run_step(String, String, name? : String, shell? : String?, working_directory? : String?, env? : Map[String, String], if_condition? : String, with_values? : Map[String, String]) -> StepSpec
+pub fn new_run_step(String, String, name? : String, shell? : String?, working_directory? : String?, env? : Map[String, String], if_condition? : String, with_values? : Map[String, String], continue_on_error? : String) -> StepSpec
 
-pub fn new_task_plan(String, String, String, String, String, String, String, String, String, Array[String], Map[String, String], action? : ResolvedAction?, action_scope? : String?, requires_action_started? : Bool) -> TaskPlan
+pub fn new_task_plan(String, String, String, String, String, String, String, String, String, Array[String], Map[String, String], action? : ResolvedAction?, action_scope? : String?, requires_action_started? : Bool, continue_on_error? : String) -> TaskPlan
 
-pub fn new_uses_step(String, String, name? : String, env? : Map[String, String], if_condition? : String, with_values? : Map[String, String]) -> StepSpec
+pub fn new_uses_step(String, String, name? : String, env? : Map[String, String], if_condition? : String, with_values? : Map[String, String], continue_on_error? : String) -> StepSpec
 
 pub fn new_workflow(String, Array[JobSpec], trigger? : PushTrigger, env? : Map[String, String], defaults? : RunDefaults) -> WorkflowSpec
 
@@ -204,6 +204,7 @@ pub struct StepSpec {
   env : Map[String, String]
   with_values : Map[String, String]
   if_condition : String
+  continue_on_error : String
 }
 
 pub struct TaskPlan {
@@ -221,6 +222,7 @@ pub struct TaskPlan {
   action : ResolvedAction?
   action_scope : String?
   requires_action_started : Bool
+  continue_on_error : String
 }
 
 pub struct TaskRunReport {

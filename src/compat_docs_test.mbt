@@ -1,4 +1,26 @@
 ///|
+
+///|
+fn compat_docs_cache_store_root(workspace : String) -> String {
+  let cwd = @xsys.get_env_var("PWD").unwrap_or(".")
+  let absolute_workspace = if workspace.has_prefix("/") {
+    workspace
+  } else if cwd.has_suffix("/") {
+    cwd + workspace
+  } else {
+    cwd + "/" + workspace
+  }
+  let workspace_key = absolute_workspace
+    .replace_all(old="/", new="__")
+    .replace_all(old=":", new="_")
+  if cwd.has_suffix("/") {
+    cwd + "_build/action_runner/cache/" + workspace_key
+  } else {
+    cwd + "/_build/action_runner/cache/" + workspace_key
+  }
+}
+
+///|
 test "compat docs: parse push scalar fixture" {
   let (fixture, workflow) = compat_expect_docs_fixture("push-scalar")
 
@@ -228,6 +250,198 @@ test "compat docs: parse steps with fixture" {
 }
 
 ///|
+#cfg(target="native")
+async test "compat docs: checkout default fetch-depth keeps shallow history" {
+  let (fixture, workflow) = compat_expect_docs_fixture("checkout-fetch-depth")
+  let workspace = prepare_git_checkout_workspace(
+    "compat-docs-checkout-fetch-depth",
+  )
+  let report = execute_lowered_native(
+    lower_push_workflow(workflow),
+    workspace_root=workspace,
+  )
+  let task = compat_expect_task_report(report, "build/verify")
+
+  inspect(fixture.id, content="docs-checkout-fetch-depth")
+  inspect(report.ok, content="true")
+  inspect(task.status, content="success")
+  inspect(task.stdout, content="<1|yes>")
+}
+
+///|
+#cfg(target="native")
+async test "compat docs: checkout fetch-depth zero keeps full history" {
+  let (fixture, workflow) = compat_expect_docs_fixture(
+    "checkout-fetch-depth-zero",
+  )
+  let workspace = prepare_git_checkout_workspace(
+    "compat-docs-checkout-fetch-depth-zero",
+  )
+  let report = execute_lowered_native(
+    lower_push_workflow(workflow),
+    workspace_root=workspace,
+  )
+  let task = compat_expect_task_report(report, "build/verify")
+
+  inspect(fixture.id, content="docs-checkout-fetch-depth-zero")
+  inspect(report.ok, content="true")
+  inspect(task.status, content="success")
+  inspect(task.stdout, content="<2|no>")
+}
+
+///|
+#cfg(target="native")
+async test "compat docs: checkout ref selects the requested branch" {
+  let (fixture, workflow) = compat_expect_docs_fixture("checkout-ref")
+  let workspace = prepare_git_checkout_workspace_with_feature_branch(
+    "compat-docs-checkout-ref",
+  )
+  let report = execute_lowered_native(
+    lower_push_workflow(workflow),
+    workspace_root=workspace,
+  )
+  let task = compat_expect_task_report(report, "build/verify")
+
+  inspect(fixture.id, content="docs-checkout-ref")
+  inspect(report.ok, content="true")
+  inspect(task.status, content="success")
+  inspect(task.stdout, content="<feature|feature|1|yes>")
+}
+
+///|
+#cfg(target="native")
+async test "compat docs: checkout clean default removes untracked files" {
+  let (fixture, workflow) = compat_expect_docs_fixture("checkout-clean-default")
+  let workspace = prepare_git_checkout_workspace(
+    "compat-docs-checkout-clean-default",
+  )
+  @xfs.write_string_to_file(workspace + "/scratch.txt", "keep?")
+  let report = execute_lowered_native(
+    lower_push_workflow(workflow),
+    workspace_root=workspace,
+  )
+  let task = compat_expect_task_report(report, "build/verify")
+
+  inspect(fixture.id, content="docs-checkout-clean-default")
+  inspect(report.ok, content="true")
+  inspect(task.status, content="success")
+  inspect(task.stdout, content="<no|yes>")
+}
+
+///|
+#cfg(target="native")
+async test "compat docs: checkout clean false preserves untracked files" {
+  let (fixture, workflow) = compat_expect_docs_fixture("checkout-clean-false")
+  let workspace = prepare_git_checkout_workspace(
+    "compat-docs-checkout-clean-false",
+  )
+  @xfs.write_string_to_file(workspace + "/scratch.txt", "keep")
+  let report = execute_lowered_native(
+    lower_push_workflow(workflow),
+    workspace_root=workspace,
+  )
+  let task = compat_expect_task_report(report, "build/verify")
+
+  inspect(fixture.id, content="docs-checkout-clean-false")
+  inspect(report.ok, content="true")
+  inspect(task.status, content="success")
+  inspect(task.stdout, content="<second|yes|yes>")
+}
+
+///|
+#cfg(target="native")
+async test "compat docs: checkout submodules true initializes direct submodules" {
+  let (fixture, workflow) = compat_expect_docs_fixture("checkout-submodules")
+  let workspace = prepare_git_checkout_workspace_with_submodules(
+    "compat-docs-checkout-submodules",
+    recursive=true,
+  )
+  let report = execute_lowered_native(
+    lower_push_workflow(workflow),
+    workspace_root=workspace,
+  )
+  let task = compat_expect_task_report(report, "build/verify")
+
+  inspect(fixture.id, content="docs-checkout-submodules")
+  inspect(report.ok, content="true")
+  inspect(task.status, content="success")
+  inspect(task.stdout, content="<yes|no>")
+}
+
+///|
+#cfg(target="native")
+async test "compat docs: checkout submodules recursive initializes nested submodules" {
+  let (fixture, workflow) = compat_expect_docs_fixture(
+    "checkout-submodules-recursive",
+  )
+  let workspace = prepare_git_checkout_workspace_with_submodules(
+    "compat-docs-checkout-submodules-recursive",
+    recursive=true,
+  )
+  let report = execute_lowered_native(
+    lower_push_workflow(workflow),
+    workspace_root=workspace,
+  )
+  let task = compat_expect_task_report(report, "build/verify")
+
+  inspect(fixture.id, content="docs-checkout-submodules-recursive")
+  inspect(report.ok, content="true")
+  inspect(task.status, content="success")
+  inspect(task.stdout, content="<yes|yes>")
+}
+
+///|
+#cfg(target="native")
+async test "compat docs: setup-node configures node version and npm auth config" {
+  let (fixture, workflow) = compat_expect_docs_fixture("setup-node-basic")
+  let workspace = prepare_workspace("compat-docs-setup-node-basic")
+  let node_log_path = workspace + "/setup-node.log"
+  ignore(
+    test_support_prepare_fake_version_node_bin(
+      workspace, node_log_path, "24.9.0",
+    ),
+  )
+  let report = execute_lowered_native(
+    lower_push_workflow(workflow),
+    workspace_root=workspace,
+  )
+  let task = compat_expect_task_report(report, "build/verify")
+
+  inspect(fixture.id, content="docs-setup-node-basic")
+  inspect(report.ok, content="true")
+  inspect(task.status, content="success")
+  inspect(
+    task.stdout,
+    content="<v20.19.5|v20.19.5|XXXXX-XXXXX-XXXXX-XXXXX|yes|//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN};registry=https://registry.npmjs.org/>",
+  )
+}
+
+///|
+#cfg(target="native")
+async test "compat docs: setup-node cache npm restores after save job" {
+  let (fixture, workflow) = compat_expect_docs_fixture("setup-node-cache-npm")
+  let workspace = prepare_workspace("compat-docs-setup-node-cache-npm")
+  let node_log_path = workspace + "/setup-node-cache.log"
+  ignore(
+    test_support_prepare_fake_version_node_bin(
+      workspace, node_log_path, "24.9.0",
+    ),
+  )
+  @xfs.write_string_to_file(workspace + "/package-lock.json", "{\"lock\":1}\n")
+  test_support_remove_tree(compat_docs_cache_store_root(workspace))
+  let report = execute_lowered_native(
+    lower_push_workflow(workflow),
+    workspace_root=workspace,
+  )
+  let task = compat_expect_task_report(report, "restore/verify")
+
+  inspect(fixture.id, content="docs-setup-node-cache-npm")
+  inspect(report.ok, content="true")
+  inspect(task.status, content="success")
+  inspect(task.stdout, content="<true|ocean|false|v20.19.5>")
+}
+
+///|
 test "compat docs: lower steps if status functions fixture" {
   let (fixture, workflow, lowered) = compat_expect_lowered_docs_fixture(
     "steps-if-status-functions",
@@ -247,6 +461,21 @@ test "compat docs: lower steps if status functions fixture" {
   inspect(
     compat_expect_task_plan(lowered.plan, "build/on_cancelled").if_condition,
     content="cancelled()",
+  )
+}
+
+///|
+test "compat docs: lower steps continue-on-error fixture" {
+  let (fixture, workflow, lowered) = compat_expect_lowered_docs_fixture(
+    "steps-continue-on-error",
+  )
+
+  inspect(fixture.id, content="docs-steps-continue-on-error")
+  inspect(workflow.jobs[0].steps[0].continue_on_error, content="true")
+  inspect(lowered.errors, content="[]")
+  inspect(
+    compat_expect_task_plan(lowered.plan, "build/fail_soft").continue_on_error,
+    content="true",
   )
 }
 
@@ -634,6 +863,39 @@ async test "compat docs: step if status functions work in push workflow" {
 
 ///|
 #cfg(target="native")
+async test "compat docs: continue-on-error lets later steps run" {
+  let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
+    "steps-continue-on-error",
+  )
+  let report = execute_lowered_native(
+    lower_push_workflow(workflow),
+    workspace_root=workspace,
+    push_event=compat_push_event_fixture(fixture),
+  )
+
+  inspect(fixture.id, content="docs-steps-continue-on-error")
+  inspect(report.ok, content="true")
+  inspect(report.state, content="completed")
+  inspect(
+    compat_expect_task_report(report, "build/fail_soft").status,
+    content="failed",
+  )
+  inspect(
+    compat_expect_step_report(report, "build/fail_soft").status,
+    content="success",
+  )
+  inspect(
+    compat_expect_task_report(report, "build/after").status,
+    content="success",
+  )
+  inspect(
+    @xfs.read_file_to_string(workspace + "/artifacts/result.txt"),
+    content="mizchi/action_runner|yes",
+  )
+}
+
+///|
+#cfg(target="native")
 async test "compat docs: job if can use github repository context" {
   let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
     "jobs-if-repository",
@@ -801,6 +1063,28 @@ async test "compat docs: step outputs are available to later steps" {
   inspect(report.ok, content="true")
   inspect(task.status, content="success")
   inspect(task.stdout, content="<from-output>")
+}
+
+///|
+#cfg(target="native")
+async test "compat docs: step outcome and conclusion are available to later steps" {
+  let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
+    "context-step-status",
+  )
+  let report = execute_lowered_native(
+    lower_push_workflow(workflow),
+    workspace_root=workspace,
+    push_event=compat_push_event_fixture(fixture),
+  )
+  let task = compat_expect_task_report(report, "build/consume")
+
+  inspect(fixture.id, content="docs-context-step-status")
+  inspect(report.ok, content="true")
+  inspect(task.status, content="success")
+  inspect(
+    task.stdout,
+    content="<success|success|failure|success|failure|success>",
+  )
 }
 
 ///|

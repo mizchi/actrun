@@ -1,0 +1,39 @@
+name: docs-setup-node-cache-npm
+'on': push
+jobs:
+  save:
+    runs-on: ubuntu-latest
+    env:
+      ACTION_RUNNER_SETUP_NODE_BIN: bin/node
+    steps:
+      - id: setup
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.19.5
+          cache: npm
+      - id: fill_cache
+        shell: bash
+        run: |
+          mkdir -p "$NPM_CONFIG_CACHE"
+          printf '%s' ocean > "$NPM_CONFIG_CACHE/value.txt"
+          printf '%s' "${{ steps.setup.outputs.cache-hit }}" > miss.txt
+  restore:
+    needs:
+      - save
+    runs-on: ubuntu-latest
+    env:
+      ACTION_RUNNER_SETUP_NODE_BIN: bin/node
+    steps:
+      - id: setup
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.19.5
+          cache: npm
+      - id: verify
+        shell: bash
+        run: |
+          printf '<%s|%s|%s|%s>' \
+            "${{ steps.setup.outputs.cache-hit }}" \
+            "$(cat "$NPM_CONFIG_CACHE/value.txt")" \
+            "$(cat miss.txt)" \
+            "$(node --version)"

@@ -1,0 +1,12 @@
+name: docs-checkout-fetch-depth
+'on': push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: checkout
+        uses: actions/checkout@v4
+      - id: verify
+        shell: bash
+        run: |
+          printf '<%s|%s>' "$(git rev-list --count HEAD)" "$(test -f .git/shallow && echo yes || echo no)"

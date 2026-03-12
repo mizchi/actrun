@@ -98,6 +98,40 @@ async fn test_support_prepare_fake_node_bin(
 
 ///|
 #cfg(target="native")
+async fn test_support_prepare_fake_version_node_bin(
+  workspace : String,
+  log_path : String,
+  version : String,
+) -> String {
+  let bin_dir = workspace + "/bin"
+  test_support_ensure_dir(bin_dir)
+  let node_path = bin_dir + "/node"
+  let absolute_log_path = test_support_absolute_path(log_path)
+  @xfs.write_string_to_file(absolute_log_path, "")
+  let normalized_version = if version.has_prefix("v") {
+    version
+  } else {
+    "v" + version
+  }
+  let script = "#!/bin/sh\n" +
+    "set -eu\n" +
+    "printf '%s\\n' \"$@\" >> '" +
+    absolute_log_path +
+    "'\n" +
+    "if [ \"${1:-}\" = \"--version\" ] || [ \"${1:-}\" = \"-v\" ]; then\n" +
+    "  printf '%s\\n' '" +
+    normalized_version +
+    "'\n" +
+    "  exit 0\n" +
+    "fi\n" +
+    "exit 0\n"
+  @xfs.write_string_to_file(node_path, script)
+  test_support_make_executable(node_path)
+  test_support_absolute_path(node_path)
+}
+
+///|
+#cfg(target="native")
 async fn test_support_prepare_fake_docker_bin(
   workspace : String,
   log_path : String,

@@ -1,0 +1,8 @@
+id=docs-checkout-ref
+source=docs
+mode=supported
+kind=run
+url=https://github.com/actions/checkout
+docs_urls=https://github.com/actions/checkout/blob/main/README.md
+added_at=2026-03-13
+notes=actions/checkout ref checks out a requested branch and still honors shallow clone semantics by default

@@ -1,0 +1,8 @@
+id=docs-steps-continue-on-error
+source=docs
+mode=supported
+kind=run
+url=https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax
+docs_urls=https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax
+added_at=2026-03-13
+notes=step-level continue-on-error keeps the workflow green while preserving the failed task outcome

@@ -1,0 +1,23 @@
+name: e2e-step-status-context
+'on': push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: first
+        shell: bash
+        run: exit 0
+      - id: second
+        shell: bash
+        continue-on-error: true
+        run: exit 1
+      - id: gate
+        if: steps.second.outcome == 'failure' && steps.second.conclusion == 'success'
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          printf '%s|%s|%s|%s' \
+            "${{ steps.first.outcome }}" \
+            "${{ steps.first.conclusion }}" \
+            "${{ steps.second.outcome }}" \
+            "${{ steps.second.conclusion }}" > artifacts/result.txt

@@ -1,0 +1,15 @@
+name: docs-checkout-submodules-recursive
+'on': push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: checkout
+        uses: actions/checkout@v4
+        with:
+          path: repo
+          submodules: recursive
+      - id: verify
+        shell: bash
+        run: |
+          printf '<%s|%s>' "$(test -f repo/deps/child/child.txt && echo yes || echo no)" "$(test -f repo/deps/child/vendor/grand/grand.txt && echo yes || echo no)"

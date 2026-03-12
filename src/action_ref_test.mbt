@@ -93,6 +93,14 @@ test "action ref: resolve builtin cache main alias" {
 }
 
 ///|
+test "action ref: resolve builtin setup-node alias" {
+  let setup = expect_resolved(resolve_action_uses("actions/setup-node@v4"))
+
+  inspect(setup.kind, content="setup-node")
+  inspect(setup.backend, content="builtin")
+}
+
+///|
 test "action ref: resolve docker image action" {
   let docker_action = expect_resolved(
     resolve_action_uses("docker://alpine:3.21"),

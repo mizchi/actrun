@@ -10,12 +10,25 @@ workflow_file="$1"
 repo="${2:-mizchi/action_runner}"
 ref="${3:-main}"
 compat_key=""
+compat_node_version=""
 dispatch_args=()
 
 case "$workflow_file" in
   compat-cache-auto-save.yml)
     compat_key="compat-cache-auto-save-$(date +%s)-$$"
     dispatch_args=(-f "compat_key=$compat_key")
+    ;;
+  compat-setup-node-basic.yml)
+    compat_node_version="${ACTION_RUNNER_COMPAT_NODE_VERSION:-$(node --version | sed 's/^v//')}"
+    dispatch_args=(-f "compat_node_version=$compat_node_version")
+    ;;
+  compat-setup-node-cache-npm.yml)
+    compat_key="compat-setup-node-cache-npm-$(date +%s)-$$"
+    compat_node_version="${ACTION_RUNNER_COMPAT_NODE_VERSION:-$(node --version | sed 's/^v//')}"
+    dispatch_args=(
+      -f "compat_key=$compat_key"
+      -f "compat_node_version=$compat_node_version"
+    )
     ;;
 esac
 
@@ -92,4 +105,5 @@ if [ ! -x "$cli_bin" ]; then
   moon build src/main --target native >/dev/null
 fi
 ACTION_RUNNER_COMPAT_CACHE_KEY="$compat_key" \
+ACTION_RUNNER_COMPAT_NODE_VERSION="$compat_node_version" \
   bash scripts/gha_compat_compare.sh "$workflow_file" "$download_dir"

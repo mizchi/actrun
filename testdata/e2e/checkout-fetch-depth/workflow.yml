@@ -1,0 +1,21 @@
+name: e2e-checkout-fetch-depth
+'on': push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: shallow
+        uses: actions/checkout@v4
+        with:
+          path: shallow
+      - id: full
+        uses: actions/checkout@v4
+        with:
+          path: full
+          fetch-depth: 0
+      - id: verify
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          printf '%s|%s' "$(git -C shallow rev-list --count HEAD)" "$(test -f shallow/.git/shallow && echo yes || echo no)" > artifacts/shallow.txt
+          printf '%s|%s' "$(git -C full rev-list --count HEAD)" "$(test -f full/.git/shallow && echo yes || echo no)" > artifacts/full.txt

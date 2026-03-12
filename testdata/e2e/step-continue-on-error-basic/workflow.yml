@@ -1,0 +1,19 @@
+name: e2e-step-continue-on-error
+'on': push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: fail_soft
+        shell: bash
+        continue-on-error: true
+        run: |
+          mkdir -p artifacts
+          printf '%s' 'before-fail' > artifacts/fail.txt
+          printf '%s' 'boom' >&2
+          exit 4
+      - id: after
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          printf '%s' 'after-ran' > artifacts/after.txt

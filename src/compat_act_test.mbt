@@ -63,7 +63,7 @@ async test "compat act: step env override is visible inside local composite acti
 
 ///|
 #cfg(target="native")
-async test "compat act: steps context outcome is a known diff" {
+async test "compat act: steps context outcome is supported" {
   let (fixture, workflow, workspace) = compat_prepare_act_fixture_auto(
     "steps-context-outcome",
   )
@@ -72,19 +72,21 @@ async test "compat act: steps context outcome is a known diff" {
     workspace_root=workspace,
   )
   let second = compat_expect_task_report(report, "check/second")
-  let third = compat_expect_step_report(report, "check/step_3")
+  let third = compat_expect_task_report(report, "check/step_3")
+  let fourth = compat_expect_task_report(report, "check/step_4")
 
   inspect(fixture.id, content="act-steps-context-outcome")
-  inspect(fixture.mode, content="known_diff")
-  inspect(report.ok, content="false")
-  inspect(report.state, content="partial_failed")
+  inspect(fixture.mode, content="supported")
+  inspect(report.ok, content="true")
+  inspect(report.state, content="completed")
   inspect(second.status, content="failed")
-  inspect(third.status, content="skipped")
+  inspect(third.status, content="success")
+  inspect(fourth.status, content="success")
 }
 
 ///|
 #cfg(target="native")
-async test "compat act: steps context conclusion is a known diff" {
+async test "compat act: steps context conclusion is supported" {
   let (fixture, workflow, workspace) = compat_prepare_act_fixture_auto(
     "steps-context-conclusion",
   )
@@ -93,14 +95,16 @@ async test "compat act: steps context conclusion is a known diff" {
     workspace_root=workspace,
   )
   let second = compat_expect_task_report(report, "check/second")
-  let third = compat_expect_step_report(report, "check/step_3")
+  let third = compat_expect_task_report(report, "check/step_3")
+  let fourth = compat_expect_task_report(report, "check/step_4")
 
   inspect(fixture.id, content="act-steps-context-conclusion")
-  inspect(fixture.mode, content="known_diff")
-  inspect(report.ok, content="false")
-  inspect(report.state, content="partial_failed")
+  inspect(fixture.mode, content="supported")
+  inspect(report.ok, content="true")
+  inspect(report.state, content="completed")
   inspect(second.status, content="failed")
-  inspect(third.status, content="skipped")
+  inspect(third.status, content="success")
+  inspect(fourth.status, content="success")
 }
 
 ///|

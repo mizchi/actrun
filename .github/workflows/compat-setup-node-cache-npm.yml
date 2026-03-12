@@ -1,0 +1,81 @@
+name: Compat Setup Node Cache Npm
+
+on:
+  workflow_dispatch:
+    inputs:
+      compat_key:
+        description: Unique compat key mixed into package-lock.json
+        required: true
+        type: string
+      compat_node_version:
+        description: Exact Node.js version to install
+        required: true
+        type: string
+  push:
+    paths:
+      - .github/workflows/__compat_setup_node_cache_npm__.trigger
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  save:
+    runs-on: ubuntu-latest
+    outputs:
+      first_hit: ${{ steps.record.outputs.first_hit }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+      - name: Prepare lockfile
+        shell: bash
+        run: |
+          printf '{"lock":1,"compat":"%s"}\n' "${{ inputs.compat_key }}" > package-lock.json
+      - id: setup
+        name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.compat_node_version }}
+          cache: npm
+      - id: record
+        name: Record first cache hit
+        shell: bash
+        run: |
+          printf 'first_hit=%s\n' "${{ steps.setup.outputs.cache-hit }}" >> "$GITHUB_OUTPUT"
+      - name: Fill npm cache
+        shell: bash
+        run: |
+          mkdir -p "$NPM_CONFIG_CACHE"
+          printf '%s' ocean > "$NPM_CONFIG_CACHE/value.txt"
+
+  restore:
+    needs:
+      - save
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+      - name: Prepare lockfile
+        shell: bash
+        run: |
+          printf '{"lock":1,"compat":"%s"}\n' "${{ inputs.compat_key }}" > package-lock.json
+      - id: setup
+        name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.compat_node_version }}
+          cache: npm
+      - name: Build report
+        shell: bash
+        run: |
+          mkdir -p report
+          printf '%s|%s|%s|%s' \
+            "${{ steps.setup.outputs.cache-hit }}" \
+            "$(cat "$NPM_CONFIG_CACHE/value.txt")" \
+            "${{ needs.save.outputs.first_hit }}" \
+            "$(node --version)" > report/result.txt
+      - name: Upload report
+        uses: actions/upload-artifact@v4
+        with:
+          name: compat-setup-node-cache-npm-report
+          path: report/result.txt

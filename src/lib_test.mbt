@@ -195,6 +195,24 @@ test "parser: parse job level if condition" {
 }
 
 ///|
+test "parser: parse step continue-on-error" {
+  let src =
+    #|name: ci
+    #|on: push
+    #|jobs:
+    #|  build:
+    #|    runs-on: ubuntu-latest
+    #|    steps:
+    #|      - id: fail_soft
+    #|        continue-on-error: true
+    #|        run: exit 1
+  let parsed = parse_workflow_yaml(src)
+  let workflow = expect_workflow(parsed)
+
+  inspect(workflow.jobs[0].steps[0].continue_on_error, content="true")
+}
+
+///|
 test "parser: parse checkout uses step" {
   let src =
     #|name: ci
@@ -1118,6 +1136,28 @@ test "lowering: step if status functions are accepted" {
   inspect(
     expect_task_plan(lowered.plan, "build/cancelled_step").if_condition,
     content="cancelled()",
+  )
+}
+
+///|
+test "lowering: step continue-on-error is accepted" {
+  let workflow = new_workflow("ci", [
+    new_job(
+      "build",
+      [
+        new_run_step("fail_soft", "exit 1", continue_on_error="true"),
+        new_run_step("after", "echo after"),
+      ],
+      defaults=new_run_defaults(shell=Some("bash")),
+    ),
+  ])
+
+  let lowered = lower_push_workflow(workflow)
+
+  inspect(lowered.errors, content="[]")
+  inspect(
+    expect_task_plan(lowered.plan, "build/fail_soft").continue_on_error,
+    content="true",
   )
 }
 

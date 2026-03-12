@@ -19,7 +19,9 @@ event_path="$workspace_root/event.json"
 cli_bin="$repo_root/_build/native/debug/build/main/main.exe"
 event_added_path=".github/workflows/$workflow_file"
 compat_key="${ACTION_RUNNER_COMPAT_CACHE_KEY:-}"
+compat_node_version="${ACTION_RUNNER_COMPAT_NODE_VERSION:-}"
 seed_license=0
+seed_git_history=0
 
 case "$workflow_file" in
   compat-checkout-artifact.yml)
@@ -28,6 +30,14 @@ case "$workflow_file" in
   compat-checkout-sparse.yml)
     report_name="compat-checkout-sparse-report"
     seed_license=1
+    ;;
+  compat-checkout-fetch-depth.yml)
+    report_name="compat-checkout-fetch-depth-report"
+    seed_git_history=1
+    ;;
+  compat-checkout-clean.yml)
+    report_name="compat-checkout-clean-report"
+    seed_git_history=1
     ;;
   compat-artifact-multi-job.yml)
     report_name="compat-artifact-report"
@@ -40,6 +50,23 @@ case "$workflow_file" in
     event_added_path=".github/workflows/__compat_cache_auto_save__.trigger"
     if [ -z "$compat_key" ]; then
       compat_key="compat-cache-auto-save-local"
+    fi
+    ;;
+  compat-setup-node-basic.yml)
+    report_name="compat-setup-node-basic-report"
+    event_added_path=".github/workflows/__compat_setup_node_basic__.trigger"
+    if [ -z "$compat_node_version" ]; then
+      compat_node_version="$(node --version | sed 's/^v//')"
+    fi
+    ;;
+  compat-setup-node-cache-npm.yml)
+    report_name="compat-setup-node-cache-npm-report"
+    event_added_path=".github/workflows/__compat_setup_node_cache_npm__.trigger"
+    if [ -z "$compat_key" ]; then
+      compat_key="compat-setup-node-cache-npm-local"
+    fi
+    if [ -z "$compat_node_version" ]; then
+      compat_node_version="$(node --version | sed 's/^v//')"
     fi
     ;;
   *)
@@ -66,10 +93,28 @@ if [ "$seed_license" = "1" ]; then
   cp "$repo_root/LICENSE" "$workspace_root/LICENSE"
 fi
 
+if [ "$seed_git_history" = "1" ]; then
+  git -C "$workspace_root" init -q
+  git -C "$workspace_root" config user.name compat-bot
+  git -C "$workspace_root" config user.email compat-bot@example.com
+  git -C "$workspace_root" add .
+  git -C "$workspace_root" commit -q -m first
+  printf '\ncompat-second\n' >> "$workspace_root/README.md"
+  git -C "$workspace_root" add README.md
+  git -C "$workspace_root" commit -q -m second
+fi
+
 if [ -n "$compat_key" ]; then
   placeholder='${{ inputs.compat_key }}'
   workflow_text="$(cat "$workflow_dst")"
   workflow_text="${workflow_text//$placeholder/$compat_key}"
+  printf '%s' "$workflow_text" > "$workflow_dst"
+fi
+
+if [ -n "$compat_node_version" ]; then
+  placeholder='${{ inputs.compat_node_version }}'
+  workflow_text="$(cat "$workflow_dst")"
+  workflow_text="${workflow_text//$placeholder/$compat_node_version}"
   printf '%s' "$workflow_text" > "$workflow_dst"
 fi
 

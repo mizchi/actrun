@@ -1,0 +1,51 @@
+name: Compat Checkout Fetch Depth
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/compat-checkout-fetch-depth.yml
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout shallow
+        uses: actions/checkout@v5
+        with:
+          path: shallow
+      - name: Checkout full
+        uses: actions/checkout@v5
+        with:
+          path: full
+          fetch-depth: 0
+      - name: Build report
+        shell: bash
+        run: |
+          mkdir -p report
+          shallow_count="$(git -C shallow rev-list --count HEAD)"
+          if [ "$shallow_count" = "1" ]; then
+            shallow_kind="single"
+          else
+            shallow_kind="multi"
+          fi
+          full_count="$(git -C full rev-list --count HEAD)"
+          if [ "$full_count" -gt 1 ]; then
+            full_kind="multi"
+          else
+            full_kind="single"
+          fi
+          printf '%s|%s|%s|%s' \
+            "$shallow_kind" \
+            "$(git -C shallow rev-parse --is-shallow-repository)" \
+            "$full_kind" \
+            "$(git -C full rev-parse --is-shallow-repository)" > report/result.txt
+      - name: Upload report
+        uses: actions/upload-artifact@v4
+        with:
+          name: compat-checkout-fetch-depth-report
+          path: report/result.txt

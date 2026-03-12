@@ -1,0 +1,12 @@
+name: docs-checkout-clean-default
+'on': push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: checkout
+        uses: actions/checkout@v4
+      - id: verify
+        shell: bash
+        run: |
+          printf '<%s|%s>' "$(test -f scratch.txt && echo yes || echo no)" "$(test -f .git/shallow && echo yes || echo no)"

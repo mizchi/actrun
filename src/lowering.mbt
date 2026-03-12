@@ -427,6 +427,10 @@ fn substitute_matrix_step(
     env: substitute_matrix_map(step.env, matrix_values),
     with_values: substitute_matrix_map(step.with_values, matrix_values),
     if_condition: substitute_matrix_text(step.if_condition, matrix_values),
+    continue_on_error: substitute_matrix_text(
+      step.continue_on_error,
+      matrix_values,
+    ),
   }
 }
 
@@ -628,6 +632,20 @@ fn validate_job_if(
 }
 
 ///|
+fn validate_continue_on_error(
+  job_id : String,
+  step_id : String,
+  continue_on_error : String,
+  errors : Array[String],
+) -> Unit {
+  if not(if_condition_supported(continue_on_error)) {
+    errors.push(
+      "step '\{job_id}/\{step_id}' continue-on-error='\{continue_on_error}' is not supported in MVP",
+    )
+  }
+}
+
+///|
 fn append_run_task(
   tasks : Array[@wf.FlowTask],
   task_plans : Array[TaskPlan],
@@ -640,6 +658,7 @@ fn append_run_task(
   shell : String,
   working_directory : String,
   if_condition : String,
+  continue_on_error : String,
   env : Map[String, String],
   action_scope? : String? = None,
 ) -> Unit {
@@ -659,6 +678,7 @@ fn append_run_task(
       if_condition,
       job.runs_on,
       env,
+      continue_on_error~,
       action_scope~,
     ),
   )
@@ -676,6 +696,7 @@ fn append_action_task(
   shell : String,
   working_directory : String,
   if_condition : String,
+  continue_on_error : String,
   env : Map[String, String],
   action : ResolvedAction,
   action_scope? : String? = None,
@@ -703,6 +724,7 @@ fn append_action_task(
       if_condition,
       job.runs_on,
       env,
+      continue_on_error~,
       action=Some(action),
       action_scope~,
       requires_action_started~,
@@ -718,6 +740,7 @@ priv struct DeferredActionTask {
   shell : String
   working_directory : String
   if_condition : String
+  continue_on_error : String
   env : Map[String, String]
   action : ResolvedAction
   action_scope : String?
@@ -748,6 +771,7 @@ fn append_deferred_action_tasks(
       deferred.shell,
       deferred.working_directory,
       deferred.if_condition,
+      deferred.continue_on_error,
       deferred.env,
       deferred.action,
       action_scope=deferred.action_scope,
@@ -808,7 +832,13 @@ fn lower_builtin_action(
 ) -> String {
   let task_id = step_task_id(job.id, resolved_step_id)
   let needs = task_needs(job, previous_task_id)
-  if action.kind == "cache" {
+  let setup_node_cache = step.with_values
+    .get("cache")
+    .unwrap_or("")
+    .trim(chars=" \t\r\n")
+    .length() >
+    0
+  if action.kind == "cache" || (action.kind == "setup-node" && setup_node_cache) {
     let action_scope = task_id
     append_action_task(
       tasks,
@@ -821,6 +851,7 @@ fn lower_builtin_action(
       shell,
       working_directory,
       step.if_condition,
+      step.continue_on_error,
       env,
       action,
       action_scope=Some(action_scope),
@@ -832,11 +863,16 @@ fn lower_builtin_action(
       shell,
       working_directory,
       if_condition: "success()",
+      continue_on_error: "false",
       env,
       action: {
         uses: action.uses,
         action_ref,
-        kind: "cache-save-post",
+        kind: if action.kind == "setup-node" {
+          "setup-node-cache-post"
+        } else {
+          "cache-save-post"
+        },
         backend: "builtin",
         action_path: None,
         entrypoint: None,
@@ -859,6 +895,7 @@ fn lower_builtin_action(
     shell,
     working_directory,
     step.if_condition,
+    step.continue_on_error,
     env,
     action,
   )
@@ -961,6 +998,7 @@ fn lower_cached_github_action(
           shell,
           working_directory,
           pre_if_condition,
+          "false",
           node_env,
           {
             uses: action_ref_text(action_ref),
@@ -989,6 +1027,7 @@ fn lower_cached_github_action(
       shell,
       working_directory,
       step.if_condition,
+      step.continue_on_error,
       node_env,
       {
         uses: action_ref_text(action_ref),
@@ -1014,6 +1053,7 @@ fn lower_cached_github_action(
           shell,
           working_directory,
           if_condition: action_manifest.post_if,
+          continue_on_error: "false",
           env: node_env,
           action: {
             uses: action_ref_text(action_ref),
@@ -1092,6 +1132,7 @@ fn lower_cached_github_action(
           shell,
           working_directory,
           pre_if_condition,
+          "false",
           docker_env,
           {
             uses: action_ref_text(action_ref),
@@ -1120,6 +1161,7 @@ fn lower_cached_github_action(
       shell,
       working_directory,
       step.if_condition,
+      step.continue_on_error,
       docker_env,
       {
         uses: action_ref_text(action_ref),
@@ -1152,6 +1194,7 @@ fn lower_cached_github_action(
           shell,
           working_directory,
           if_condition: action_manifest.post_if,
+          continue_on_error: "false",
           env: docker_env,
           action: {
             uses: action_ref_text(action_ref),
@@ -1251,6 +1294,12 @@ fn lower_local_action(
     let inner_step_id = default_step_id(inner_step, inner_index)
     let resolved_step_id = composite_step_id(outer_step_id, inner_step_id)
     validate_step_if(job.id, resolved_step_id, inner_step.if_condition, errors)
+    validate_continue_on_error(
+      job.id,
+      resolved_step_id,
+      inner_step.continue_on_error,
+      errors,
+    )
     let resolved_name = if inner_step.name.length() > 0 {
       outer_name +
       " / " +
@@ -1282,6 +1331,7 @@ fn lower_local_action(
         env: nested_env,
         with_values: nested_with_values,
         if_condition: inner_step.if_condition,
+        continue_on_error: inner_step.continue_on_error,
       }
       match action_ref {
         LocalPath(path) => {
@@ -1333,6 +1383,7 @@ fn lower_local_action(
             "",
           ),
           inner_step.if_condition,
+          inner_step.continue_on_error,
           merge_env(merge_env(outer_env, nested_env), action_context_env),
           action,
         )
@@ -1404,6 +1455,7 @@ fn lower_local_action(
       shell,
       working_directory,
       inner_step.if_condition,
+      inner_step.continue_on_error,
       env,
       action_scope=Some(action_scope),
     )
@@ -1490,6 +1542,12 @@ pub fn lower_push_workflow_in_workspace(
       let step = job.steps[step_index]
       let resolved_step_id = default_step_id(step, step_index)
       validate_step_if(job.id, resolved_step_id, step.if_condition, errors)
+      validate_continue_on_error(
+        job.id,
+        resolved_step_id,
+        step.continue_on_error,
+        errors,
+      )
       let shell = resolve_string(
         workflow.defaults.shell,
         job.defaults.shell,
@@ -1583,6 +1641,7 @@ pub fn lower_push_workflow_in_workspace(
         shell,
         working_directory,
         step.if_condition,
+        step.continue_on_error,
         step_env,
       )
       previous_task_id = task_id

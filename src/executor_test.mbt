@@ -28,6 +28,230 @@ fn prepare_workspace(name : String) -> String raise {
 }
 
 ///|
+fn executor_test_cache_store_root(workspace : String) -> String {
+  executor_test_absolute_path(
+    "_build/action_runner/cache/" +
+    workspace.replace_all(old="/", new="__").replace_all(old=":", new="_"),
+  )
+}
+
+///|
+#cfg(target="native")
+async fn executor_test_run_env(
+  cmd : String,
+  args : Array[String],
+  cwd : String,
+  env? : Map[String, String] = {},
+) -> (Int, String, String) {
+  let command_args : Array[String] = []
+  for key, value in env {
+    command_args.push(key + "=" + value)
+  }
+  command_args.push(cmd)
+  for arg in args {
+    command_args.push(arg)
+  }
+  let (code, stdout, stderr) = @process.collect_output(
+    "env",
+    command_args,
+    cwd~,
+  )
+  (code, stdout.text(), stderr.text())
+}
+
+///|
+#cfg(target="native")
+async fn executor_test_require_ok(
+  label : String,
+  cmd : String,
+  args : Array[String],
+  cwd : String,
+  env? : Map[String, String] = {},
+) -> Unit {
+  let (code, stdout, stderr) = executor_test_run_env(cmd, args, cwd, env~)
+  if code != 0 {
+    let message = if stderr.length() > 0 { stderr } else { stdout }
+    abort(label + " failed: " + message)
+  }
+}
+
+///|
+#cfg(target="native")
+async fn prepare_git_checkout_workspace(name : String) -> String {
+  let existing = executor_test_absolute_path("_build/test-workspaces/" + name)
+  if @xfs.path_exists(existing) {
+    executor_test_require_ok("rm workspace", "rm", ["-rf", existing], ".")
+  }
+  let workspace = prepare_workspace(name)
+  executor_test_require_ok("git init", "git", ["init", "-q"], workspace)
+  executor_test_require_ok(
+    "git config name",
+    "git",
+    ["config", "user.name", "Action Runner Test"],
+    workspace,
+  )
+  executor_test_require_ok(
+    "git config email",
+    "git",
+    ["config", "user.email", "action-runner@example.com"],
+    workspace,
+  )
+  @xfs.write_string_to_file(workspace + "/tracked.txt", "first")
+  executor_test_require_ok(
+    "git add first",
+    "git",
+    ["add", "tracked.txt"],
+    workspace,
+  )
+  executor_test_require_ok(
+    "git commit first",
+    "git",
+    ["commit", "-q", "-m", "first"],
+    workspace,
+  )
+  @xfs.write_string_to_file(workspace + "/tracked.txt", "second")
+  executor_test_require_ok(
+    "git add second",
+    "git",
+    ["add", "tracked.txt"],
+    workspace,
+  )
+  executor_test_require_ok(
+    "git commit second",
+    "git",
+    ["commit", "-q", "-m", "second"],
+    workspace,
+  )
+  workspace
+}
+
+///|
+#cfg(target="native")
+async fn prepare_git_checkout_workspace_with_feature_branch(
+  name : String,
+) -> String {
+  let workspace = prepare_git_checkout_workspace(name)
+  executor_test_require_ok(
+    "git branch main",
+    "git",
+    ["branch", "-M", "main"],
+    workspace,
+  )
+  executor_test_require_ok(
+    "git checkout feature",
+    "git",
+    ["checkout", "-q", "-b", "feature"],
+    workspace,
+  )
+  @xfs.write_string_to_file(workspace + "/tracked.txt", "feature")
+  executor_test_require_ok(
+    "git add feature",
+    "git",
+    ["add", "tracked.txt"],
+    workspace,
+  )
+  executor_test_require_ok(
+    "git commit feature",
+    "git",
+    ["commit", "-q", "-m", "feature"],
+    workspace,
+  )
+  executor_test_require_ok(
+    "git checkout main",
+    "git",
+    ["checkout", "-q", "main"],
+    workspace,
+  )
+  workspace
+}
+
+///|
+#cfg(target="native")
+async fn prepare_git_repo_with_single_file(
+  name : String,
+  filename : String,
+  content : String,
+) -> String {
+  let existing = executor_test_absolute_path("_build/test-workspaces/" + name)
+  if @xfs.path_exists(existing) {
+    executor_test_require_ok("rm repo", "rm", ["-rf", existing], ".")
+  }
+  let repo = prepare_workspace(name)
+  executor_test_require_ok("git init", "git", ["init", "-q"], repo)
+  executor_test_require_ok(
+    "git config name",
+    "git",
+    ["config", "user.name", "Action Runner Test"],
+    repo,
+  )
+  executor_test_require_ok(
+    "git config email",
+    "git",
+    ["config", "user.email", "action-runner@example.com"],
+    repo,
+  )
+  @xfs.write_string_to_file(repo + "/" + filename, content)
+  executor_test_require_ok("git add file", "git", ["add", filename], repo)
+  executor_test_require_ok(
+    "git commit file",
+    "git",
+    ["commit", "-q", "-m", "init"],
+    repo,
+  )
+  repo
+}
+
+///|
+#cfg(target="native")
+async fn prepare_git_checkout_workspace_with_submodules(
+  name : String,
+  recursive? : Bool = false,
+) -> String {
+  let workspace = prepare_git_checkout_workspace(name)
+  let child_repo = prepare_git_repo_with_single_file(
+    name + "-child",
+    "child.txt",
+    "child\n",
+  )
+  if recursive {
+    let grand_repo = prepare_git_repo_with_single_file(
+      name + "-grand",
+      "grand.txt",
+      "grand\n",
+    )
+    executor_test_require_ok(
+      "child add grand submodule",
+      "git",
+      [
+        "-c", "protocol.file.allow=always", "submodule", "add", grand_repo, "vendor/grand",
+      ],
+      child_repo,
+    )
+    executor_test_require_ok(
+      "child commit grand submodule",
+      "git",
+      ["commit", "-qam", "add grand"],
+      child_repo,
+    )
+  }
+  executor_test_require_ok(
+    "root add child submodule",
+    "git",
+    [
+      "-c", "protocol.file.allow=always", "submodule", "add", child_repo, "deps/child",
+    ],
+    workspace,
+  )
+  executor_test_require_ok(
+    "root commit child submodule",
+    "git",
+    ["commit", "-qam", "add child"],
+    workspace,
+  )
+  workspace
+}
+
+///|
 fn prepare_cached_github_action_root_for_executor(
   owner : String,
   repo : String,
@@ -648,6 +872,285 @@ async test "executor: checkout supports sparse-checkout cone mode false" {
 
 ///|
 #cfg(target="native")
+async test "executor: checkout default fetch-depth clones shallow history" {
+  let workspace = prepare_git_checkout_workspace(
+    "executor-checkout-fetch-depth",
+  )
+
+  let workflow = new_workflow("ci", [
+    new_job(
+      "build",
+      [
+        new_uses_step("checkout", "actions/checkout@v4"),
+        new_run_step(
+          "verify",
+          "printf '%s|%s' \"$(git rev-list --count HEAD)\" \"$(test -f .git/shallow && echo yes || echo no)\"",
+          shell=Some("bash"),
+        ),
+      ],
+      defaults=new_run_defaults(shell=Some("bash")),
+    ),
+  ])
+
+  let lowered = lower_push_workflow(workflow)
+  inspect(lowered.errors, content="[]")
+
+  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  inspect(report.ok, content="true")
+  inspect(report.state, content="completed")
+  inspect(
+    expect_task_report(report, "build/checkout").status,
+    content="success",
+  )
+  inspect(
+    expect_task_report(report, "build/verify").stdout
+    .trim(chars=" \n\r\t")
+    .to_string(),
+    content="1|yes",
+  )
+}
+
+///|
+#cfg(target="native")
+async test "executor: checkout fetch-depth zero keeps full history" {
+  let workspace = prepare_git_checkout_workspace(
+    "executor-checkout-fetch-depth-zero",
+  )
+
+  let workflow = new_workflow("ci", [
+    new_job(
+      "build",
+      [
+        new_uses_step("checkout", "actions/checkout@v4", with_values={
+          "fetch-depth": "0",
+        }),
+        new_run_step(
+          "verify",
+          "printf '%s|%s' \"$(git rev-list --count HEAD)\" \"$(test -f .git/shallow && echo yes || echo no)\"",
+          shell=Some("bash"),
+        ),
+      ],
+      defaults=new_run_defaults(shell=Some("bash")),
+    ),
+  ])
+
+  let lowered = lower_push_workflow(workflow)
+  inspect(lowered.errors, content="[]")
+
+  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  inspect(report.ok, content="true")
+  inspect(report.state, content="completed")
+  inspect(
+    expect_task_report(report, "build/checkout").status,
+    content="success",
+  )
+  inspect(
+    expect_task_report(report, "build/verify").stdout
+    .trim(chars=" \n\r\t")
+    .to_string(),
+    content="2|no",
+  )
+}
+
+///|
+#cfg(target="native")
+async test "executor: checkout ref selects requested branch" {
+  let workspace = prepare_git_checkout_workspace_with_feature_branch(
+    "executor-checkout-ref",
+  )
+
+  let workflow = new_workflow("ci", [
+    new_job(
+      "build",
+      [
+        new_uses_step("checkout", "actions/checkout@v4", with_values={
+          "path": "repo",
+          "ref": "feature",
+        }),
+        new_run_step(
+          "verify",
+          "printf '%s|%s|%s|%s' \"$(cat repo/tracked.txt)\" \"$(git -C repo branch --show-current)\" \"$(git -C repo rev-list --count HEAD)\" \"$(test -f repo/.git/shallow && echo yes || echo no)\"",
+          shell=Some("bash"),
+        ),
+      ],
+      defaults=new_run_defaults(shell=Some("bash")),
+    ),
+  ])
+
+  let lowered = lower_push_workflow(workflow)
+  inspect(lowered.errors, content="[]")
+
+  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  inspect(report.ok, content="true")
+  inspect(report.state, content="completed")
+  inspect(
+    expect_task_report(report, "build/checkout").status,
+    content="success",
+  )
+  inspect(
+    expect_task_report(report, "build/verify").stdout
+    .trim(chars=" \n\r\t")
+    .to_string(),
+    content="feature|feature|1|yes",
+  )
+}
+
+///|
+#cfg(target="native")
+async test "executor: checkout clean default removes untracked files" {
+  let workspace = prepare_git_checkout_workspace(
+    "executor-checkout-clean-default",
+  )
+  @xfs.write_string_to_file(workspace + "/scratch.txt", "keep?")
+
+  let workflow = new_workflow("ci", [
+    new_job(
+      "build",
+      [
+        new_uses_step("checkout", "actions/checkout@v4"),
+        new_run_step(
+          "verify",
+          "printf '%s|%s' \"$(test -f scratch.txt && echo yes || echo no)\" \"$(test -f .git/shallow && echo yes || echo no)\"",
+          shell=Some("bash"),
+        ),
+      ],
+      defaults=new_run_defaults(shell=Some("bash")),
+    ),
+  ])
+
+  let lowered = lower_push_workflow(workflow)
+  inspect(lowered.errors, content="[]")
+
+  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  inspect(report.ok, content="true")
+  inspect(report.state, content="completed")
+  inspect(
+    expect_task_report(report, "build/verify").stdout
+    .trim(chars=" \n\r\t")
+    .to_string(),
+    content="no|yes",
+  )
+}
+
+///|
+#cfg(target="native")
+async test "executor: checkout clean false preserves untracked files" {
+  let workspace = prepare_git_checkout_workspace(
+    "executor-checkout-clean-false",
+  )
+  @xfs.write_string_to_file(workspace + "/scratch.txt", "keep")
+
+  let workflow = new_workflow("ci", [
+    new_job(
+      "build",
+      [
+        new_uses_step("checkout", "actions/checkout@v4", with_values={
+          "clean": "false",
+        }),
+        new_run_step(
+          "verify",
+          "printf '%s|%s|%s' \"$(cat tracked.txt)\" \"$(test -f scratch.txt && echo yes || echo no)\" \"$(test -f .git/shallow && echo yes || echo no)\"",
+          shell=Some("bash"),
+        ),
+      ],
+      defaults=new_run_defaults(shell=Some("bash")),
+    ),
+  ])
+
+  let lowered = lower_push_workflow(workflow)
+  inspect(lowered.errors, content="[]")
+
+  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  inspect(report.ok, content="true")
+  inspect(report.state, content="completed")
+  inspect(
+    expect_task_report(report, "build/verify").stdout
+    .trim(chars=" \n\r\t")
+    .to_string(),
+    content="second|yes|yes",
+  )
+}
+
+///|
+#cfg(target="native")
+async test "executor: checkout submodules true initializes direct submodules" {
+  let workspace = prepare_git_checkout_workspace_with_submodules(
+    "executor-checkout-submodules",
+    recursive=true,
+  )
+
+  let workflow = new_workflow("ci", [
+    new_job(
+      "build",
+      [
+        new_uses_step("checkout", "actions/checkout@v4", with_values={
+          "path": "repo",
+          "submodules": "true",
+        }),
+        new_run_step(
+          "verify",
+          "printf '%s|%s' \"$(test -f repo/deps/child/child.txt && echo yes || echo no)\" \"$(test -f repo/deps/child/vendor/grand/grand.txt && echo yes || echo no)\"",
+          shell=Some("bash"),
+        ),
+      ],
+      defaults=new_run_defaults(shell=Some("bash")),
+    ),
+  ])
+
+  let report = execute_lowered_native(
+    lower_push_workflow(workflow),
+    workspace_root=workspace,
+  )
+  inspect(report.ok, content="true")
+  inspect(
+    expect_task_report(report, "build/verify").stdout
+    .trim(chars=" \n\r\t")
+    .to_string(),
+    content="yes|no",
+  )
+}
+
+///|
+#cfg(target="native")
+async test "executor: checkout submodules recursive initializes nested submodules" {
+  let workspace = prepare_git_checkout_workspace_with_submodules(
+    "executor-checkout-submodules-recursive",
+    recursive=true,
+  )
+
+  let workflow = new_workflow("ci", [
+    new_job(
+      "build",
+      [
+        new_uses_step("checkout", "actions/checkout@v4", with_values={
+          "path": "repo",
+          "submodules": "recursive",
+        }),
+        new_run_step(
+          "verify",
+          "printf '%s|%s' \"$(test -f repo/deps/child/child.txt && echo yes || echo no)\" \"$(test -f repo/deps/child/vendor/grand/grand.txt && echo yes || echo no)\"",
+          shell=Some("bash"),
+        ),
+      ],
+      defaults=new_run_defaults(shell=Some("bash")),
+    ),
+  ])
+
+  let report = execute_lowered_native(
+    lower_push_workflow(workflow),
+    workspace_root=workspace,
+  )
+  inspect(report.ok, content="true")
+  inspect(
+    expect_task_report(report, "build/verify").stdout
+    .trim(chars=" \n\r\t")
+    .to_string(),
+    content="yes|yes",
+  )
+}
+
+///|
+#cfg(target="native")
 async test "executor: cached github repo composite action runs inner steps" {
   let workspace = prepare_workspace("executor-github-repo-action")
   let action_root = prepare_cached_github_action_root_for_executor(
@@ -897,7 +1400,7 @@ async test "executor: builtin artifact actions upload and download files" {
 #cfg(target="native")
 async test "executor: builtin cache save and restore roundtrip across jobs" {
   let workspace = prepare_workspace("executor-builtin-cache")
-  test_support_remove_tree("_build/action_runner/cache")
+  test_support_remove_tree(executor_test_cache_store_root(workspace))
 
   let workflow = new_workflow("ci", [
     new_job(
@@ -953,7 +1456,7 @@ async test "executor: builtin cache save and restore roundtrip across jobs" {
 #cfg(target="native")
 async test "executor: builtin cache action auto-saves on miss and restores on next job" {
   let workspace = prepare_workspace("executor-builtin-cache-main")
-  test_support_remove_tree("_build/action_runner/cache")
+  test_support_remove_tree(executor_test_cache_store_root(workspace))
 
   let workflow = new_workflow("ci", [
     new_job(
@@ -1012,6 +1515,154 @@ async test "executor: builtin cache action auto-saves on miss and restores on ne
   let verify = expect_task_report(report, "restore/verify")
   inspect(verify.status, content="success")
   inspect(verify.stdout.trim(chars=" \n\r\t").to_string(), content="true|ocean")
+}
+
+///|
+#cfg(target="native")
+async test "executor: builtin setup-node exposes requested node version output and PATH shim" {
+  let workspace = prepare_workspace("executor-builtin-setup-node")
+  let node_log_path = workspace + "/setup-node.log"
+  let fake_node = test_support_prepare_fake_version_node_bin(
+    workspace, node_log_path, "24.9.0",
+  )
+
+  let workflow = new_workflow("ci", [
+    new_job(
+      "build",
+      [
+        new_uses_step("setup", "actions/setup-node@v4", with_values={
+          "node-version": "20",
+        }),
+        new_run_step(
+          "verify",
+          "printf '%s|%s' \"${{ steps.setup.outputs.node-version }}\" \"$(node --version)\"",
+          shell=Some("bash"),
+        ),
+      ],
+      env={ "ACTION_RUNNER_SETUP_NODE_BIN": fake_node },
+      defaults=new_run_defaults(shell=Some("bash")),
+    ),
+  ])
+
+  let lowered = lower_push_workflow(workflow)
+  inspect(lowered.errors, content="[]")
+
+  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  inspect(report.ok, content="true")
+
+  let setup = expect_task_report(report, "build/setup")
+  inspect(setup.status, content="success")
+  let verify = expect_task_report(report, "build/verify")
+  inspect(verify.status, content="success")
+  inspect(
+    verify.stdout.trim(chars=" \n\r\t").to_string(),
+    content="v20.0.0|v20.0.0",
+  )
+}
+
+///|
+#cfg(target="native")
+async test "executor: builtin setup-node registry-url exports npm auth config" {
+  let workspace = prepare_workspace("executor-builtin-setup-node-registry")
+
+  let workflow = new_workflow("ci", [
+    new_job(
+      "build",
+      [
+        new_uses_step("setup", "actions/setup-node@v4", with_values={
+          "registry-url": "https://registry.npmjs.org",
+        }),
+        new_run_step(
+          "verify",
+          "printf '%s|%s|%s' \"$NODE_AUTH_TOKEN\" \"$(test -f \"$NPM_CONFIG_USERCONFIG\" && echo yes || echo no)\" \"$(tr '\\n' ';' < \"$NPM_CONFIG_USERCONFIG\")\"",
+          shell=Some("bash"),
+        ),
+      ],
+      defaults=new_run_defaults(shell=Some("bash")),
+    ),
+  ])
+
+  let lowered = lower_push_workflow(workflow)
+  inspect(lowered.errors, content="[]")
+
+  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  inspect(report.ok, content="true")
+
+  let setup = expect_task_report(report, "build/setup")
+  inspect(setup.status, content="success")
+  let verify = expect_task_report(report, "build/verify")
+  inspect(verify.status, content="success")
+  inspect(
+    verify.stdout.trim(chars=" \n\r\t").to_string(),
+    content="XXXXX-XXXXX-XXXXX-XXXXX|yes|//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN};registry=https://registry.npmjs.org/",
+  )
+}
+
+///|
+#cfg(target="native")
+async test "executor: builtin setup-node cache npm restores after deferred post save" {
+  let workspace = prepare_workspace("executor-builtin-setup-node-cache")
+  let node_log_path = workspace + "/setup-node-cache.log"
+  let fake_node = test_support_prepare_fake_version_node_bin(
+    workspace, node_log_path, "24.9.0",
+  )
+  @xfs.write_string_to_file(workspace + "/package-lock.json", "{\"lock\":1}\n")
+  test_support_remove_tree(executor_test_cache_store_root(workspace))
+
+  let workflow = new_workflow("ci", [
+    new_job(
+      "save",
+      [
+        new_uses_step("setup", "actions/setup-node@v4", with_values={
+          "node-version": "20",
+          "cache": "npm",
+        }),
+        new_run_step(
+          "fill_cache",
+          "mkdir -p \"$NPM_CONFIG_CACHE\"\nprintf '%s' ocean > \"$NPM_CONFIG_CACHE/value.txt\"\nprintf '%s' \"${{ steps.setup.outputs.cache-hit }}\" > miss.txt",
+          shell=Some("bash"),
+        ),
+      ],
+      env={ "ACTION_RUNNER_SETUP_NODE_BIN": fake_node },
+      defaults=new_run_defaults(shell=Some("bash")),
+    ),
+    new_job(
+      "restore",
+      [
+        new_uses_step("setup", "actions/setup-node@v4", with_values={
+          "node-version": "20",
+          "cache": "npm",
+        }),
+        new_run_step(
+          "verify",
+          "printf '%s|%s|%s|%s' \"${{ steps.setup.outputs.cache-hit }}\" \"$(cat \"$NPM_CONFIG_CACHE/value.txt\")\" \"$(cat miss.txt)\" \"$(node --version)\"",
+          shell=Some("bash"),
+        ),
+      ],
+      needs=["save"],
+      env={ "ACTION_RUNNER_SETUP_NODE_BIN": fake_node },
+      defaults=new_run_defaults(shell=Some("bash")),
+    ),
+  ])
+
+  let lowered = lower_push_workflow(workflow)
+  inspect(lowered.errors, content="[]")
+
+  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  inspect(report.ok, content="true")
+
+  let setup = expect_task_report(report, "save/setup")
+  inspect(setup.status, content="success")
+  let setup_post = expect_task_report(report, "save/setup__post")
+  inspect(setup_post.status, content="success")
+  let restore_setup = expect_task_report(report, "restore/setup")
+  inspect(restore_setup.status, content="success")
+  let verify = expect_task_report(report, "restore/verify")
+  inspect(verify.status, content="success")
+  inspect(
+    verify.stdout.trim(chars=" \n\r\t").to_string(),
+    content="true|ocean|false|v20.0.0",
+  )
 }
 
 ///|
@@ -1414,6 +2065,89 @@ async test "executor: step if status functions respect prior step results" {
     expect_task_report(report, "build/on_cancelled").status,
     content="skipped",
   )
+}
+
+///|
+#cfg(target="native")
+async test "executor: continue-on-error keeps workflow green and runs later steps" {
+  let workspace = prepare_workspace("executor-continue-on-error")
+
+  let workflow = new_workflow("ci", [
+    new_job(
+      "build",
+      [
+        new_run_step(
+          "fail_soft",
+          "echo boom 1>&2; exit 4",
+          continue_on_error="true",
+        ),
+        new_run_step("after", "printf '%s' after-ran"),
+      ],
+      defaults=new_run_defaults(shell=Some("bash")),
+    ),
+  ])
+
+  let report = execute_lowered_native(
+    lower_push_workflow(workflow),
+    workspace_root=workspace,
+  )
+
+  inspect(report.ok, content="true")
+  inspect(report.state, content="completed")
+  inspect(
+    expect_task_report(report, "build/fail_soft").status,
+    content="failed",
+  )
+  inspect(
+    expect_step_report(report, "build/fail_soft").status,
+    content="success",
+  )
+  inspect(expect_task_report(report, "build/after").status, content="success")
+  inspect(expect_task_report(report, "build/after").stdout, content="after-ran")
+}
+
+///|
+#cfg(target="native")
+async test "executor: steps outcome and conclusion are available to later steps and if" {
+  let workspace = prepare_workspace("executor-step-status-context")
+
+  let workflow = new_workflow("ci", [
+    new_job(
+      "build",
+      [
+        new_run_step("first", "exit 0"),
+        new_run_step("second", "exit 1", continue_on_error="true"),
+        new_run_step(
+          "show",
+          "printf '%s|%s|%s|%s|%s|%s' '${{ steps.first.outcome }}' '${{ steps.first.conclusion }}' '${{ steps.second.outcome }}' '${{ steps.second.conclusion }}' \"$FIRST_OUTCOME\" \"$SECOND_CONCLUSION\"",
+          env={
+            "FIRST_OUTCOME": "${{ steps.first.outcome }}",
+            "SECOND_CONCLUSION": "${{ steps.second.conclusion }}",
+          },
+        ),
+        new_run_step(
+          "gate",
+          "printf '%s' gate-ran",
+          if_condition="steps.second.outcome == 'failure' && steps.second.conclusion == 'success'",
+        ),
+      ],
+      defaults=new_run_defaults(shell=Some("bash")),
+    ),
+  ])
+
+  let report = execute_lowered_native(
+    lower_push_workflow(workflow),
+    workspace_root=workspace,
+  )
+
+  inspect(report.ok, content="true")
+  inspect(report.state, content="completed")
+  inspect(
+    expect_task_report(report, "build/show").stdout,
+    content="success|success|failure|success|success|success",
+  )
+  inspect(expect_task_report(report, "build/gate").status, content="success")
+  inspect(expect_task_report(report, "build/gate").stdout, content="gate-ran")
 }
 
 ///|

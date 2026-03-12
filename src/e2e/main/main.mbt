@@ -268,6 +268,177 @@ async fn e2e_make_executable(path : String) -> Unit {
 
 ///|
 #cfg(target="native")
+async fn e2e_run_env(
+  cmd : String,
+  args : Array[String],
+  cwd : String,
+  env? : Map[String, String] = {},
+) -> E2eProcessResult {
+  let command_args : Array[String] = []
+  for key, value in env {
+    command_args.push(key + "=" + value)
+  }
+  command_args.push(cmd)
+  for arg in args {
+    command_args.push(arg)
+  }
+  let (code, stdout, stderr) = @process.collect_output(
+    "env",
+    command_args,
+    cwd~,
+  )
+  { code, stdout: stdout.text(), stderr: stderr.text() }
+}
+
+///|
+#cfg(target="native")
+async fn e2e_require_ok(
+  label : String,
+  cmd : String,
+  args : Array[String],
+  cwd : String,
+  env? : Map[String, String] = {},
+) -> Unit {
+  let result = e2e_run_env(cmd, args, cwd, env~)
+  if result.code != 0 {
+    let message = if result.stderr.length() > 0 {
+      result.stderr
+    } else {
+      result.stdout
+    }
+    abort(label + " failed: " + message)
+  }
+}
+
+///|
+#cfg(target="native")
+async fn e2e_prepare_git_checkout_workspace(path : String) -> Unit {
+  e2e_require_ok("git init", "git", ["init", "-q"], path)
+  e2e_require_ok(
+    "git config name",
+    "git",
+    ["config", "user.name", "Action Runner E2E"],
+    path,
+  )
+  e2e_require_ok(
+    "git config email",
+    "git",
+    ["config", "user.email", "action-runner-e2e@example.com"],
+    path,
+  )
+  e2e_require_ok("git add first", "git", ["add", "."], path)
+  e2e_require_ok(
+    "git commit first",
+    "git",
+    ["commit", "-q", "-m", "first"],
+    path,
+  )
+  @xfs.write_string_to_file(e2e_join_path(path, "tracked.txt"), "second\n")
+  e2e_require_ok("git add second", "git", ["add", "tracked.txt"], path)
+  e2e_require_ok(
+    "git commit second",
+    "git",
+    ["commit", "-q", "-m", "second"],
+    path,
+  )
+}
+
+///|
+#cfg(target="native")
+async fn e2e_prepare_git_checkout_workspace_with_feature_branch(
+  path : String,
+) -> Unit {
+  e2e_prepare_git_checkout_workspace(path)
+  e2e_require_ok("git branch main", "git", ["branch", "-M", "main"], path)
+  e2e_require_ok(
+    "git checkout feature",
+    "git",
+    ["checkout", "-q", "-b", "feature"],
+    path,
+  )
+  @xfs.write_string_to_file(e2e_join_path(path, "tracked.txt"), "feature\n")
+  e2e_require_ok("git add feature", "git", ["add", "tracked.txt"], path)
+  e2e_require_ok(
+    "git commit feature",
+    "git",
+    ["commit", "-q", "-m", "feature"],
+    path,
+  )
+  e2e_require_ok("git checkout main", "git", ["checkout", "-q", "main"], path)
+}
+
+///|
+#cfg(target="native")
+async fn e2e_prepare_git_repo_with_single_file(
+  path : String,
+  filename : String,
+  content : String,
+) -> Unit {
+  e2e_remove_tree(path)
+  e2e_ensure_dir(path)
+  e2e_require_ok("git init", "git", ["init", "-q"], path)
+  e2e_require_ok(
+    "git config name",
+    "git",
+    ["config", "user.name", "Action Runner E2E"],
+    path,
+  )
+  e2e_require_ok(
+    "git config email",
+    "git",
+    ["config", "user.email", "action-runner-e2e@example.com"],
+    path,
+  )
+  @xfs.write_string_to_file(e2e_join_path(path, filename), content)
+  e2e_require_ok("git add file", "git", ["add", filename], path)
+  e2e_require_ok("git commit file", "git", ["commit", "-q", "-m", "init"], path)
+}
+
+///|
+#cfg(target="native")
+async fn e2e_prepare_git_checkout_workspace_with_submodules(
+  path : String,
+  recursive? : Bool = false,
+) -> Unit {
+  e2e_prepare_git_checkout_workspace(path)
+  let child_repo = e2e_join_path(e2e_parent_dir(path), "submodule-child")
+  e2e_prepare_git_repo_with_single_file(child_repo, "child.txt", "child\n")
+  if recursive {
+    let grand_repo = e2e_join_path(e2e_parent_dir(path), "submodule-grand")
+    e2e_prepare_git_repo_with_single_file(grand_repo, "grand.txt", "grand\n")
+    e2e_require_ok(
+      "child add grand submodule",
+      "git",
+      [
+        "-c", "protocol.file.allow=always", "submodule", "add", grand_repo, "vendor/grand",
+      ],
+      child_repo,
+    )
+    e2e_require_ok(
+      "child commit grand submodule",
+      "git",
+      ["commit", "-qam", "add grand"],
+      child_repo,
+    )
+  }
+  e2e_require_ok(
+    "root add child submodule",
+    "git",
+    [
+      "-c", "protocol.file.allow=always", "submodule", "add", child_repo, "deps/child",
+    ],
+    path,
+  )
+  e2e_require_ok(
+    "root commit child submodule",
+    "git",
+    ["commit", "-qam", "add child"],
+    path,
+  )
+}
+
+///|
+#cfg(target="native")
 async fn e2e_prepare_fake_git_bin(
   workspace : String,
   action_src : String,
@@ -397,6 +568,40 @@ async fn e2e_prepare_fake_node_bin(
     "script=\"$1\"\n" +
     "shift || true\n" +
     "exec sh \"$script\" \"$@\"\n"
+  @xfs.write_string_to_file(node_path, script)
+  e2e_make_executable(node_path)
+  e2e_absolute_path(node_path)
+}
+
+///|
+#cfg(target="native")
+async fn e2e_prepare_fake_version_node_bin(
+  workspace : String,
+  log_path : String,
+  version : String,
+) -> String {
+  let bin_dir = e2e_join_path(workspace, "bin")
+  e2e_ensure_dir(bin_dir)
+  let node_path = e2e_join_path(bin_dir, "node")
+  let absolute_log_path = e2e_absolute_path(log_path)
+  @xfs.write_string_to_file(absolute_log_path, "")
+  let normalized_version = if version.has_prefix("v") {
+    version
+  } else {
+    "v" + version
+  }
+  let script = "#!/bin/sh\n" +
+    "set -eu\n" +
+    "printf '%s\\n' \"$@\" >> '" +
+    absolute_log_path +
+    "'\n" +
+    "if [ \"${1:-}\" = \"--version\" ] || [ \"${1:-}\" = \"-v\" ]; then\n" +
+    "  printf '%s\\n' '" +
+    normalized_version +
+    "'\n" +
+    "  exit 0\n" +
+    "fi\n" +
+    "exit 0\n"
   @xfs.write_string_to_file(node_path, script)
   e2e_make_executable(node_path)
   e2e_absolute_path(node_path)
@@ -785,6 +990,201 @@ async fn run_checkout_sparse_path() -> Unit {
 
 ///|
 #cfg(target="native")
+async fn run_checkout_fetch_depth() -> Unit {
+  let scenario = "checkout-fetch-depth"
+  let workspace = e2e_prepare_copied_dir(
+    "_build/e2e/workspaces",
+    scenario,
+    e2e_fixture_dir(scenario),
+  )
+  e2e_prepare_git_checkout_workspace(workspace)
+  let result = e2e_run_cli([
+    e2e_join_path(workspace, "workflow.yml"),
+    "--event",
+    e2e_join_path(workspace, "event.json"),
+  ])
+  e2e_expect_ok(result, scenario)
+  e2e_expect_contains(
+    result.stdout,
+    "workflow=e2e-checkout-fetch-depth",
+    scenario,
+  )
+  e2e_expect_contains(result.stdout, "state=completed", scenario)
+  e2e_expect_contains(result.stdout, "build/shallow: success", scenario)
+  e2e_expect_contains(result.stdout, "build/full: success", scenario)
+  e2e_expect_eq(
+    e2e_read_text(e2e_join_path(workspace, "artifacts/shallow.txt")),
+    "1|yes",
+    scenario + " shallow artifact",
+  )
+  e2e_expect_eq(
+    e2e_read_text(e2e_join_path(workspace, "artifacts/full.txt")),
+    "2|no",
+    scenario + " full artifact",
+  )
+}
+
+///|
+#cfg(target="native")
+async fn run_checkout_ref() -> Unit {
+  let scenario = "checkout-ref"
+  let workspace = e2e_prepare_copied_dir(
+    "_build/e2e/workspaces",
+    scenario,
+    e2e_fixture_dir(scenario),
+  )
+  e2e_prepare_git_checkout_workspace_with_feature_branch(workspace)
+  let result = e2e_run_cli([
+    e2e_join_path(workspace, "workflow.yml"),
+    "--event",
+    e2e_join_path(workspace, "event.json"),
+  ])
+  e2e_expect_ok(result, scenario)
+  e2e_expect_contains(result.stdout, "workflow=e2e-checkout-ref", scenario)
+  e2e_expect_contains(result.stdout, "state=completed", scenario)
+  e2e_expect_contains(result.stdout, "build/checkout: success", scenario)
+  e2e_expect_eq(
+    e2e_read_text(e2e_join_path(workspace, "artifacts/result.txt")),
+    "feature|feature|1|yes",
+    scenario + " result artifact",
+  )
+}
+
+///|
+#cfg(target="native")
+async fn run_checkout_clean() -> Unit {
+  let scenario = "checkout-clean"
+  let workspace = e2e_prepare_copied_dir(
+    "_build/e2e/workspaces",
+    scenario,
+    e2e_fixture_dir(scenario),
+  )
+  e2e_prepare_git_checkout_workspace(workspace)
+  @xfs.write_string_to_file(
+    e2e_join_path(workspace, "scratch-before.txt"),
+    "keep me\n",
+  )
+  let result = e2e_run_cli([
+    e2e_join_path(workspace, "workflow.yml"),
+    "--event",
+    e2e_join_path(workspace, "event.json"),
+  ])
+  e2e_expect_ok(result, scenario)
+  e2e_expect_contains(result.stdout, "workflow=e2e-checkout-clean", scenario)
+  e2e_expect_contains(result.stdout, "state=completed", scenario)
+  e2e_expect_contains(result.stdout, "build/keep_dirty: success", scenario)
+  e2e_expect_contains(result.stdout, "build/clean_checkout: success", scenario)
+  e2e_expect_eq(
+    e2e_read_text(e2e_join_path(workspace, "artifacts/clean.txt")),
+    "yes|no|no",
+    scenario + " clean artifact",
+  )
+}
+
+///|
+#cfg(target="native")
+async fn run_checkout_submodules() -> Unit {
+  let scenario = "checkout-submodules"
+  let workspace = e2e_prepare_copied_dir(
+    "_build/e2e/workspaces",
+    scenario,
+    e2e_fixture_dir(scenario),
+  )
+  e2e_prepare_git_checkout_workspace_with_submodules(workspace, recursive=true)
+  let result = e2e_run_cli([
+    e2e_join_path(workspace, "workflow.yml"),
+    "--event",
+    e2e_join_path(workspace, "event.json"),
+  ])
+  e2e_expect_ok(result, scenario)
+  e2e_expect_contains(
+    result.stdout,
+    "workflow=e2e-checkout-submodules",
+    scenario,
+  )
+  e2e_expect_contains(result.stdout, "state=completed", scenario)
+  e2e_expect_contains(result.stdout, "build/direct: success", scenario)
+  e2e_expect_contains(result.stdout, "build/recursive: success", scenario)
+  e2e_expect_eq(
+    e2e_read_text(e2e_join_path(workspace, "artifacts/direct.txt")),
+    "yes|no",
+    scenario + " direct artifact",
+  )
+  e2e_expect_eq(
+    e2e_read_text(e2e_join_path(workspace, "artifacts/recursive.txt")),
+    "yes|yes",
+    scenario + " recursive artifact",
+  )
+}
+
+///|
+#cfg(target="native")
+async fn run_setup_node_basic() -> Unit {
+  let scenario = "setup-node-basic"
+  let workspace = e2e_prepare_copied_dir(
+    "_build/e2e/workspaces",
+    scenario,
+    e2e_fixture_dir(scenario),
+  )
+  let node_log_path = e2e_join_path(workspace, "setup-node.log")
+  let fake_node = e2e_prepare_fake_version_node_bin(
+    workspace, node_log_path, "24.9.0",
+  )
+  ignore(fake_node)
+  let result = e2e_run_cli([
+    e2e_join_path(workspace, "workflow.yml"),
+    "--event",
+    e2e_join_path(workspace, "event.json"),
+  ])
+  e2e_expect_ok(result, scenario)
+  e2e_expect_contains(result.stdout, "workflow=e2e-setup-node-basic", scenario)
+  e2e_expect_contains(result.stdout, "state=completed", scenario)
+  e2e_expect_contains(result.stdout, "build/setup: success", scenario)
+  e2e_expect_eq(
+    e2e_read_text(e2e_join_path(workspace, "artifacts/result.txt")),
+    "v20.19.5|v20.19.5|XXXXX-XXXXX-XXXXX-XXXXX|yes|//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN};registry=https://registry.npmjs.org/",
+    scenario + " result artifact",
+  )
+}
+
+///|
+#cfg(target="native")
+async fn run_setup_node_cache_npm() -> Unit {
+  let scenario = "setup-node-cache-npm"
+  let workspace = e2e_prepare_copied_dir(
+    "_build/e2e/workspaces",
+    scenario,
+    e2e_fixture_dir(scenario),
+  )
+  let node_log_path = e2e_join_path(workspace, "setup-node-cache.log")
+  ignore(e2e_prepare_fake_version_node_bin(workspace, node_log_path, "24.9.0"))
+  @xfs.write_string_to_file(
+    e2e_join_path(workspace, "package-lock.json"),
+    "{\"lock\":1}\n",
+  )
+  let result = e2e_run_cli([
+    e2e_join_path(workspace, "workflow.yml"),
+    "--event",
+    e2e_join_path(workspace, "event.json"),
+  ])
+  e2e_expect_ok(result, scenario)
+  e2e_expect_contains(
+    result.stdout,
+    "workflow=e2e-setup-node-cache-npm",
+    scenario,
+  )
+  e2e_expect_contains(result.stdout, "save/setup: success", scenario)
+  e2e_expect_contains(result.stdout, "save/setup__post: success", scenario)
+  e2e_expect_contains(result.stdout, "restore/setup: success", scenario)
+  e2e_expect_eq(
+    e2e_read_text(e2e_join_path(workspace, "artifacts/result.txt")),
+    "true|ocean|false|v20.19.5",
+    scenario + " result artifact",
+  )
+}
+
+///|
+#cfg(target="native")
 async fn run_matrix_include_basic() -> Unit {
   let scenario = "matrix-include-basic"
   let workspace = e2e_prepare_copied_dir(
@@ -1098,6 +1498,66 @@ async fn run_step_if_status_functions() -> Unit {
   e2e_expect_missing(
     e2e_join_path(workspace, "artifacts/cancelled.txt"),
     scenario + " cancelled artifact",
+  )
+}
+
+///|
+#cfg(target="native")
+async fn run_step_continue_on_error_basic() -> Unit {
+  let scenario = "step-continue-on-error-basic"
+  let workspace = e2e_prepare_copied_dir(
+    "_build/e2e/workspaces",
+    scenario,
+    e2e_fixture_dir(scenario),
+  )
+  let result = e2e_run_cli([
+    e2e_join_path(workspace, "workflow.yml"),
+    "--event",
+    e2e_join_path(workspace, "event.json"),
+  ])
+  e2e_expect_ok(result, scenario)
+  e2e_expect_contains(
+    result.stdout,
+    "workflow=e2e-step-continue-on-error",
+    scenario,
+  )
+  e2e_expect_contains(result.stdout, "state=completed", scenario)
+  e2e_expect_contains(result.stdout, "build/fail_soft: success", scenario)
+  e2e_expect_contains(result.stdout, "build/after: success", scenario)
+  e2e_expect_eq(
+    e2e_read_text(e2e_join_path(workspace, "artifacts/after.txt")),
+    "after-ran",
+    scenario + " after artifact",
+  )
+}
+
+///|
+#cfg(target="native")
+async fn run_step_status_context() -> Unit {
+  let scenario = "step-status-context"
+  let workspace = e2e_prepare_copied_dir(
+    "_build/e2e/workspaces",
+    scenario,
+    e2e_fixture_dir(scenario),
+  )
+  let result = e2e_run_cli([
+    e2e_join_path(workspace, "workflow.yml"),
+    "--event",
+    e2e_join_path(workspace, "event.json"),
+  ])
+  e2e_expect_ok(result, scenario)
+  e2e_expect_contains(
+    result.stdout,
+    "workflow=e2e-step-status-context",
+    scenario,
+  )
+  e2e_expect_contains(result.stdout, "state=completed", scenario)
+  e2e_expect_contains(result.stdout, "build/second: success", scenario)
+  e2e_expect_contains(result.stdout, "build/gate: success", scenario)
+  e2e_expect_eq(
+    e2e_read_text(e2e_join_path(workspace, "artifacts/result.txt")),
+    "success|success|failure|success",
+    scenario + " status artifact",
   )
 }
 
@@ -3082,6 +3542,30 @@ async fn main {
   run_checkout_sparse_path()
   println("e2e: checkout-sparse-path ok")
 
+  println("e2e: checkout-fetch-depth")
+  run_checkout_fetch_depth()
+  println("e2e: checkout-fetch-depth ok")
+
+  println("e2e: checkout-ref")
+  run_checkout_ref()
+  println("e2e: checkout-ref ok")
+
+  println("e2e: checkout-clean")
+  run_checkout_clean()
+  println("e2e: checkout-clean ok")
+
+  println("e2e: checkout-submodules")
+  run_checkout_submodules()
+  println("e2e: checkout-submodules ok")
+
+  println("e2e: setup-node-basic")
+  run_setup_node_basic()
+  println("e2e: setup-node-basic ok")
+
+  println("e2e: setup-node-cache-npm")
+  run_setup_node_cache_npm()
+  println("e2e: setup-node-cache-npm ok")
+
   println("e2e: matrix-include-basic")
   run_matrix_include_basic()
   println("e2e: matrix-include-basic ok")
@@ -3117,6 +3601,14 @@ async fn main {
   println("e2e: step-if-status-functions")
   run_step_if_status_functions()
   println("e2e: step-if-status-functions ok")
+
+  println("e2e: step-continue-on-error-basic")
+  run_step_continue_on_error_basic()
+  println("e2e: step-continue-on-error-basic ok")
+
+  println("e2e: step-status-context")
+  run_step_status_context()
+  println("e2e: step-status-context ok")
 
   println("e2e: unsupported-uses")
   run_unsupported_uses()
