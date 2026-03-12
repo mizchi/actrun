@@ -1,0 +1,12 @@
+name: e2e-skipped
+'on':
+  push:
+    branches:
+      - main
+    paths:
+      - src/**
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: printf 'nope' > should-not-exist.txt

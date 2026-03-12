@@ -1,0 +1,11 @@
+name: ci-paths
+on:
+  push:
+    paths:
+      - src/**
+      - package.json
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo paths

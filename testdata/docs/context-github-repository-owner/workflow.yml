@@ -1,0 +1,8 @@
+name: github-repository-owner-context
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: print
+        run: printf '<%s|%s>' "${{ github.repository_owner }}" "$GITHUB_REPOSITORY_OWNER"

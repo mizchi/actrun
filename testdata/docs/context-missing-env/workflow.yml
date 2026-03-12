@@ -1,0 +1,9 @@
+name: ci-context-missing-env
+'on': push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: show
+        shell: bash
+        run: printf '<%s>' "${{ env.MISSING }}"

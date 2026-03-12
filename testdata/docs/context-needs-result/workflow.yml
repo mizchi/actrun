@@ -1,0 +1,16 @@
+name: needs-result-context
+'on': push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: produce
+        shell: bash
+        run: printf 'ok'
+  consume:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - id: read
+        shell: bash
+        run: printf '<%s>' "${{ needs.build.result }}"

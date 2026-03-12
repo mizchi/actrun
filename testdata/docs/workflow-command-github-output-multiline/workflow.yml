@@ -1,0 +1,20 @@
+name: ci-github-output-multiline
+'on': push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: writer
+        shell: bash
+        run: |
+          {
+            echo 'JSON_RESPONSE<<EOF'
+            echo 'line-1'
+            echo 'line-2'
+            echo EOF
+          } >> "$GITHUB_OUTPUT"
+      - id: get_json
+        shell: bash
+        env:
+          JSON_RESPONSE: ${{ steps.writer.outputs.JSON_RESPONSE }}
+        run: printf '<%s>' "$JSON_RESPONSE"

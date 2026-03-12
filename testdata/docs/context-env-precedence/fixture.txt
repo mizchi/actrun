@@ -1,0 +1,7 @@
+id=docs-context-env-precedence
+source=docs
+mode=supported
+kind=run
+url=https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-variables
+added_at=2026-03-12
+notes=env precedence uses the most specific workflow job or step value

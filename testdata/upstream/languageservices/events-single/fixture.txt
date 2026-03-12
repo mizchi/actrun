@@ -1,0 +1,8 @@
+id=languageservices-events-single
+source=actions-languageservices
+mode=supported
+kind=parse
+url=https://raw.githubusercontent.com/actions/languageservices/main/workflow-parser/testdata/reader/events-single.yml
+added_at=2026-03-12
+notes=selected parser success fixture within MVP push subset
+origin=workflow-parser/testdata/reader/events-single.yml

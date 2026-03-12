@@ -1,0 +1,8 @@
+id=docs-context-needs-output
+source=docs
+mode=supported
+kind=run
+url=https://docs.github.com/en/actions/reference/workflows-and-actions/contexts
+docs_urls=https://docs.github.com/en/actions/reference/workflows-and-actions/contexts;https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions#jobsjob_idoutputs
+added_at=2026-03-12
+notes=job outputs are exposed to direct dependent jobs via needs context

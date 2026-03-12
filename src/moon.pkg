@@ -1,0 +1,18 @@
+import {
+  "mizchi/bit" @bit,
+  "mizchi/bit/diff" @bitdiff,
+  "mizchi/bit/lib" @bitlib,
+  "mizchi/bit/osfs" @bitosfs,
+  "moonbitlang/core/encoding/utf8" @utf8,
+  "moonbitlang/core/json" @json,
+  "moonbitlang/async/process" @process,
+  "moonbitlang/core/bench",
+  "mizchi/bitflow/workflow" @wf,
+  "moonbitlang/x/fs" @xfs,
+  "moonbitlang/x/sys" @xsys,
+}
+
+import {
+  "moonbitlang/async",
+  "moonbitlang/quickcheck" @qc,
+} for "test"

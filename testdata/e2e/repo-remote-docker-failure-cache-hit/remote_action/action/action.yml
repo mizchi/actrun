@@ -1,0 +1,7 @@
+name: Repo Remote Docker Failure Cache Hit
+runs:
+  using: docker
+  image: Dockerfile
+  pre-entrypoint: pre.sh
+  entrypoint: fail.sh
+  post-entrypoint: post.sh

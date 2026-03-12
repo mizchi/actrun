@@ -1,0 +1,8 @@
+id=languageservices-job-needs
+source=actions-languageservices
+mode=supported
+kind=lower
+url=https://raw.githubusercontent.com/actions/languageservices/main/workflow-parser/testdata/reader/job-needs.yml
+added_at=2026-03-12
+notes=selected parser success fixture for string and sequence job needs
+origin=workflow-parser/testdata/reader/job-needs.yml

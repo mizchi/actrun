@@ -1,0 +1,13 @@
+name: e2e-docker-image
+'on': push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: image
+        uses: docker://alpine:3.21
+      - id: marker
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          printf '%s' 'after-docker' > artifacts/marker.txt

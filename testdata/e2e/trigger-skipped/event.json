@@ -1,0 +1,18 @@
+{
+  "ref": "refs/heads/feature/demo",
+  "before": "1111111111111111111111111111111111111111",
+  "after": "abc123def456",
+  "repository": {
+    "full_name": "mizchi/action_runner"
+  },
+  "sender": {
+    "login": "octocat"
+  },
+  "commits": [
+    {
+      "added": [],
+      "modified": ["README.md"],
+      "removed": []
+    }
+  ]
+}

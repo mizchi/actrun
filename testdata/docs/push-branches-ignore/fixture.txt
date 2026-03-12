@@ -1,0 +1,7 @@
+id=docs-push-branches-ignore
+source=docs
+mode=supported
+kind=trigger
+url=https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax
+added_at=2026-03-12
+notes=push trigger branches-ignore filter

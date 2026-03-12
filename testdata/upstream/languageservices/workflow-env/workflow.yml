@@ -1,0 +1,12 @@
+on: push
+env:
+  root-env: root env value
+jobs:
+  one:
+    runs-on: windows-2019
+    env:
+      job-env: job env value
+    steps:
+      - run: echo 1
+        env:
+          step-env: step env value

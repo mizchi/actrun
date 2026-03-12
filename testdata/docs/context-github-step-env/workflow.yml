@@ -1,0 +1,12 @@
+name: github-context-env
+'on': push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: read
+        shell: bash
+        env:
+          MESSAGE: ${{ github.workflow }}
+          JOB_NAME: ${{ github.job }}
+        run: printf '<%s|%s>' "$MESSAGE" "$JOB_NAME"

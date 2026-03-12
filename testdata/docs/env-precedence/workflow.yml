@@ -1,0 +1,17 @@
+name: ci-env
+'on': push
+env:
+  GLOBAL: workflow
+  SHARED: workflow
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      JOB_ONLY: job
+      SHARED: job
+    steps:
+      - id: print
+        env:
+          SHARED: step
+          STEP_ONLY: step
+        run: echo env

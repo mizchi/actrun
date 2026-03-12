@@ -1,0 +1,12 @@
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: docker://alpine:3.8
+      - uses: actions/aws/ec2@main
+      - uses: ./.github/actions/my-action
+      - uses: $$docker://alpine:3.8
+      - uses: ...docker://alpine:3.8
+      - uses: badrepo@invalid
+      - uses: docker://

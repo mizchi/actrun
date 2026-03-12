@@ -1,0 +1,11 @@
+name: e2e-unsupported-matrix
+'on': push
+jobs:
+  build:
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+    runs-on: ubuntu-latest
+    steps:
+      - run: printf '%s' 'nope'

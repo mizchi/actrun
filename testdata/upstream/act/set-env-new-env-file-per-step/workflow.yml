@@ -1,0 +1,33 @@
+name: act-set-env-new-env-file-per-step
+'on': push
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      MY_ENV: test
+    steps:
+      - id: show_initial
+        shell: bash
+        run: |
+          printf '%s\n' "$GITHUB_ENV" > env_paths.txt
+          printf '<%s>' "${{ env.MY_ENV }}"
+      - id: update_to_test2
+        shell: bash
+        run: |
+          printf '%s\n' "$GITHUB_ENV" >> env_paths.txt
+          echo "MY_ENV=test2" > "$GITHUB_ENV"
+      - id: show_test2
+        shell: bash
+        run: |
+          printf '%s\n' "$GITHUB_ENV" >> env_paths.txt
+          printf '<%s>' "${{ env.MY_ENV }}"
+      - id: update_to_returnedenv
+        shell: bash
+        run: |
+          printf '%s\n' "$GITHUB_ENV" >> env_paths.txt
+          echo "MY_ENV=returnedenv" > "$GITHUB_ENV"
+      - id: show_returnedenv
+        shell: bash
+        run: |
+          printf '%s\n' "$GITHUB_ENV" >> env_paths.txt
+          printf '<%s>' "${{ env.MY_ENV }}"

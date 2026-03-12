@@ -1,0 +1,11 @@
+name: e2e-remote-node-nested-cache-hit
+'on': push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: demo/tools/composite@v1
+      - id: verify
+        run: |
+          mkdir -p artifacts
+          cat node.txt > artifacts/node.txt

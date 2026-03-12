@@ -1,0 +1,8 @@
+name: ci-step-id
+'on': push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: print_version
+        run: echo 1.0.0

@@ -1,0 +1,9 @@
+name: act-stepsummary
+'on': push
+jobs:
+  create_summary:
+    runs-on: ubuntu-latest
+    steps:
+      - id: write_summary
+        shell: bash
+        run: echo "summary" >> "$GITHUB_STEP_SUMMARY"

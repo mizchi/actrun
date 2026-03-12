@@ -1,0 +1,9 @@
+name: ci-step-shell
+'on': push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: shell_step
+        shell: sh
+        run: echo shell

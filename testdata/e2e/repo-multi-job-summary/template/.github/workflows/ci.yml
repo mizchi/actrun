@@ -1,0 +1,25 @@
+name: e2e-repo-summary
+'on':
+  push:
+    paths:
+      - src/**
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    steps:
+      - id: write
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          printf '%s' 'setup-summary' | tee "$GITHUB_STEP_SUMMARY" > artifacts/setup-summary.txt
+  build:
+    needs:
+      - setup
+    runs-on: ubuntu-latest
+    steps:
+      - id: write
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          printf '%s' 'build-summary|' | tee "$GITHUB_STEP_SUMMARY" > artifacts/build-summary.txt
+          tr -d '\n' < src/message.txt >> artifacts/build-summary.txt

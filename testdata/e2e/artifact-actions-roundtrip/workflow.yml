@@ -1,0 +1,32 @@
+name: e2e-artifact-actions
+'on': push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: write
+        shell: bash
+        run: |
+          mkdir -p dist artifacts
+          printf '%s' alpha > dist/alpha.txt
+          printf '%s' beta > dist/beta.txt
+      - id: upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: bundle
+          path: |
+            dist/alpha.txt
+            dist/beta.txt
+      - id: remove
+        shell: bash
+        run: |
+          rm -f dist/alpha.txt dist/beta.txt
+      - id: download
+        uses: actions/download-artifact@v4
+        with:
+          name: bundle
+          path: restored
+      - id: verify
+        shell: bash
+        run: |
+          printf '%s|%s' "$(cat restored/alpha.txt)" "$(cat restored/beta.txt)" > artifacts/result.txt

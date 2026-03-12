@@ -1,0 +1,13 @@
+name: e2e-remote-cache-hit
+'on': push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: demo/tools/composite@v1
+        with:
+          message: cached-hello
+      - id: verify
+        run: |
+          mkdir -p artifacts
+          cat remote.txt > artifacts/remote.txt

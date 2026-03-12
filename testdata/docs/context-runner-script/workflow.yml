@@ -1,0 +1,17 @@
+name: runner-context
+'on': push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: show
+        shell: bash
+        run: |
+          if [ "${{ runner.os }}" = "$RUNNER_OS" ] &&
+             [ "${{ runner.arch }}" = "$RUNNER_ARCH" ] &&
+             [ "${{ runner.environment }}" = "$RUNNER_ENVIRONMENT" ]; then
+            printf '<ok>'
+          else
+            printf '<%s|%s|%s|%s|%s|%s>' "${{ runner.os }}" "$RUNNER_OS" "${{ runner.arch }}" "$RUNNER_ARCH" "${{ runner.environment }}" "$RUNNER_ENVIRONMENT"
+            exit 1
+          fi

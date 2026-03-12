@@ -1,0 +1,32 @@
+name: e2e-repo-needs-summary
+'on':
+  push:
+    paths:
+      - src/**
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      color: ${{ steps.pick.outputs.color }}
+    steps:
+      - id: pick
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          printf '%s\n' 'color=violet' >> "$GITHUB_OUTPUT"
+          printf '%s' 'setup-summary|violet' | tee "$GITHUB_STEP_SUMMARY" > artifacts/setup-summary.txt
+  build:
+    needs:
+      - setup
+    runs-on: ubuntu-latest
+    steps:
+      - id: write
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          summary_prefix="${{ needs.setup.outputs.color }}|${{ needs.setup.result }}|"
+          printf '%s' "$summary_prefix" | tee "$GITHUB_STEP_SUMMARY" > artifacts/build-summary.txt
+          tr -d '\n' < src/message.txt | tee -a "$GITHUB_STEP_SUMMARY" >> artifacts/build-summary.txt
+          printf '%s' "$summary_prefix" > artifacts/result.txt
+          tr -d '\n' < src/message.txt >> artifacts/result.txt
+          printf '|%s' "${{ github.repository }}" >> artifacts/result.txt

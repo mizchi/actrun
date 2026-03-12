@@ -1,0 +1,18 @@
+on: push
+env:
+  MY_SHELL: sh
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - shell: sh
+        run: |
+          printf 'sh-ok\n'
+  check-job-default:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: ${{ env.MY_SHELL }}
+    steps:
+      - run: |
+          printf 'sh-ok\n'

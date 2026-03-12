@@ -1,0 +1,8 @@
+id=languageservices-errors-step-uses-missing
+source=actions-languageservices
+mode=known_diff
+kind=lower
+url=https://raw.githubusercontent.com/actions/languageservices/main/workflow-parser/testdata/reader/errors-step-uses-missing.yml
+added_at=2026-03-12
+notes=upstream reports missing uses when with is present; action_runner collapses this to missing run or uses during lowering
+origin=workflow-parser/testdata/reader/errors-step-uses-missing.yml

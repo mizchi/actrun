@@ -1,0 +1,12 @@
+name: ci-github-env-single
+'on': push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: set_env
+        shell: bash
+        run: echo "action_state=yellow" >> "$GITHUB_ENV"
+      - id: read
+        shell: bash
+        run: printf '<%s>' "$action_state"

@@ -1,0 +1,7 @@
+id=docs-workflow-command-state
+source=docs
+mode=unsupported
+kind=run
+url=https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands
+added_at=2026-03-12
+notes=GITHUB_STATE is only available within actions and is unsupported in action_runner

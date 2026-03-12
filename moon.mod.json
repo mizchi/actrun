@@ -1,0 +1,23 @@
+{
+  "name": "mizchi/action_runner",
+  "version": "0.1.0",
+  "deps": {
+    "moonbitlang/async": "0.16.2",
+    "mizchi/bitflow": "0.3.1",
+    "mizchi/bit": { "path": "../../bit-vcs/bit" },
+    "moonbitlang/x": "0.4.40",
+    "moonbitlang/quickcheck": "0.9.10"
+  },
+  "readme": "src/README.mbt.md",
+  "repository": "https://github.com/mizchi/action_runner",
+  "license": "Apache-2.0",
+  "keywords": [
+    "github-actions",
+    "workflow",
+    "runner",
+    "ci"
+  ],
+  "description": "MVP GitHub Actions-compatible push CI runner with bitflow lowering, native execution, and bit workspace materialization.",
+  "source": "src",
+  "preferred-target": "native"
+}

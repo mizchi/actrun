@@ -1,0 +1,16 @@
+name: e2e-repo-remote-docker-failure
+'on':
+  push:
+    paths:
+      - src/**
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: remote
+        uses: demo/tools/action@v1
+      - id: verify
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          cat src/message.txt > artifacts/message.txt

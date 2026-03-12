@@ -1,0 +1,8 @@
+id=languageservices-step-id
+source=actions-languageservices
+mode=supported
+kind=parse
+url=https://raw.githubusercontent.com/actions/languageservices/main/workflow-parser/testdata/reader/step-id.yml
+added_at=2026-03-12
+notes=selected parser success fixture for explicit step ids
+origin=workflow-parser/testdata/reader/step-id.yml

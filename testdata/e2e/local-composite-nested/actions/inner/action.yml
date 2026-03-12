@@ -1,0 +1,10 @@
+name: inner
+inputs:
+  message:
+    default: inner-default
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        printf '%s' "${{ inputs.message }}" > inner.txt

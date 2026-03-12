@@ -1,0 +1,8 @@
+id=docs-context-github-ref
+source=docs
+mode=supported
+kind=run
+url=https://docs.github.com/en/actions/reference/workflows-and-actions/contexts
+docs_urls=https://docs.github.com/en/actions/reference/workflows-and-actions/contexts;https://docs.github.com/actions/reference/workflows-and-actions/variables
+added_at=2026-03-12
+notes=push event exposes github.ref github.ref_name github.sha and matching default env vars

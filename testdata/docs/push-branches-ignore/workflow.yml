@@ -1,0 +1,11 @@
+name: ci-branches-ignore
+on:
+  push:
+    branches-ignore:
+      - mona/octocat
+      - releases/*-alpha
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo branches-ignore

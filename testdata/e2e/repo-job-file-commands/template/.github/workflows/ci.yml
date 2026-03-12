@@ -1,0 +1,40 @@
+name: e2e-repo-job-commands
+'on':
+  push:
+    paths:
+      - src/**
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      shade: ${{ steps.vars.outputs.shade }}
+    steps:
+      - id: vars
+        shell: bash
+        run: |
+          mkdir -p .tools
+          cat > .tools/paint <<'EOF'
+          #!/bin/sh
+          printf 'painted:%s' "$1"
+          EOF
+          chmod +x .tools/paint
+          printf '%s\n' "$PWD/.tools" >> "$GITHUB_PATH"
+          printf '%s\n' 'JOB_ONLY=hidden' >> "$GITHUB_ENV"
+          printf '%s\n' 'shade=amber' >> "$GITHUB_OUTPUT"
+  build:
+    needs:
+      - setup
+    runs-on: ubuntu-latest
+    steps:
+      - id: consume
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          if command -v paint >/dev/null 2>&1; then
+            paint_status=visible
+          else
+            paint_status=missing
+          fi
+          printf '%s|%s|%s|' "${{ needs.setup.outputs.shade }}" "${JOB_ONLY:-missing}" "$paint_status" > artifacts/result.txt
+          tr -d '\n' < src/message.txt >> artifacts/result.txt
+          printf '|%s' "${{ github.repository }}" >> artifacts/result.txt

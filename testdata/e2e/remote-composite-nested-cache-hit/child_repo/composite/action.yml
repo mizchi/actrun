@@ -1,0 +1,7 @@
+name: Child Composite
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        printf '%s|%s|%s' 'nested' "${{ github.action_repository }}" "${{ github.action_ref }}" > remote.txt

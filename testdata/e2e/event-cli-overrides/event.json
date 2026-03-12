@@ -1,0 +1,18 @@
+{
+  "ref": "refs/heads/release",
+  "before": "1111111111111111111111111111111111111111",
+  "after": "event-after",
+  "repository": {
+    "full_name": "octo/demo"
+  },
+  "sender": {
+    "login": "event-octocat"
+  },
+  "commits": [
+    {
+      "added": [],
+      "modified": ["docs/skip.txt"],
+      "removed": []
+    }
+  ]
+}

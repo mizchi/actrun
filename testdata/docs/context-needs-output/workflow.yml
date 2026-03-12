@@ -1,0 +1,18 @@
+name: needs-output-context
+'on': push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      artifact_id: ${{ steps.produce.outputs.artifact_id }}
+    steps:
+      - id: produce
+        shell: bash
+        run: printf 'artifact_id=build-42\n' >> "$GITHUB_OUTPUT"
+  consume:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - id: read
+        shell: bash
+        run: printf '<%s>' "${{ needs.build.outputs.artifact_id }}"

@@ -1,0 +1,45 @@
+# E2E Scenarios
+
+`just e2e` で実行する CLI black-box scenario の fixture 置き場。
+
+- `local-push-basic`: local workflow + push event + `env` / `output` / `needs`
+- `local-composite-nested`: local composite action + nested `uses`
+- `trigger-skipped`: branch/path filter mismatch で CLI が `state=skipped` を返す
+- `file-commands`: `GITHUB_ENV` / `GITHUB_OUTPUT` / `GITHUB_PATH` / `GITHUB_STEP_SUMMARY`
+- `artifact-actions-roundtrip`: `actions/upload-artifact` / `actions/download-artifact` の roundtrip
+- `job-failure-blocked`: required step failure と downstream `blocked`
+- `unsupported-uses`: unsupported `uses:` を CLI error として reject
+- `unsupported-matrix`: unsupported `strategy.matrix` を CLI error として reject
+- `event-cli-overrides`: `--event` より CLI flag (`--ref` / `--repository` / `--after` / `--changed`) が優先される
+- `event-head-commit-fallback`: `commits` が無くても `head_commit` から changed paths を読んで trigger 判定する
+- `docker-image-basic`: direct `docker://...` action を native docker adapter で実行する
+- `remote-composite-fetch`: GitHub repo action prefetch + remote composite action
+- `remote-composite-nested-prefetch`: remote composite action が nested remote action を再帰 prefetch する
+- `remote-composite-nested-cache-hit`: nested remote action が cache 済みなら fetch なしで解決される
+- `remote-composite-cache-hit`: cache 済み GitHub repo composite action が fetch なしで解決される
+- `remote-node-lifecycle`: remote `node20` action の pre/main/post lifecycle
+- `remote-node-failure-cleanup`: remote `node20` action が失敗しても post cleanup が走る
+- `remote-node-failure-cache-hit`: cache 済み remote `node20` action が失敗しても fetch なしで post cleanup が走る
+- `remote-node-nested-prefetch`: nested remote `node20` action を再帰 prefetch して実行する
+- `remote-node-nested-cache-hit`: nested remote `node20` action が cache 済みなら fetch なしで解決される
+- `remote-node-cache-hit`: cache 済み GitHub repo `node20` action が fetch なしで lifecycle 実行される
+- `remote-docker-lifecycle`: remote `docker` action の pre/main/post lifecycle
+- `remote-docker-failure-cleanup`: remote `docker` action が失敗しても post cleanup が走る
+- `remote-docker-failure-cache-hit`: cache 済み remote `docker` action が失敗しても fetch なしで post cleanup が走る
+- `remote-docker-nested-prefetch`: nested remote `docker` action を再帰 prefetch して実行する
+- `remote-docker-nested-cache-hit`: nested remote `docker` action が cache 済みなら fetch なしで解決される
+- `remote-docker-cache-hit`: cache 済み GitHub repo `docker` action が fetch なしで lifecycle 実行される
+- `repo-push-bit`: `bit` repo materialize + changed path 判定
+- `repo-needs-output`: repo materialize 後の複数 job で `needs.<job>.outputs.*` を参照する
+- `repo-job-file-commands`: `GITHUB_OUTPUT` は `needs.outputs` で残り、`GITHUB_ENV` / `GITHUB_PATH` は job を跨がない
+- `repo-multi-job-summary`: repo mode の複数 job で `GITHUB_STEP_SUMMARY` が使える
+- `repo-needs-summary`: repo mode で `needs.outputs` と `GITHUB_STEP_SUMMARY` を同時に使う
+- `repo-remote-node-failure-cleanup`: repo mode で remote `node20` action が失敗しても post cleanup が走る
+- `repo-remote-node-failure-cache-hit`: repo mode で cache 済み remote `node20` action が失敗しても fetch なしで post cleanup が走る
+- `repo-remote-docker-failure-cleanup`: repo mode で remote `docker` action が失敗しても post cleanup が走る
+- `repo-remote-docker-failure-cache-hit`: repo mode で cache 済み remote `docker` action が失敗しても fetch なしで post cleanup が走る
+- `repo-event-json`: `--repo + --event` だけで push payload から materialize / context を解決する
+- `repo-event-head-commit`: repo mode でも `head_commit` fallback で changed paths を解決する
+- `repo-auto-detect-repository`: repo root の `origin` から `${{ github.repository }}` を自動推測
+- `repo-event-auto-detect-repository`: `--repo + --event` で event に repository が無くても `origin` から自動推測する
+- `repo-event-head-commit-auto-detect-repository`: repo mode で `head_commit` fallback と repository auto-detect を同時に使う

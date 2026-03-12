@@ -1,0 +1,18 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "mizchi/action_runner/e2e/main"
+
+// Values
+
+// Errors
+
+// Types and methods
+type E2eFakeGitRoute
+
+type E2eProcessResult
+
+type E2eRepoFile
+
+// Type aliases
+
+// Traits
+

@@ -1,0 +1,11 @@
+name: ci-branches
+on:
+  push:
+    branches:
+      - main
+      - releases/*
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo branches

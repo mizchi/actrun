@@ -1,0 +1,8 @@
+id=docs-context-github-action
+source=docs
+mode=supported
+kind=run
+url=https://docs.github.com/en/actions/reference/workflows-and-actions/contexts
+docs_urls=https://docs.github.com/en/actions/reference/workflows-and-actions/contexts;https://docs.github.com/en/actions/reference/workflows-and-actions/variables
+added_at=2026-03-12
+notes=github.action と GITHUB_ACTION は run step で現在の step id を返す最小ケース

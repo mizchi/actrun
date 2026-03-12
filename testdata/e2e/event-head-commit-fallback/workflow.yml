@@ -1,0 +1,14 @@
+name: e2e-head-commit
+'on':
+  push:
+    paths:
+      - src/**
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: write
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          printf '%s|%s' "${{ github.actor }}" "${{ github.repository }}" > artifacts/context.txt

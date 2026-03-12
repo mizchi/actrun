@@ -1,0 +1,8 @@
+id=languageservices-errors-step-run-missing
+source=actions-languageservices
+mode=supported
+kind=lower
+url=https://raw.githubusercontent.com/actions/languageservices/main/workflow-parser/testdata/reader/errors-step-run-missing.yml
+added_at=2026-03-12
+notes=upstream parser reports missing run; action_runner reports equivalent error during lowering
+origin=workflow-parser/testdata/reader/errors-step-run-missing.yml

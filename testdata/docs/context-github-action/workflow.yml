@@ -1,0 +1,9 @@
+name: github-action-context
+'on': push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: show
+        shell: bash
+        run: printf '<%s|%s>' "${{ github.action }}" "$GITHUB_ACTION"

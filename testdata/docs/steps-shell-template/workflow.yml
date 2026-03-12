@@ -1,0 +1,9 @@
+name: shell-template
+'on': push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: template
+        shell: sh {0}
+        run: printf '<template-ok>'

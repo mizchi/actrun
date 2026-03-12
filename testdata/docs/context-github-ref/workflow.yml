@@ -1,0 +1,9 @@
+name: github-ref-context
+'on': push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: show
+        shell: bash
+        run: printf '<%s|%s|%s|%s|%s|%s|%s|%s>' "${{ github.event_name }}" "${{ github.ref }}" "${{ github.ref_name }}" "${{ github.sha }}" "$GITHUB_EVENT_NAME" "$GITHUB_REF" "$GITHUB_REF_NAME" "$GITHUB_SHA"

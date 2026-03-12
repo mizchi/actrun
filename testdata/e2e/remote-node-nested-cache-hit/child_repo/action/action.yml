@@ -1,0 +1,4 @@
+name: Child Node Action
+runs:
+  using: node20
+  main: main.sh

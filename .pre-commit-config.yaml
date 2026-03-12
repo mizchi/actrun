@@ -1,0 +1,22 @@
+repos:
+  - repo: local
+    hooks:
+      - id: moon-check
+        name: moon check
+        entry: moon check --deny-warn
+        language: system
+        pass_filenames: false
+        files: '\.mbt$'
+      - id: moon-fmt
+        name: moon fmt
+        entry: moon fmt
+        language: system
+        pass_filenames: false
+        files: '\.mbt$'
+      # Optional: install with `moon install mizchi/starlint/cmd/starlint`
+      # - id: starlint
+      #   name: starlint
+      #   entry: starlint .
+      #   language: system
+      #   pass_filenames: false
+      #   files: '\.mbt$'

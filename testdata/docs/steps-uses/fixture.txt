@@ -1,0 +1,7 @@
+id=docs-steps-uses
+source=docs
+mode=supported
+kind=lower
+url=https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax
+added_at=2026-03-12
+notes=step uses action reference

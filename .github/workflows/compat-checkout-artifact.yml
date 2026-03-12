@@ -1,0 +1,53 @@
+name: Compat Checkout Artifact
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/compat-checkout-artifact.yml
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+      - name: Capture
+        shell: bash
+        run: |
+          mkdir -p observed
+          printf '%s' "$GITHUB_REPOSITORY" > observed/repository.txt
+          printf '%s' "$GITHUB_WORKSPACE" > observed/workspace.txt
+          printf '%s' "$(test -f README.md && echo yes || echo no)" > observed/readme.txt
+      - name: Upload observed
+        uses: actions/upload-artifact@v4
+        with:
+          name: compat-checkout-observed
+          path: |
+            observed/repository.txt
+            observed/workspace.txt
+            observed/readme.txt
+      - name: Download observed
+        uses: actions/download-artifact@v4
+        with:
+          name: compat-checkout-observed
+          path: downloaded
+      - name: Build report
+        shell: bash
+        run: |
+          mkdir -p report
+          workspace="$(cat downloaded/workspace.txt)"
+          printf '%s|%s|%s|%s' \
+            "$(cat downloaded/repository.txt)" \
+            "$(basename "$(dirname "$workspace")")" \
+            "$(basename "$workspace")" \
+            "$(cat downloaded/readme.txt)" > report/result.txt
+      - name: Upload report
+        uses: actions/upload-artifact@v4
+        with:
+          name: compat-checkout-report
+          path: report/result.txt

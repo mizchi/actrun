@@ -1,0 +1,7 @@
+id=docs-context-env-script
+source=docs
+mode=supported
+kind=run
+url=https://docs.github.com/en/actions/reference/workflows-and-actions/contexts
+added_at=2026-03-12
+notes=env context is available in run step script expressions

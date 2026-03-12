@@ -1,0 +1,9 @@
+id=act-shells-sh
+source=nektos-act
+mode=supported
+kind=run
+url=https://raw.githubusercontent.com/nektos/act/master/pkg/runner/testdata/shells/sh/push.yml
+docs_urls=https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions;https://docs.github.com/en/actions/how-tos/writing-workflows/choosing-what-your-workflow-does/setting-a-default-shell-and-working-directory
+added_at=2026-03-12
+notes=normalized host-only sh shell coverage from act shells fixture
+origin=pkg/runner/testdata/shells/sh/push.yml

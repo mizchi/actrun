@@ -1,0 +1,7 @@
+id=docs-workflow-command-github-env-multiline
+source=docs
+mode=supported
+kind=run
+url=https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands
+added_at=2026-03-12
+notes=multiline GITHUB_ENV uses delimiter syntax

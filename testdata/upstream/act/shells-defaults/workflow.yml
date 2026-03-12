@@ -1,0 +1,11 @@
+on: push
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          if [[ -n "$BASH" ]]; then
+            echo "I'm $BASH!"
+          else
+            exit 1
+          fi

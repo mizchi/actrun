@@ -1,0 +1,15 @@
+name: ci-object
+on:
+  push:
+    branches:
+      - main
+      - release/*
+    paths:
+      - src/**
+      - package.json
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: test
+        run: echo object

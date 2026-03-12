@@ -1,0 +1,14 @@
+name: ci-github-output-single
+'on': push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: color-selector
+        shell: bash
+        run: echo "SELECTED_COLOR=green" >> "$GITHUB_OUTPUT"
+      - id: get_color
+        shell: bash
+        env:
+          SELECTED_COLOR: ${{ steps.color-selector.outputs.SELECTED_COLOR }}
+        run: printf '<%s>' "$SELECTED_COLOR"

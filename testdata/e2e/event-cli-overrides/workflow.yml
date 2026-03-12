@@ -1,0 +1,14 @@
+name: e2e-event-override
+'on':
+  push:
+    paths:
+      - src/**
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: write
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          printf '%s|%s|%s|%s|%s' "${{ github.ref_name }}" "${{ github.repository }}" "${{ github.sha }}" "${{ github.actor }}" "$GITHUB_EVENT_NAME" > artifacts/context.txt

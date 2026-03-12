@@ -1,0 +1,10 @@
+import {
+  "mizchi/action_runner" @ar,
+  "moonbitlang/async",
+  "moonbitlang/x/fs" @xfs,
+  "moonbitlang/x/sys" @xsys,
+}
+
+options(
+  "is-main": true,
+)

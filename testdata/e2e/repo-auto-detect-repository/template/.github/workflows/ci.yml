@@ -1,0 +1,16 @@
+name: e2e-repo-detect
+'on':
+  push:
+    paths:
+      - src/**
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: repo
+        run: |
+          mkdir -p artifacts
+          printf '%s' "${{ github.repository }}" > artifacts/repository.txt
+      - id: owner
+        run: |
+          printf '%s' "${{ github.repository_owner }}" > artifacts/owner.txt

@@ -1,0 +1,8 @@
+id=languageservices-expr-step-output-case-insensitive
+source=actions-languageservices
+mode=supported
+kind=run
+url=https://raw.githubusercontent.com/actions/languageservices/main/expressions/testdata/op_dot.json
+added_at=2026-03-12
+notes=adapted from property-case-insensitive to step outputs lookup
+origin=expressions/testdata/op_dot.json#property-case-insensitive[0]

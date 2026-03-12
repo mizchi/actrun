@@ -1,0 +1,7 @@
+id=docs-workflow-command-github-path
+source=docs
+mode=supported
+kind=run
+url=https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands
+added_at=2026-03-12
+notes=GITHUB_PATH affects only subsequent steps

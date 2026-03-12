@@ -1,0 +1,20 @@
+name: ci-defaults
+'on': push
+defaults:
+  run:
+    shell: sh
+    working-directory: workspace
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+        working-directory: packages/app
+    steps:
+      - id: from_job_default
+        run: echo job
+      - id: from_step_override
+        shell: sh
+        working-directory: scripts
+        run: echo step

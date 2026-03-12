@@ -1,0 +1,10 @@
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      bar: baz
+    steps:
+      - id: show
+        shell: bash
+        run: printf '<%s>' "${{ env.bar }}"

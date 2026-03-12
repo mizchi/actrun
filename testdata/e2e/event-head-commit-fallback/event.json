@@ -1,0 +1,16 @@
+{
+  "ref": "refs/heads/main",
+  "before": "1111111111111111111111111111111111111111",
+  "after": "abc123def456",
+  "repository": {
+    "full_name": "mizchi/action_runner"
+  },
+  "sender": {
+    "login": "head-octocat"
+  },
+  "head_commit": {
+    "added": [],
+    "modified": ["src/head_commit.mbt"],
+    "removed": []
+  }
+}

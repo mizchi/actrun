@@ -1,0 +1,9 @@
+id=act-set-env-step-env-override
+source=nektos-act
+mode=supported
+kind=run
+url=https://raw.githubusercontent.com/nektos/act/master/pkg/runner/testdata/set-env-step-env-override/push.yml
+docs_urls=https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands;https://docs.github.com/actions/learn-github-actions/contexts;https://docs.github.com/en/actions/reference/metadata-syntax-for-github-actions
+added_at=2026-03-12
+notes=normalized local composite fixture that checks step env override inside the action and GITHUB_ENV propagation back to the job
+origin=pkg/runner/testdata/set-env-step-env-override/push.yml

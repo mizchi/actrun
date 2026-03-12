@@ -1,0 +1,54 @@
+name: Compat Artifact Multi Job
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/compat-artifact-multi-job.yml
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  pack:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+      - name: Produce files
+        shell: bash
+        run: |
+          mkdir -p produced
+          printf '%s' alpha > produced/alpha.txt
+          printf '%s' beta > produced/beta.txt
+      - name: Upload bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: compat-bundle
+          path: |
+            produced/alpha.txt
+            produced/beta.txt
+
+  unpack:
+    needs:
+      - pack
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: compat-bundle
+          path: restored
+      - name: Build report
+        shell: bash
+        run: |
+          mkdir -p report
+          printf '%s|%s' \
+            "$(cat restored/alpha.txt)" \
+            "$(cat restored/beta.txt)" > report/result.txt
+      - name: Upload report
+        uses: actions/upload-artifact@v4
+        with:
+          name: compat-artifact-report
+          path: report/result.txt

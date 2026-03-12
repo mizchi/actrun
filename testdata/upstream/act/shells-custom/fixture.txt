@@ -1,0 +1,9 @@
+id=act-shells-custom
+source=nektos-act
+mode=known_diff
+kind=run
+url=https://raw.githubusercontent.com/nektos/act/master/pkg/runner/testdata/shells/custom/push.yml
+docs_urls=https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions
+added_at=2026-03-12
+notes=GitHub supports templated custom shell strings with {0}; action_runner also expands them, but this upstream fixture still depends on a host pwsh binary
+origin=pkg/runner/testdata/shells/custom/push.yml

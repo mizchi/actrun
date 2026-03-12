@@ -1,0 +1,14 @@
+name: ci-step-env
+'on': push
+env:
+  DAY_OF_WEEK: Monday
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      GREETING: Hello
+    steps:
+      - id: env_step
+        env:
+          STEP_NAME: Mona
+        run: echo env

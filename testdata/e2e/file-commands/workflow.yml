@@ -1,0 +1,29 @@
+name: e2e-file-commands
+'on': push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: setup
+        shell: bash
+        run: |
+          mkdir -p .tools artifacts
+          cat > .tools/paint <<'EOF'
+          #!/bin/sh
+          printf 'painted:%s' "$1"
+          EOF
+          chmod +x .tools/paint
+          printf '%s\n' "$PWD/.tools" >> "$GITHUB_PATH"
+          printf '%s\n' 'COLOR=yellow' >> "$GITHUB_ENV"
+          {
+            printf '%s\n' 'MULTI<<EOF'
+            printf '%s\n' 'line-1'
+            printf '%s\n' 'line-2'
+            printf '%s\n' 'EOF'
+          } >> "$GITHUB_ENV"
+          printf '%s\n' 'shade=green' >> "$GITHUB_OUTPUT"
+          printf '%s' 'summary-line' | tee "$GITHUB_STEP_SUMMARY" > artifacts/summary.txt
+      - id: consume
+        shell: bash
+        run: |
+          printf '%s|%s|%s|%s' "$COLOR" "$MULTI" "${{ steps.setup.outputs.shade }}" "$(paint test)" > artifacts/commands.txt

@@ -1,0 +1,7 @@
+id=docs-steps-shell-template
+source=docs
+mode=supported
+kind=run
+url=https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax
+added_at=2026-03-12
+notes=custom shell templates using {0} execute the generated script file

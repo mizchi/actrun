@@ -1,0 +1,8 @@
+id=languageservices-workflow-env
+source=actions-languageservices
+mode=supported
+kind=parse
+url=https://raw.githubusercontent.com/actions/languageservices/main/workflow-parser/testdata/reader/workflow-env.yml
+added_at=2026-03-12
+notes=selected parser success fixture for workflow job and step env
+origin=workflow-parser/testdata/reader/workflow-env.yml

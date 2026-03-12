@@ -1,0 +1,27 @@
+name: e2e-basic
+'on':
+  push:
+    branches:
+      - main
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      color: ${{ steps.pick.outputs.color }}
+    steps:
+      - id: pick
+        run: |
+          mkdir -p artifacts
+          echo "MODE=${{ github.event_name }}" >> "$GITHUB_ENV"
+          echo "color=blue" >> "$GITHUB_OUTPUT"
+      - id: verify
+        run: |
+          printf '%s|%s|%s' "${MODE}" "${{ steps.pick.outputs.color }}" "${{ github.repository }}" > artifacts/setup.txt
+  build:
+    needs:
+      - setup
+    runs-on: ubuntu-latest
+    steps:
+      - id: consume
+        run: |
+          printf '%s|%s|%s' "${{ needs.setup.outputs.color }}" "${{ needs.setup.result }}" "${{ github.actor }}" > artifacts/build.txt

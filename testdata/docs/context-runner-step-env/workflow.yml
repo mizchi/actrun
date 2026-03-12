@@ -1,0 +1,21 @@
+name: runner-context-env
+'on': push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: read
+        shell: bash
+        env:
+          TEMP_PATH: ${{ runner.temp }}
+          ENV_KIND: ${{ runner.environment }}
+        run: |
+          if [ "$TEMP_PATH" = "$RUNNER_TEMP" ] &&
+             [ "$ENV_KIND" = "$RUNNER_ENVIRONMENT" ] &&
+             [ -n "$TEMP_PATH" ] &&
+             [ -d "$TEMP_PATH" ]; then
+            printf '<ok>'
+          else
+            printf '<%s|%s|%s|%s>' "$TEMP_PATH" "$RUNNER_TEMP" "$ENV_KIND" "$RUNNER_ENVIRONMENT"
+            exit 1
+          fi

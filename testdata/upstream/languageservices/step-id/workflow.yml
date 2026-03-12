@@ -1,0 +1,9 @@
+on: push
+jobs:
+  job1:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+        id: action-step-id
+      - run: echo 1
+        id: run-step-id

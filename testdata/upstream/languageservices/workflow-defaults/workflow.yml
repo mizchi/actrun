@@ -1,0 +1,10 @@
+on: push
+defaults:
+  run:
+    shell: cmd
+    working-directory: foo
+jobs:
+  one:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo hi

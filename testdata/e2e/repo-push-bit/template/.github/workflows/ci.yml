@@ -1,0 +1,16 @@
+name: e2e-repo
+'on':
+  push:
+    paths:
+      - src/**
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: copy
+        run: |
+          mkdir -p artifacts
+          cat src/message.txt > artifacts/message.txt
+      - id: context
+        run: |
+          printf '%s|%s' "${GITHUB_EVENT_NAME}" "${GITHUB_REF_NAME}" > artifacts/context.txt

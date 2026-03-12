@@ -1,0 +1,13 @@
+name: e2e-remote
+'on': push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: demo/tools/composite@v1
+        with:
+          message: remote-hello
+      - id: verify
+        run: |
+          mkdir -p artifacts
+          cat remote.txt > artifacts/remote.txt

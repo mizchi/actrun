@@ -1,0 +1,16 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "mizchi/action_runner/main"
+
+// Values
+
+// Errors
+
+// Types and methods
+type CliOptions
+
+type CliParseResult
+
+// Type aliases
+
+// Traits
+

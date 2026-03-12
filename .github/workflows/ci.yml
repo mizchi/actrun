@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+      - name: Setup just
+        uses: extractions/setup-just@v3
+      - name: Install MoonBit CLI
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+      - name: Moon version
+        run: moon version --all
+      - name: Moon update
+        run: moon update
+      - name: Verify format
+        run: just fmt-check
+      - name: Verify generated interfaces
+        run: just info-check
+
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: js
+          - os: ubuntu-latest
+            target: native
+          - os: macos-latest
+            target: native
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+      - name: Setup just
+        uses: extractions/setup-just@v3
+      - name: Install MoonBit CLI
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+      - name: Moon version
+        run: moon version --all
+      - name: Moon update
+        run: moon update
+      - name: Moon check
+        run: just target=${{ matrix.target }} check
+      - name: Moon test
+        run: just target=${{ matrix.target }} test

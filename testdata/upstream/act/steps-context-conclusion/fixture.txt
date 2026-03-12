@@ -1,0 +1,9 @@
+id=act-steps-context-conclusion
+source=nektos-act
+mode=known_diff
+kind=run
+url=https://raw.githubusercontent.com/nektos/act/master/pkg/runner/testdata/steps-context/conclusion/push.yml
+docs_urls=https://docs.github.com/actions/learn-github-actions/contexts
+added_at=2026-03-12
+notes=upstream depends on continue-on-error and steps conclusion context; MVP blocks later steps instead
+origin=pkg/runner/testdata/steps-context/conclusion/push.yml

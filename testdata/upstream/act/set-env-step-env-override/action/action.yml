@@ -1,0 +1,10 @@
+name: env override
+runs:
+  using: composite
+  steps:
+    - id: check
+      shell: bash
+      run: printf '<%s>' "${{ env.MY_ENV }}" > inner.txt
+    - id: export
+      shell: bash
+      run: echo "MY_ENV=returnedenv" > "$GITHUB_ENV"

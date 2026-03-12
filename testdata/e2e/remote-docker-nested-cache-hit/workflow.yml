@@ -1,0 +1,12 @@
+name: e2e-remote-docker-nested-cache-hit
+'on': push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: demo/tools/composite@v1
+      - id: verify
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          cat main.txt > artifacts/main.txt

@@ -1,0 +1,8 @@
+id=docs-context-needs-result
+source=docs
+mode=supported
+kind=run
+url=https://docs.github.com/en/actions/reference/workflows-and-actions/contexts
+docs_urls=https://docs.github.com/en/actions/reference/workflows-and-actions/contexts
+added_at=2026-03-12
+notes=direct dependent jobs can read needs.job.result for successful jobs

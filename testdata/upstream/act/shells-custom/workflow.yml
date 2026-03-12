@@ -1,0 +1,7 @@
+on: push
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - shell: pwsh -v '. {0}'
+        run: ''

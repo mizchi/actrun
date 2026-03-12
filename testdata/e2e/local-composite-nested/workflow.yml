@@ -1,0 +1,13 @@
+name: e2e-composite
+'on': push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./actions/outer
+        with:
+          message: hello-nested
+      - id: verify
+        run: |
+          mkdir -p artifacts
+          printf '%s|%s' "$(cat outer.txt)" "$(cat inner.txt)" > artifacts/result.txt

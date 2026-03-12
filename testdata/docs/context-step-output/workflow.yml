@@ -1,0 +1,12 @@
+name: ci-context-step-output
+'on': push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: produce
+        shell: bash
+        run: echo "message=from-output" >> "$GITHUB_OUTPUT"
+      - id: consume
+        shell: bash
+        run: printf '<%s>' "${{ steps.produce.outputs.message }}"

@@ -1,0 +1,7 @@
+name: Remote Docker Lifecycle
+runs:
+  using: docker
+  image: Dockerfile
+  pre-entrypoint: pre.sh
+  entrypoint: main.sh
+  post-entrypoint: post.sh

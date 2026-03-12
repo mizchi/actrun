@@ -1,0 +1,9 @@
+name: ci-step-working-directory
+'on': push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: workdir
+        working-directory: scripts
+        run: echo workdir

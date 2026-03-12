@@ -1,0 +1,23 @@
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo hi
+  test-level-0:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo hi
+  test-level-1:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo hi
+  deploy:
+    needs:
+      - test-level-0
+      - test-level-1
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo hi

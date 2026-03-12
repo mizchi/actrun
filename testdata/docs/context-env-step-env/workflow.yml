@@ -1,0 +1,13 @@
+name: ci-context-env-step-env
+'on': push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      GREETING: from-job-env
+    steps:
+      - id: read
+        shell: bash
+        env:
+          MESSAGE: ${{ env.GREETING }}
+        run: printf '<%s>' "$MESSAGE"

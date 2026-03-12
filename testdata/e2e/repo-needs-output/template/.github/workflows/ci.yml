@@ -1,0 +1,27 @@
+name: e2e-repo-needs
+'on':
+  push:
+    paths:
+      - src/**
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      color: ${{ steps.pick.outputs.color }}
+    steps:
+      - id: pick
+        shell: bash
+        run: |
+          printf '%s\n' 'color=green' >> "$GITHUB_OUTPUT"
+  build:
+    needs:
+      - setup
+    runs-on: ubuntu-latest
+    steps:
+      - id: consume
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          printf '%s|%s|' "${{ needs.setup.outputs.color }}" "${{ needs.setup.result }}" > artifacts/result.txt
+          cat src/message.txt >> artifacts/result.txt
+          printf '|%s' "${{ github.repository }}" >> artifacts/result.txt

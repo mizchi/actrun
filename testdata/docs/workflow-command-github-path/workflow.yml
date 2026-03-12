@@ -1,0 +1,24 @@
+name: ci-github-path
+'on': push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: export_path
+        shell: bash
+        run: |
+          mkdir -p tools
+          cat > tools/hello-tool <<'EOF'
+          #!/bin/sh
+          printf '<from-path>'
+          EOF
+          chmod +x tools/hello-tool
+          printf '%s\n' "$(pwd)/tools" >> "$GITHUB_PATH"
+          if command -v hello-tool >/dev/null 2>&1; then
+            printf '<unexpected>'
+          else
+            printf '<missing>'
+          fi
+      - id: read_path
+        shell: bash
+        run: hello-tool

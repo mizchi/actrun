@@ -1,0 +1,9 @@
+name: github-context
+'on': push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: show
+        shell: bash
+        run: printf '<%s|%s|%s>' "${{ github.workflow }}" "${{ github.job }}" "${{ github.workspace }}"

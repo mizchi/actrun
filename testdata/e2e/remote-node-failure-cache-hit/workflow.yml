@@ -1,0 +1,12 @@
+name: e2e-node-failure-cache-hit
+'on': push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: remote
+        uses: demo/tools/action@v1
+      - id: verify
+        shell: bash
+        run: |
+          printf '%s' 'should-not-run'

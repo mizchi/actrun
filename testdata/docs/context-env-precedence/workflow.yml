@@ -1,0 +1,15 @@
+name: ci-context-env-precedence
+'on': push
+env:
+  LEVEL: workflow
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      LEVEL: job
+    steps:
+      - id: show
+        shell: bash
+        env:
+          LEVEL: step
+        run: printf '<%s>' "${{ env.LEVEL }}"

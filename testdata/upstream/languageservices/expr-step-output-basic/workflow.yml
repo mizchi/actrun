@@ -1,0 +1,11 @@
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: produce
+        shell: bash
+        run: echo "bar=baz" >> "$GITHUB_OUTPUT"
+      - id: consume
+        shell: bash
+        run: printf '<%s>' "${{ steps.produce.outputs.bar }}"

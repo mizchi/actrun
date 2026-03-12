@@ -1,0 +1,18 @@
+name: ci-github-env-multiline
+'on': push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: set_env
+        shell: bash
+        run: |
+          {
+            echo 'JSON_RESPONSE<<EOF'
+            echo 'line-1'
+            echo 'line-2'
+            echo EOF
+          } >> "$GITHUB_ENV"
+      - id: read
+        shell: bash
+        run: printf '<%s>' "$JSON_RESPONSE"

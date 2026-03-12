@@ -1,0 +1,5 @@
+name: Parent Composite
+runs:
+  using: composite
+  steps:
+    - uses: demo/child/action@v2

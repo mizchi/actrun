@@ -1,0 +1,8 @@
+id=languageservices-workflow-defaults
+source=actions-languageservices
+mode=supported
+kind=lower
+url=https://raw.githubusercontent.com/actions/languageservices/main/workflow-parser/testdata/reader/workflow-defaults.yml
+added_at=2026-03-12
+notes=selected parser success fixture for defaults.run shell and working-directory
+origin=workflow-parser/testdata/reader/workflow-defaults.yml

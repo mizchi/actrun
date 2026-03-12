@@ -1,0 +1,258 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "mizchi/action_runner"
+
+import {
+  "mizchi/bit/types",
+  "mizchi/bitflow/workflow",
+}
+
+// Values
+pub fn compute_bit_changed_paths(&@types.RepoFileSystem, String, PushEvent) -> BitChangedPathsResult
+
+pub fn compute_bit_changed_paths_native(String, PushEvent) -> BitChangedPathsResult
+
+pub async fn execute_lowered_native(LoweringResult, workspace_root? : String, push_event? : PushEvent?) -> WorkflowRunReport
+
+pub fn find_task_plan(ExecutionPlan, String) -> TaskPlan?
+
+pub fn find_task_run_report(WorkflowRunReport, String) -> TaskRunReport?
+
+pub fn find_workflow_step_report(WorkflowRunReport, String) -> WorkflowStepReport?
+
+pub fn lower_push_workflow(WorkflowSpec) -> LoweringResult
+
+pub fn lower_push_workflow_in_workspace(WorkflowSpec, String) -> LoweringResult
+
+pub fn matches_push_trigger(PushTrigger, PushEvent) -> Bool
+
+pub fn materialize_bit_push_workspace(&@types.FileSystem, &@types.RepoFileSystem, String, PushEvent, String, remote_url? : String) -> BitWorkspaceResult
+
+pub fn materialize_bit_push_workspace_native(String, PushEvent, String, remote_url? : String) -> BitWorkspaceResult
+
+pub fn new_job(String, Array[StepSpec], name? : String, needs? : Array[String], outputs? : Map[String, String], runs_on? : Array[String], env? : Map[String, String], defaults? : RunDefaults, matrix_enabled? : Bool, reusable_workflow? : String?, container_image? : String?) -> JobSpec
+
+pub fn new_local_action(Array[StepSpec], name? : String, inputs? : Map[String, String]) -> LocalActionSpec
+
+pub fn new_push_event(String, Array[String], before_sha? : String, after_sha? : String, repository? : String, actor? : String) -> PushEvent
+
+pub fn new_push_trigger(branches? : Array[String], branches_ignore? : Array[String], paths? : Array[String], paths_ignore? : Array[String]) -> PushTrigger
+
+pub fn new_run_defaults(shell? : String?, working_directory? : String?) -> RunDefaults
+
+pub fn new_run_step(String, String, name? : String, shell? : String?, working_directory? : String?, env? : Map[String, String], if_condition? : String, with_values? : Map[String, String]) -> StepSpec
+
+pub fn new_task_plan(String, String, String, String, String, String, String, String, String, Array[String], Map[String, String], action? : ResolvedAction?, action_scope? : String?, requires_action_started? : Bool) -> TaskPlan
+
+pub fn new_uses_step(String, String, name? : String, env? : Map[String, String], if_condition? : String, with_values? : Map[String, String]) -> StepSpec
+
+pub fn new_workflow(String, Array[JobSpec], trigger? : PushTrigger, env? : Map[String, String], defaults? : RunDefaults) -> WorkflowSpec
+
+pub fn parse_action_ref(String) -> ActionRefParseResult
+
+pub fn parse_github_push_event_json(String) -> PushEventJsonParseResult
+
+pub fn parse_local_action_yaml(String) -> LocalActionParseResult
+
+pub fn parse_workflow_yaml(String) -> WorkflowParseResult
+
+pub async fn prefetch_workflow_github_actions_native(WorkflowSpec, String, git_bin? : String?, github_base_url? : String?) -> GitHubActionPrefetchResult
+
+pub fn resolve_action_ref(ActionRef) -> ActionResolutionResult
+
+pub fn resolve_action_uses(String) -> ActionResolutionResult
+
+// Errors
+
+// Types and methods
+pub enum ActionRef {
+  GitHubRepo(String, String, String, String?)
+  LocalPath(String)
+  DockerImage(String)
+  Registry(String, String, String)
+}
+
+pub struct ActionRefParseResult {
+  action : ActionRef?
+  errors : Array[String]
+}
+
+pub struct ActionResolutionResult {
+  action : ResolvedAction?
+  errors : Array[String]
+}
+
+pub struct BitChangedPathsResult {
+  paths : Array[String]
+  base_sha : String
+  head_sha : String
+  errors : Array[String]
+}
+
+pub struct BitWorkspace {
+  repo_root : String
+  git_dir : String
+  workspace_root : String
+  commit_sha : String
+  refname : String
+  remote_url : String
+}
+
+pub struct BitWorkspaceResult {
+  workspace : BitWorkspace?
+  errors : Array[String]
+}
+
+pub struct ExecutionPlan {
+  tasks : Array[TaskPlan]
+  job_outputs : Map[String, Map[String, String]]
+  job_needs : Map[String, Array[String]]
+}
+
+pub struct GitHubActionPrefetchResult {
+  fetched : Array[String]
+  errors : Array[String]
+}
+
+pub struct JobSpec {
+  id : String
+  name : String
+  needs : Array[String]
+  outputs : Map[String, String]
+  runs_on : Array[String]
+  env : Map[String, String]
+  defaults : RunDefaults
+  steps : Array[StepSpec]
+  matrix_enabled : Bool
+  reusable_workflow : String?
+  container_image : String?
+}
+
+pub struct LocalActionParseResult {
+  action : LocalActionSpec?
+  errors : Array[String]
+}
+
+pub struct LocalActionSpec {
+  name : String
+  inputs : Map[String, String]
+  steps : Array[StepSpec]
+}
+
+pub struct LoweringResult {
+  ir : @workflow.FlowIr
+  plan : ExecutionPlan
+  errors : Array[String]
+}
+
+pub struct PushEvent {
+  ref_name : String
+  before_sha : String
+  after_sha : String
+  changed_paths : Array[String]
+  repository : String
+  actor : String
+}
+
+pub struct PushEventJsonParseResult {
+  event : PushEvent?
+  errors : Array[String]
+}
+
+pub struct PushTrigger {
+  branches : Array[String]
+  branches_ignore : Array[String]
+  paths : Array[String]
+  paths_ignore : Array[String]
+}
+
+pub struct ResolvedAction {
+  uses : String
+  action_ref : ActionRef
+  kind : String
+  backend : String
+  action_path : String?
+  entrypoint : String?
+  image : String?
+  args : Array[String]
+}
+
+pub struct RunDefaults {
+  shell : String?
+  working_directory : String?
+}
+
+pub struct StepSpec {
+  id : String
+  name : String
+  run : String?
+  uses : String?
+  shell : String?
+  working_directory : String?
+  env : Map[String, String]
+  with_values : Map[String, String]
+  if_condition : String
+}
+
+pub struct TaskPlan {
+  id : String
+  kind : String
+  job_id : String
+  step_id : String
+  name : String
+  script : String
+  shell : String
+  working_directory : String
+  if_condition : String
+  runs_on : Array[String]
+  env : Map[String, String]
+  action : ResolvedAction?
+  action_scope : String?
+  requires_action_started : Bool
+}
+
+pub struct TaskRunReport {
+  id : String
+  kind : String
+  status : String
+  code : Int
+  shell : String
+  script : String
+  cwd : String
+  stdout : String
+  stderr : String
+  summary : String
+}
+
+pub struct WorkflowParseResult {
+  workflow : WorkflowSpec?
+  errors : Array[String]
+}
+
+pub struct WorkflowRunReport {
+  ok : Bool
+  state : String
+  order : Array[String]
+  steps : Array[WorkflowStepReport]
+  issues : Array[String]
+  task_reports : Array[TaskRunReport]
+}
+
+pub struct WorkflowSpec {
+  name : String
+  trigger : PushTrigger
+  env : Map[String, String]
+  defaults : RunDefaults
+  jobs : Array[JobSpec]
+}
+
+pub struct WorkflowStepReport {
+  id : String
+  status : String
+  required : Bool
+  message : String
+}
+
+// Type aliases
+
+// Traits
+

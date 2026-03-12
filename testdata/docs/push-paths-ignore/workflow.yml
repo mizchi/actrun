@@ -1,0 +1,11 @@
+name: ci-paths-ignore
+on:
+  push:
+    paths-ignore:
+      - docs/**
+      - '*.md'
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo paths-ignore

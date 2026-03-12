@@ -1,0 +1,95 @@
+# Changelog
+
+## [Unreleased]
+
+### Added
+
+- `push` trigger matcher for MVP CI workflows
+- workflow YAML subset parser for `on.push`, `jobs`, `steps`, `env`, and `defaults.run`
+- workflow/job/step contract types
+- lowering from workflow spec to `bitflow` IR
+- native host executor for `run` steps
+- bit workspace materialization from push `after_sha`
+- minimal CLI that parses, lowers, and executes a workflow on native target
+- CLI repo mode with `--repo`, `--workspace`, `--ref`, `--after`, `--changed`
+- automatic changed-path calculation in CLI repo mode, with `--before` support
+- minimal `uses: actions/checkout@*` support as a no-op workspace step
+- `ActionRef` parser and resolver layer for GitHub, docker, local, and custom action refs
+- `builtin://checkout` alias for runner-native checkout semantics
+- generic action-task dispatch in the native executor
+- workspace-aware `./local-action` composite expansion
+- local composite action `with` inputs and `${{ inputs.* }}` substitution
+- basic GitHub runner environment injection for native `run` steps
+- minimal `GITHUB_ACTION` support for native execution
+- `GITHUB_ACTION_REPOSITORY` and `GITHUB_ACTION_REF` injection for cached / prefetched GitHub actions
+- `GITHUB_ACTION_PATH` injection for local composite action inner steps
+- `GITHUB_ENV` and `GITHUB_OUTPUT` heredoc-style multiline file command support
+- workspace-scoped file command paths to avoid cross-run collisions
+- `GITHUB_ENV`, `GITHUB_PATH`, and `GITHUB_OUTPUT` file command support
+- `GITHUB_STEP_SUMMARY` support with per-step summary capture in task reports
+- local composite action-scoped `GITHUB_STATE` propagation for later inner steps
+- minimal `${{ env.* }}` substitution for native `run` step script/env/shell/cwd
+- minimal direct-dependency `${{ needs.<job>.outputs.<name> }}` and `${{ needs.<job>.result }}` substitution
+- minimal push-event `${{ github.ref }}`, `${{ github.ref_name }}`, `${{ github.sha }}` substitution and matching `GITHUB_REF*` env injection
+- minimal push-event `${{ github.event_name }}` substitution and `GITHUB_EVENT_NAME` env injection
+- minimal push-event `${{ github.repository }}` substitution and `GITHUB_REPOSITORY` env injection
+- minimal push-event `${{ github.repository_owner }}` substitution and `GITHUB_REPOSITORY_OWNER` env injection
+- minimal push-event `${{ github.actor }}` substitution and `GITHUB_ACTOR` env injection
+- CLI repo mode infers `github.repository` from the `origin` remote URL when `--repository` is omitted
+- CLI `--event` support for GitHub push webhook payload JSON, with explicit flag overrides
+- minimal `${{ github.workflow }}`, `${{ github.job }}`, `${{ github.workspace }}` substitution for native `run` steps
+- minimal `${{ github.action }}` substitution for native `run` steps
+- minimal `${{ github.action_repository }}` and `${{ github.action_ref }}` substitution for cached / prefetched GitHub actions
+- minimal `${{ github.action_path }}` substitution for local composite action inner steps
+- minimal `${{ runner.os }}`, `${{ runner.arch }}`, `${{ runner.temp }}`, `${{ runner.environment }}` substitution for native `run` steps
+- file-based shell execution for `bash` / `sh` / `pwsh` and `{0}` custom shell templates
+- nested `uses` support inside local composite actions for local actions and builtin checkout
+- native GitHub action prefetch that clones `owner/repo[/path]@ref` into the action cache before lowering
+- workspace-aware expansion for cached GitHub repo composite actions under `_build/action_runner/github_actions`
+- native execution for cached / prefetched GitHub repo `node*` actions via `runs.main`
+- native docker execution for `docker://...` actions and cached / prefetched GitHub repo `runs.using: docker` actions
+- deferred `post` cleanup scheduling and `GITHUB_STATE` sharing for cached / prefetched GitHub repo `node*` actions
+- deferred `post-entrypoint` cleanup scheduling and `GITHUB_STATE` sharing for cached / prefetched GitHub repo `runs.using: docker` actions
+- job-local `${{ steps.<id>.outputs.<name> }}` substitution for later native `run` steps
+- absolute `GITHUB_WORKSPACE` / `${{ github.workspace }}` resolution during native execution
+- compat fixture testdata scaffold under `testdata/`
+- test-only compat fixture loader for `fixture.txt + workflow.yml`
+- docs-based compat fixtures for `on: push` scalar / array / object forms
+- docs-based compat fixtures for `branches`, `branches-ignore`, `paths`, and `paths-ignore`
+- docs-based compat fixtures for env precedence and `defaults.run` resolution
+- docs-based compat fixtures for `jobs.needs`, `steps.id`, and multiline `steps.run`
+- docs-based compat fixtures for `steps.uses`, `steps.shell`, `steps.working-directory`, `steps.env`, and `steps.with`
+- docs-based compat fixtures for missing context properties and unsupported `GITHUB_STATE`
+- docs-based compat fixtures for `GITHUB_STEP_SUMMARY` file command behavior
+- docs-based compat fixtures for positive `env` / `steps.*.outputs.*` contexts and env precedence
+- docs-based compat fixtures for minimal `github.*` context support
+- docs-based compat fixtures for minimal `runner.*` context support
+- docs-based compat fixture for custom shell template execution
+- docs-based compat fixtures for `GITHUB_ENV`, `GITHUB_OUTPUT`, and `GITHUB_PATH` workflow commands
+- compat fixture `event.json` support wired through `PushEvent` parsing for black-box runs
+- docs-based `github.*` context fixtures migrated from inline events to `event.json`
+- docs-based compat run tests share a common fixture/workspace preparation helper
+- docs-based compat parse/lower tests share common fixture parsing and lowering helpers
+- compat suites derive workspace names from fixture paths via shared helpers
+- compat suites share workspace preparation primitives for absolute and copied workspaces
+- compat suites share workflow fixture preparation helpers
+- compat suites share sync workflow lowering helpers
+- compat suites resolve fixture names relative to suite roots
+- act compat tests also use relative fixture names
+- compat suites share assertion helpers for workflow/task/step lookups
+- compat suite-specific wrapper helpers moved into a shared helper test file
+- compat suite roots/workspace policies are centralized as suite config data
+- languageservices / act compat tests share common fixture parsing helpers and thinner workspace setup
+- vendored `actions/languageservices` parser success fixtures for the MVP push subset
+- vendored `actions/languageservices` parser error fixtures with `known_diff` tracking for MVP mismatches
+- vendored `actions/languageservices` expression fixtures for `env` and `steps.*.outputs.*`, including case-insensitive property access
+- vendored normalized `nektos/act` fixtures for `set-env-*`, `steps-context`, and `stepsummary`
+- vendored normalized `nektos/act` shell fixtures for `bash`, `sh`, runner default shell, and custom shell known diff
+- `docs_urls` metadata and validation for upstream `nektos/act` fixtures against GitHub Docs
+- smoke tests for multiline/default shell, explicit `sh`, and checkout action aliases
+- unsupported feature guards for `uses`, `matrix`, reusable workflow, container, non-`success()` step conditions
+- Expanded the `just e2e` black-box CLI harness with trigger skip, workflow file commands, remote node lifecycle, and remote docker lifecycle scenarios
+- Added black-box CLI scenarios for artifact action roundtrip, failure/blocking, unsupported `uses` / `matrix`, `--event` override precedence, `head_commit` fallback, direct `docker://...` actions, nested remote composite prefetch, nested remote composite cache hits, remote composite cache hits, remote `node` / `docker` failure cleanup, cached remote `node` / `docker` failure cleanup, nested remote `node` / `docker` prefetch, nested remote `node` / `docker` cache hits, cached remote `node` / `docker` action lifecycle, repo-mode `needs.outputs`, repo-mode job-scoped file commands, repo-mode multi-job summary, repo-mode `needs.outputs + GITHUB_STEP_SUMMARY`, repo-mode remote `node` / `docker` failure cleanup, repo-mode cached remote `node` / `docker` failure cleanup, repo-mode `head_commit` fallback, `--repo + --event` execution, and repo `origin` based repository auto-detection
+- Added builtin emulators for `actions/upload-artifact` and `actions/download-artifact`, plus dispatchable GitHub-hosted compat workflows that upload observed values as artifacts
+- Added `gha-compat-compare` to replay dispatchable compat workflows locally and compare downloaded GitHub-hosted artifacts against local emulator output
+- Added `gha-compat-live` to dispatch a GitHub-hosted compat workflow, wait for completion, download artifacts, and compare against local emulator output in one step

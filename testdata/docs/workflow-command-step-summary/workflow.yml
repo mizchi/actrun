@@ -1,0 +1,9 @@
+name: ci-step-summary
+'on': push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: summary
+        shell: bash
+        run: printf 'summary' >> "$GITHUB_STEP_SUMMARY"

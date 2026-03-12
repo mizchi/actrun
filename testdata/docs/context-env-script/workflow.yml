@@ -1,0 +1,13 @@
+name: ci-context-env-script
+'on': push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      GREETING: from-job
+    steps:
+      - id: show
+        shell: bash
+        env:
+          TARGET: from-step
+        run: printf '<%s|%s>' "${{ env.GREETING }}" "${{ env.TARGET }}"

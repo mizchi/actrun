@@ -1,0 +1,13 @@
+name: e2e-node-lifecycle
+'on': push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: remote
+        uses: demo/tools/action@v1
+      - id: verify
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          cat main.txt > artifacts/main.txt

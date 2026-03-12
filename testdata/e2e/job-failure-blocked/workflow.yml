@@ -1,0 +1,18 @@
+name: e2e-failure
+'on': push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: fail
+        shell: bash
+        run: |
+          printf '%s' 'boom' >&2
+          exit 1
+  lint:
+    needs:
+      - build
+    runs-on: ubuntu-latest
+    steps:
+      - id: wait
+        run: printf '%s' 'lint'

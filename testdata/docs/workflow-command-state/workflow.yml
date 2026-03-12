@@ -1,0 +1,9 @@
+name: ci-state
+'on': push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: state
+        shell: bash
+        run: printf 'key=value' >> "$GITHUB_STATE"
