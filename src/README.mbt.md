@@ -24,6 +24,7 @@ MVP の GitHub Actions 互換 push CI ランナー向けコア API。
 - `uses: actions/checkout@*` と `uses: builtin://checkout` の最小 builtin 対応
 - `actions/checkout` の `path` / `sparse-checkout` / `sparse-checkout-cone-mode` / `fetch-depth` / `ref` / `clean` / `submodules` の最小 builtin 対応
 - `uses: actions/setup-node@*` の最小 builtin 対応 (`node-version`, `cache: npm`, `registry-url`)
+- `uses: actions/cache@*` / `actions/cache/restore@*` の `restore-keys` 対応
 - native prefetch による `owner/repo[/path]@ref` GitHub repo action の remote fetch / cache fill
 - cache 済み `owner/repo[/path]@ref` GitHub repo composite action の workspace-aware 展開
 - cache 済み / prefetched `owner/repo[/path]@ref` GitHub repo `node*` action の最小実行

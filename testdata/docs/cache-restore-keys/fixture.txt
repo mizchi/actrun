@@ -1,0 +1,8 @@
+id=docs-cache-restore-keys
+source=docs
+mode=supported
+kind=run
+url=https://docs.github.com/en/actions/reference/dependency-caching-reference
+docs_urls=https://docs.github.com/en/actions/reference/dependency-caching-reference;https://github.com/actions/cache
+added_at=2026-03-13
+notes=actions/cache restore-keys restores the most recent prefix match and reports cache-hit false

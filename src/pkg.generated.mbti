@@ -29,11 +29,13 @@ pub fn materialize_bit_push_workspace(&@types.FileSystem, &@types.RepoFileSystem
 
 pub fn materialize_bit_push_workspace_native(String, PushEvent, String, remote_url? : String) -> BitWorkspaceResult
 
-pub fn new_job(String, Array[StepSpec], name? : String, if_condition? : String, needs? : Array[String], outputs? : Map[String, String], runs_on? : Array[String], env? : Map[String, String], defaults? : RunDefaults, matrix? : JobMatrixSpec?, reusable_workflow? : String?, container_image? : String?) -> JobSpec
+pub fn new_job(String, Array[StepSpec], name? : String, if_condition? : String, needs? : Array[String], outputs? : Map[String, String], permissions? : PermissionsSpec?, runs_on? : Array[String], env? : Map[String, String], defaults? : RunDefaults, matrix? : JobMatrixSpec?, reusable_workflow? : String?, container_image? : String?) -> JobSpec
 
 pub fn new_job_matrix(Array[Map[String, String]], fail_fast? : Bool, max_parallel? : Int?) -> JobMatrixSpec
 
 pub fn new_local_action(Array[StepSpec], name? : String, inputs? : Map[String, String]) -> LocalActionSpec
+
+pub fn new_permissions_spec(values? : Map[String, String]) -> PermissionsSpec
 
 pub fn new_push_event(String, Array[String], before_sha? : String, after_sha? : String, repository? : String, actor? : String) -> PushEvent
 
@@ -47,7 +49,7 @@ pub fn new_task_plan(String, String, String, String, String, String, String, Str
 
 pub fn new_uses_step(String, String, name? : String, env? : Map[String, String], if_condition? : String, with_values? : Map[String, String], continue_on_error? : String) -> StepSpec
 
-pub fn new_workflow(String, Array[JobSpec], trigger? : PushTrigger, env? : Map[String, String], defaults? : RunDefaults) -> WorkflowSpec
+pub fn new_workflow(String, Array[JobSpec], trigger? : PushTrigger, permissions? : PermissionsSpec?, env? : Map[String, String], defaults? : RunDefaults) -> WorkflowSpec
 
 pub fn parse_action_ref(String) -> ActionRefParseResult
 
@@ -131,6 +133,7 @@ pub struct JobSpec {
   if_condition : String
   needs : Array[String]
   outputs : Map[String, String]
+  permissions : PermissionsSpec?
   runs_on : Array[String]
   env : Map[String, String]
   defaults : RunDefaults
@@ -155,6 +158,10 @@ pub struct LoweringResult {
   ir : @workflow.FlowIr
   plan : ExecutionPlan
   errors : Array[String]
+}
+
+pub struct PermissionsSpec {
+  values : Map[String, String]
 }
 
 pub struct PushEvent {
@@ -255,6 +262,7 @@ pub struct WorkflowRunReport {
 pub struct WorkflowSpec {
   name : String
   trigger : PushTrigger
+  permissions : PermissionsSpec?
   env : Map[String, String]
   defaults : RunDefaults
   jobs : Array[JobSpec]

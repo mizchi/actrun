@@ -135,12 +135,7 @@ test "compat docs: parse and reject permissions fixture" {
     content="read-all",
   )
   inspect(
-    workflow.jobs[0]
-    .permissions
-    .unwrap()
-    .values
-    .get("contents")
-    .unwrap_or(""),
+    workflow.jobs[0].permissions.unwrap().values.get("contents").unwrap_or(""),
     content="read",
   )
   inspect(
@@ -480,6 +475,24 @@ async test "compat docs: setup-node cache npm restores after save job" {
   inspect(report.ok, content="true")
   inspect(task.status, content="success")
   inspect(task.stdout, content="<true|ocean|false|v20.19.5>")
+}
+
+///|
+#cfg(target="native")
+async test "compat docs: cache restore-keys restores prefix hit and reports false" {
+  let (fixture, workflow) = compat_expect_docs_fixture("cache-restore-keys")
+  let workspace = prepare_workspace("compat-docs-cache-restore-keys")
+  test_support_remove_tree(compat_docs_cache_store_root(workspace))
+  let report = execute_lowered_native(
+    lower_push_workflow(workflow),
+    workspace_root=workspace,
+  )
+  let task = compat_expect_task_report(report, "restore/verify")
+
+  inspect(fixture.id, content="docs-cache-restore-keys")
+  inspect(report.ok, content="true")
+  inspect(task.status, content="success")
+  inspect(task.stdout, content="<false|ocean>")
 }
 
 ///|

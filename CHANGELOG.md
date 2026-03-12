@@ -5,6 +5,8 @@
 ### Added
 
 - `actions/setup-node@*` の最小 builtin emulator (`node-version`, `cache: npm`, `registry-url`)
+- `actions/cache@*` / `actions/cache/restore@*` の `restore-keys` prefix hit 対応
+- `compat-cache-restore-keys.yml` と local/GitHub-hosted cache restore-keys compat coverage
 - `compat-setup-node-cache-npm.yml` と `gha-compat-*` script の live compare 導線
 - expression function の最小 subset (`contains`, `startsWith`, `endsWith`, `fromJSON`, `toJSON`, `hashFiles`)
 - docs/E2E coverage for `fromJSON()` / `toJSON()` and `contains(fromJSON(...), ...)`

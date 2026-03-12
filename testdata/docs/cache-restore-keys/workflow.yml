@@ -1,0 +1,37 @@
+name: docs-cache-restore-keys
+'on': push
+jobs:
+  save:
+    runs-on: ubuntu-latest
+    steps:
+      - id: write
+        shell: bash
+        run: |
+          mkdir -p cache-dir
+          printf '%s' ocean > cache-dir/value.txt
+      - id: save
+        uses: actions/cache/save@v4
+        with:
+          key: compat-cache-restore-docs-v1
+          path: cache-dir
+  restore:
+    needs:
+      - save
+    runs-on: ubuntu-latest
+    steps:
+      - id: clear
+        shell: bash
+        run: rm -rf cache-dir
+      - id: restore
+        uses: actions/cache/restore@v4
+        with:
+          key: compat-cache-restore-docs-v2
+          restore-keys: |
+            compat-cache-restore-docs-
+          path: cache-dir
+      - id: verify
+        shell: bash
+        run: |
+          printf '<%s|%s>' \
+            "${{ steps.restore.outputs.cache-hit }}" \
+            "$(cat cache-dir/value.txt)"

@@ -840,7 +840,11 @@ fn parse_permissions(
     None => None
     Some(Str(text)) => Some(new_permissions_spec(values={ "_": text }))
     Some(Obj(fields)) =>
-      Some(new_permissions_spec(values=yaml_to_string_map(Some(Obj(fields)), errors, ctx)))
+      Some(
+        new_permissions_spec(
+          values=yaml_to_string_map(Some(Obj(fields)), errors, ctx),
+        ),
+      )
     Some(Null) => None
     Some(_) => {
       errors.push(ctx + " must be a string or mapping")

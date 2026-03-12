@@ -1534,6 +1534,203 @@ async test "executor: builtin cache action auto-saves on miss and restores on ne
 
 ///|
 #cfg(target="native")
+async test "executor: builtin cache restore uses restore-keys fallback and reports partial hit" {
+  let workspace = prepare_workspace("executor-builtin-cache-restore-keys")
+  test_support_remove_tree(executor_test_cache_store_root(workspace))
+
+  let workflow = new_workflow("ci", [
+    new_job(
+      "save",
+      [
+        new_run_step(
+          "write",
+          "mkdir -p cache-dir\nprintf '%s' ocean > cache-dir/value.txt",
+          shell=Some("bash"),
+        ),
+        new_uses_step("save", "actions/cache/save@v4", with_values={
+          "key": "compat-cache-restore-v1",
+          "path": "cache-dir",
+        }),
+      ],
+      defaults=new_run_defaults(shell=Some("bash")),
+    ),
+    new_job(
+      "restore",
+      [
+        new_run_step("clear", "rm -rf cache-dir", shell=Some("bash")),
+        new_uses_step("restore", "actions/cache/restore@v4", with_values={
+          "key": "compat-cache-restore-v2",
+          "restore-keys": "compat-cache-restore-\n",
+          "path": "cache-dir",
+        }),
+        new_run_step(
+          "verify",
+          "printf '%s|%s' \"${{ steps.restore.outputs.cache-hit }}\" \"$(cat cache-dir/value.txt)\"",
+          shell=Some("bash"),
+        ),
+      ],
+      needs=["save"],
+      defaults=new_run_defaults(shell=Some("bash")),
+    ),
+  ])
+
+  let lowered = lower_push_workflow(workflow)
+  inspect(lowered.errors, content="[]")
+
+  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  inspect(report.ok, content="true")
+
+  let restore = expect_task_report(report, "restore/restore")
+  inspect(restore.status, content="success")
+  let verify = expect_task_report(report, "restore/verify")
+  inspect(verify.status, content="success")
+  inspect(
+    verify.stdout.trim(chars=" \n\r\t").to_string(),
+    content="false|ocean",
+  )
+}
+
+///|
+#cfg(target="native")
+async test "executor: builtin cache action saves new primary key after restore-keys fallback" {
+  let workspace = prepare_workspace("executor-builtin-cache-restore-keys-main")
+  test_support_remove_tree(executor_test_cache_store_root(workspace))
+
+  let workflow = new_workflow("ci", [
+    new_job(
+      "seed",
+      [
+        new_run_step(
+          "write",
+          "mkdir -p cache-dir\nprintf '%s' ocean > cache-dir/value.txt",
+          shell=Some("bash"),
+        ),
+        new_uses_step("save", "actions/cache/save@v4", with_values={
+          "key": "compat-cache-main-restore-v1",
+          "path": "cache-dir",
+        }),
+      ],
+      defaults=new_run_defaults(shell=Some("bash")),
+    ),
+    new_job(
+      "restore",
+      [
+        new_run_step("clear", "rm -rf cache-dir", shell=Some("bash")),
+        new_uses_step("cache", "actions/cache@v4", with_values={
+          "key": "compat-cache-main-restore-v2",
+          "restore-keys": "compat-cache-main-restore-\n",
+          "path": "cache-dir",
+        }),
+        new_run_step(
+          "mutate",
+          "printf '%s' wave > cache-dir/value.txt",
+          shell=Some("bash"),
+        ),
+      ],
+      needs=["seed"],
+      defaults=new_run_defaults(shell=Some("bash")),
+    ),
+    new_job(
+      "verify",
+      [
+        new_run_step("clear", "rm -rf cache-dir", shell=Some("bash")),
+        new_uses_step("cache", "actions/cache@v4", with_values={
+          "key": "compat-cache-main-restore-v2",
+          "path": "cache-dir",
+        }),
+        new_run_step(
+          "verify",
+          "printf '%s|%s' \"${{ steps.cache.outputs.cache-hit }}\" \"$(cat cache-dir/value.txt)\"",
+          shell=Some("bash"),
+        ),
+      ],
+      needs=["restore"],
+      defaults=new_run_defaults(shell=Some("bash")),
+    ),
+  ])
+
+  let lowered = lower_push_workflow(workflow)
+  inspect(lowered.errors, content="[]")
+
+  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  inspect(report.ok, content="true")
+
+  let cache = expect_task_report(report, "restore/cache")
+  inspect(cache.status, content="success")
+  let cache_post = expect_task_report(report, "restore/cache__post")
+  inspect(cache_post.status, content="success")
+  let verify = expect_task_report(report, "verify/verify")
+  inspect(verify.status, content="success")
+  inspect(verify.stdout.trim(chars=" \n\r\t").to_string(), content="true|wave")
+}
+
+///|
+#cfg(target="native")
+async test "executor: builtin cache restore-keys prefers the most recent prefix match" {
+  let workspace = prepare_workspace("executor-builtin-cache-restore-latest")
+  test_support_remove_tree(executor_test_cache_store_root(workspace))
+
+  let workflow = new_workflow("ci", [
+    new_job(
+      "save_old",
+      [
+        new_run_step(
+          "write",
+          "mkdir -p cache-dir\nprintf '%s' ocean > cache-dir/value.txt",
+          shell=Some("bash"),
+        ),
+        new_uses_step("save", "actions/cache/save@v4", with_values={
+          "key": "compat-cache-restore-latest-v1",
+          "path": "cache-dir",
+        }),
+      ],
+      defaults=new_run_defaults(shell=Some("bash")),
+    ),
+    new_job(
+      "save_new",
+      [
+        new_run_step(
+          "write",
+          "mkdir -p cache-dir\nprintf '%s' wave > cache-dir/value.txt",
+          shell=Some("bash"),
+        ),
+        new_uses_step("save", "actions/cache/save@v4", with_values={
+          "key": "compat-cache-restore-latest-v2",
+          "path": "cache-dir",
+        }),
+      ],
+      needs=["save_old"],
+      defaults=new_run_defaults(shell=Some("bash")),
+    ),
+    new_job(
+      "restore",
+      [
+        new_run_step("clear", "rm -rf cache-dir", shell=Some("bash")),
+        new_uses_step("restore", "actions/cache/restore@v4", with_values={
+          "key": "compat-cache-restore-latest-v3",
+          "restore-keys": "compat-cache-restore-latest-\n",
+          "path": "cache-dir",
+        }),
+        new_run_step("verify", "cat cache-dir/value.txt", shell=Some("bash")),
+      ],
+      needs=["save_new"],
+      defaults=new_run_defaults(shell=Some("bash")),
+    ),
+  ])
+
+  let lowered = lower_push_workflow(workflow)
+  inspect(lowered.errors, content="[]")
+
+  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  inspect(report.ok, content="true")
+
+  let verify = expect_task_report(report, "restore/verify")
+  inspect(verify.status, content="success")
+  inspect(verify.stdout.trim(chars=" \n\r\t").to_string(), content="wave")
+}
+
+///|
+#cfg(target="native")
 async test "executor: builtin setup-node exposes requested node version output and PATH shim" {
   let workspace = prepare_workspace("executor-builtin-setup-node")
   let node_log_path = workspace + "/setup-node.log"

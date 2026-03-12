@@ -2331,6 +2331,142 @@ fn cache_store_root(workspace_root : String) -> String {
 }
 
 ///|
+fn cache_sequence_path(workspace_root : String) -> String {
+  cache_store_root(workspace_root) + "/__action_runner_sequence.txt"
+}
+
+///|
+fn cache_key_metadata_path(cache_root : String) -> String {
+  cache_root + "/__action_runner_cache_key.txt"
+}
+
+///|
+fn cache_sequence_metadata_path(cache_root : String) -> String {
+  cache_root + "/__action_runner_cache_sequence.txt"
+}
+
+///|
+fn cache_store_path(workspace_root : String, key : String) -> String {
+  cache_store_root(workspace_root) + "/" + sanitize_task_id(key)
+}
+
+///|
+fn read_exec_int(path : String) -> Int? {
+  guard read_exec_text(path) is Some(content) else { return None }
+  let trimmed = content.trim(chars=" \t\r\n").to_string()
+  if trimmed.length() == 0 {
+    return None
+  }
+  let parsed = @strconv.parse_int64(trimmed) catch { _ => return None }
+  Some(parsed.to_int())
+}
+
+///|
+fn write_cache_metadata(
+  workspace_root : String,
+  key : String,
+  cache_root : String,
+) -> Bool {
+  let next_sequence = read_exec_int(cache_sequence_path(workspace_root)).unwrap_or(
+      0,
+    ) +
+    1
+  if not(
+      write_exec_text(
+        cache_sequence_path(workspace_root),
+        next_sequence.to_string(),
+      ),
+    ) {
+    return false
+  }
+  if not(write_exec_text(cache_key_metadata_path(cache_root), key)) {
+    return false
+  }
+  write_exec_text(
+    cache_sequence_metadata_path(cache_root),
+    next_sequence.to_string(),
+  )
+}
+
+///|
+fn read_cache_entry_key(cache_root : String) -> String? {
+  let key_path = cache_key_metadata_path(cache_root)
+  if @xfs.path_exists(key_path) {
+    return read_exec_text(key_path).map(text => {
+      text.trim(chars=" \t\r\n").to_string()
+    })
+  }
+  None
+}
+
+///|
+fn read_cache_entry_sequence(cache_root : String) -> Int {
+  read_exec_int(cache_sequence_metadata_path(cache_root)).unwrap_or(0)
+}
+
+///|
+fn restore_key_candidates(
+  key : String,
+  restore_keys_input : String,
+) -> Array[String] {
+  let candidates : Array[String] = []
+  candidates.push(key)
+  for restore_key in split_nonempty_lines(restore_keys_input) {
+    candidates.push(restore_key)
+  }
+  candidates
+}
+
+///|
+priv enum CacheRestoreLookup {
+  Exact(String)
+  Partial(String)
+  Miss
+  Err(String)
+}
+
+///|
+fn resolve_cache_restore_lookup(
+  workspace_root : String,
+  key : String,
+  restore_keys_input : String,
+) -> CacheRestoreLookup {
+  let exact_root = cache_store_path(workspace_root, key)
+  if @xfs.path_exists(exact_root) {
+    return Exact(key)
+  }
+  let store_root = cache_store_root(workspace_root)
+  let entries = try @xfs.read_dir(store_root) catch {
+    _ => return Err("failed to inspect cache store")
+  } noraise {
+    value => value
+  }
+  let candidates = restore_key_candidates(key, restore_keys_input)
+  for candidate in candidates {
+    let mut selected_key = ""
+    let mut selected_sequence = -1
+    for entry in entries {
+      if entry == "__action_runner_sequence.txt" {
+        continue
+      }
+      let entry_root = store_root + "/" + entry
+      guard read_cache_entry_key(entry_root) is Some(entry_key) else {
+        continue
+      }
+      let sequence = read_cache_entry_sequence(entry_root)
+      if entry_key.has_prefix(candidate) && sequence >= selected_sequence {
+        selected_key = entry_key
+        selected_sequence = sequence
+      }
+    }
+    if selected_key.length() > 0 {
+      return Partial(selected_key)
+    }
+  }
+  Miss
+}
+
+///|
 fn setup_node_store_root(workspace_root : String) -> String {
   ignore(ensure_exec_dir_recursive("_build/action_runner/setup_node"))
   let workspace_key = sanitize_task_id(
@@ -2998,9 +3134,7 @@ fn execute_save_cache_native(
       plan, workspace_root, "cache-save requires with.path",
     )
   }
-  let cache_root = cache_store_root(workspace_root) +
-    "/" +
-    sanitize_task_id(key)
+  let cache_root = cache_store_path(workspace_root, key)
   if not(exec_remove_tree(cache_root)) {
     return task_report_failure(
       plan,
@@ -3046,6 +3180,13 @@ fn execute_save_cache_native(
       "cache-save found no files for '\{path_input}'",
     )
   }
+  if not(write_cache_metadata(workspace_root, key, cache_root)) {
+    return task_report_failure(
+      plan,
+      workspace_root,
+      "failed to write cache metadata for '\{key}'",
+    )
+  }
   task_report_success(plan, workspace_root)
 }
 
@@ -3073,23 +3214,35 @@ fn cache_input_result_failure(
 
 ///|
 #cfg(target="native")
-fn restore_cache_store_native(workspace_root : String, key : String) -> Bool? {
-  let cache_root = cache_store_root(workspace_root) +
-    "/" +
-    sanitize_task_id(key)
-  if not(@xfs.path_exists(cache_root)) {
-    return Some(false)
+fn restore_cache_store_native(
+  workspace_root : String,
+  key : String,
+  restore_keys_input : String,
+) -> CacheRestoreLookup {
+  let lookup = resolve_cache_restore_lookup(
+    workspace_root, key, restore_keys_input,
+  )
+  let matched_key = match lookup {
+    Exact(found_key) => found_key
+    Partial(found_key) => found_key
+    Miss => return Miss
+    Err(message) => return Err(message)
   }
+  let cache_root = cache_store_path(workspace_root, matched_key)
   let entries = try @xfs.read_dir(cache_root) catch {
-    _ => []
+    _ => return Err("failed to inspect cache '\{matched_key}'")
   } noraise {
     value => value
   }
   for entry in entries {
+    if entry == "__action_runner_cache_key.txt" ||
+      entry == "__action_runner_cache_sequence.txt" {
+      continue
+    }
     let source = cache_root + "/" + entry
     if entry == "__root__" {
       let root_entries = try @xfs.read_dir(source) catch {
-        _ => []
+        _ => return Err("failed to inspect cache '\{matched_key}' root")
       } noraise {
         value => value
       }
@@ -3100,14 +3253,19 @@ fn restore_cache_store_native(workspace_root : String, key : String) -> Bool? {
               workspace_root + "/" + root_entry,
             ),
           ) {
-          return None
+          return Err("failed to restore cache '\{matched_key}'")
         }
       }
     } else if not(exec_copy_tree(source, workspace_root + "/" + entry)) {
-      return None
+      return Err("failed to restore cache '\{matched_key}'")
     }
   }
-  Some(true)
+  match lookup {
+    Exact(_) => Exact(matched_key)
+    Partial(_) => Partial(matched_key)
+    Miss => Miss
+    Err(message) => Err(message)
+  }
 }
 
 ///|
@@ -3118,6 +3276,9 @@ fn execute_restore_cache_native(
   resolved_plan_env : Map[String, String],
 ) -> TaskExecutionResult {
   let key = resolved_plan_env.get("INPUT_KEY").unwrap_or("")
+  let restore_keys_input = resolved_plan_env
+    .get("INPUT_RESTORE_KEYS")
+    .unwrap_or("")
   let path_input = resolved_plan_env.get("INPUT_PATH").unwrap_or("")
   if key.length() == 0 {
     return cache_input_result_failure(
@@ -3129,15 +3290,14 @@ fn execute_restore_cache_native(
       plan, workspace_root, "cache-restore", false,
     )
   }
-  let cache_hit = match restore_cache_store_native(workspace_root, key) {
-    Some(value) => value
-    None =>
+  let cache_hit = match
+    restore_cache_store_native(workspace_root, key, restore_keys_input) {
+    Exact(_) => "true"
+    Partial(_) => "false"
+    Miss => "false"
+    Err(message) =>
       return {
-        report: task_report_failure(
-          plan,
-          workspace_root,
-          "failed to restore cache '\{key}'",
-        ),
+        report: task_report_failure(plan, workspace_root, message),
         env_updates: {},
         path_entries: [],
         output_values: {},
@@ -3148,7 +3308,7 @@ fn execute_restore_cache_native(
     report: task_report_success(plan, workspace_root),
     env_updates: {},
     path_entries: [],
-    output_values: { "cache-hit": if cache_hit { "true" } else { "false" } },
+    output_values: { "cache-hit": cache_hit },
     state_updates: {},
   }
 }
@@ -3161,6 +3321,9 @@ fn execute_cache_action_native(
   resolved_plan_env : Map[String, String],
 ) -> TaskExecutionResult {
   let key = resolved_plan_env.get("INPUT_KEY").unwrap_or("")
+  let restore_keys_input = resolved_plan_env
+    .get("INPUT_RESTORE_KEYS")
+    .unwrap_or("")
   let path_input = resolved_plan_env.get("INPUT_PATH").unwrap_or("")
   if key.length() == 0 {
     return cache_input_result_failure(plan, workspace_root, "cache", true)
@@ -3168,15 +3331,14 @@ fn execute_cache_action_native(
   if split_nonempty_lines(path_input).length() == 0 {
     return cache_input_result_failure(plan, workspace_root, "cache", false)
   }
-  let cache_hit = match restore_cache_store_native(workspace_root, key) {
-    Some(value) => value
-    None =>
+  let cache_hit = match
+    restore_cache_store_native(workspace_root, key, restore_keys_input) {
+    Exact(_) => "true"
+    Partial(_) => "false"
+    Miss => ""
+    Err(message) =>
       return {
-        report: task_report_failure(
-          plan,
-          workspace_root,
-          "failed to restore cache '\{key}'",
-        ),
+        report: task_report_failure(plan, workspace_root, message),
         env_updates: {},
         path_entries: [],
         output_values: {},
@@ -3187,15 +3349,11 @@ fn execute_cache_action_native(
     report: task_report_success(plan, workspace_root),
     env_updates: {},
     path_entries: [],
-    output_values: { "cache-hit": if cache_hit { "true" } else { "" } },
+    output_values: { "cache-hit": cache_hit },
     state_updates: {
       "CACHE_KEY": key,
       "CACHE_PATH": path_input,
-      "CACHE_HIT": if cache_hit {
-        "true"
-      } else {
-        ""
-      },
+      "CACHE_HIT": cache_hit,
     },
   }
 }
