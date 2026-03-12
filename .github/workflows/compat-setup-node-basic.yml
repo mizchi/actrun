@@ -11,10 +11,6 @@ on:
     paths:
       - .github/workflows/__compat_setup_node_basic__.trigger
 
-permissions:
-  contents: read
-  actions: read
-
 jobs:
   probe:
     runs-on: ubuntu-latest

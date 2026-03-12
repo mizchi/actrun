@@ -11,10 +11,6 @@ on:
     paths:
       - .github/workflows/__compat_cache_auto_save__.trigger
 
-permissions:
-  contents: read
-  actions: read
-
 jobs:
   save:
     runs-on: ubuntu-latest

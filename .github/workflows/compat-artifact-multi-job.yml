@@ -6,10 +6,6 @@ on:
     paths:
       - .github/workflows/compat-artifact-multi-job.yml
 
-permissions:
-  contents: read
-  actions: read
-
 jobs:
   pack:
     runs-on: ubuntu-latest

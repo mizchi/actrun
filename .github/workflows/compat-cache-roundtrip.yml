@@ -6,10 +6,6 @@ on:
     paths:
       - .github/workflows/compat-cache-roundtrip.yml
 
-permissions:
-  contents: read
-  actions: read
-
 jobs:
   save:
     runs-on: ubuntu-latest

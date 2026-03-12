@@ -6,10 +6,6 @@ on:
     paths:
       - .github/workflows/compat-checkout-fetch-depth.yml
 
-permissions:
-  contents: read
-  actions: read
-
 jobs:
   probe:
     runs-on: ubuntu-latest

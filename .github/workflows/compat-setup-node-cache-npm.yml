@@ -15,10 +15,6 @@ on:
     paths:
       - .github/workflows/__compat_setup_node_cache_npm__.trigger
 
-permissions:
-  contents: read
-  actions: read
-
 jobs:
   save:
     runs-on: ubuntu-latest

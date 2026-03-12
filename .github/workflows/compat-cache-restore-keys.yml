@@ -11,10 +11,6 @@ on:
     paths:
       - .github/workflows/__compat_cache_restore_keys__.trigger
 
-permissions:
-  contents: read
-  actions: read
-
 jobs:
   save:
     runs-on: ubuntu-latest
