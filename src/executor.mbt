@@ -1552,26 +1552,13 @@ fn resolve_job_container_spec(
 ///|
 async fn cleanup_job_services_native(
   started : Array[StartedJobService],
-) -> Map[String, String] {
+) -> Unit {
   let service_networks : Map[String, (String, String)] = {}
-  let service_logs : Map[String, String] = {}
   for service in started {
     match service.network_name {
       Some(name) if name.length() > 0 =>
         service_networks[name] = (service.docker_bin, service.workspace_abs)
       _ => ()
-    }
-    // Capture service logs before removal
-    let (log_code, log_stdout, _) = @process.collect_output(
-      service.docker_bin,
-      ["logs", service.name],
-      cwd=service.workspace_abs,
-    )
-    if log_code == 0 {
-      let log_text = log_stdout.text()
-      if log_text.length() > 0 {
-        service_logs[service.name] = log_text
-      }
     }
     ignore(
       @process.collect_output(
@@ -1591,7 +1578,6 @@ async fn cleanup_job_services_native(
       ),
     )
   }
-  service_logs
 }
 
 ///|
@@ -1738,7 +1724,7 @@ async fn start_job_services_native(
     )
     match ensure_container_registry_login(docker_bin, workspace_abs, resolved) {
       Some(message) => {
-        ignore(cleanup_job_services_native(started))
+        cleanup_job_services_native(started)
         cleanup_job_service_network_native(
           docker_bin, workspace_abs, network_name,
         )
@@ -1785,7 +1771,7 @@ async fn start_job_services_native(
       cwd=workspace_abs,
     )
     if code != 0 {
-      ignore(cleanup_job_services_native(started))
+      cleanup_job_services_native(started)
       cleanup_job_service_network_native(
         docker_bin, workspace_abs, network_name,
       )
@@ -1809,7 +1795,7 @@ async fn start_job_services_native(
           service_id, container_name, docker_bin, workspace_abs,
         ) {
         Some(message) => {
-          ignore(cleanup_job_services_native(started))
+          cleanup_job_services_native(started)
           cleanup_job_service_network_native(
             docker_bin, workspace_abs, network_name,
           )
@@ -6434,7 +6420,7 @@ pub async fn execute_lowered_native(
           remaining_job_tasks[plan.job_id] = next
           if next == 0 {
             match started_job_services.get(plan.job_id) {
-              Some(started) => ignore(cleanup_job_services_native(started))
+              Some(started) => cleanup_job_services_native(started)
               None => ()
             }
           }

@@ -560,9 +560,9 @@ pub struct WorkflowRunReport {
 fn strip_add_mask_lines(text : String) -> String {
   let lines : Array[String] = []
   for line_view in text.split("\n") {
-    let line = line_view.to_string()
-    if not(line.trim(chars=" \t\r").to_string().has_prefix("::add-mask::")) {
-      lines.push(line)
+    let trimmed = line_view.trim(chars=" \t\r")
+    if not(trimmed.has_prefix("::add-mask::")) {
+      lines.push(line_view.to_string())
     }
   }
   lines.join("\n")
