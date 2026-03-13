@@ -1,0 +1,34 @@
+name: docs-artifact-if-no-files-found
+'on': push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: upload_warn
+        uses: actions/upload-artifact@v4
+        with:
+          name: warn-bundle
+          path: missing/*.txt
+      - id: upload_ignore
+        uses: actions/upload-artifact@v4
+        with:
+          name: ignore-bundle
+          path: missing/*.txt
+          if-no-files-found: ignore
+      - id: upload_error
+        uses: actions/upload-artifact@v4
+        continue-on-error: true
+        with:
+          name: error-bundle
+          path: missing/*.txt
+          if-no-files-found: error
+      - id: verify
+        shell: bash
+        run: |
+          printf '<%s|%s|%s|%s|%s|%s>' \
+            "${{ steps.upload_warn.outcome }}" \
+            "${{ steps.upload_warn.conclusion }}" \
+            "${{ steps.upload_ignore.outcome }}" \
+            "${{ steps.upload_ignore.conclusion }}" \
+            "${{ steps.upload_error.outcome }}" \
+            "${{ steps.upload_error.conclusion }}"

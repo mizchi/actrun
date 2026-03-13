@@ -1,0 +1,49 @@
+name: Compat Artifact If No Files Found
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/compat-artifact-if-no-files-found.yml
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Upload warn
+        id: upload_warn
+        uses: actions/upload-artifact@v4
+        with:
+          name: warn-bundle
+          path: missing/*.txt
+      - name: Upload ignore
+        id: upload_ignore
+        uses: actions/upload-artifact@v4
+        with:
+          name: ignore-bundle
+          path: missing/*.txt
+          if-no-files-found: ignore
+      - name: Upload error
+        id: upload_error
+        uses: actions/upload-artifact@v4
+        continue-on-error: true
+        with:
+          name: error-bundle
+          path: missing/*.txt
+          if-no-files-found: error
+      - name: Build report
+        shell: bash
+        run: |
+          mkdir -p report
+          printf '%s|%s|%s|%s|%s|%s' \
+            "${{ steps.upload_warn.outcome }}" \
+            "${{ steps.upload_warn.conclusion }}" \
+            "${{ steps.upload_ignore.outcome }}" \
+            "${{ steps.upload_ignore.conclusion }}" \
+            "${{ steps.upload_error.outcome }}" \
+            "${{ steps.upload_error.conclusion }}" > report/result.txt
+      - name: Upload report
+        uses: actions/upload-artifact@v4
+        with:
+          name: compat-artifact-if-no-files-found-report
+          path: report/result.txt

@@ -941,6 +941,37 @@ async fn run_artifact_glob_directory() -> Unit {
 
 ///|
 #cfg(target="native")
+async fn run_artifact_if_no_files_found() -> Unit {
+  let scenario = "artifact-if-no-files-found"
+  let workspace = e2e_prepare_copied_dir(
+    "_build/e2e/workspaces",
+    scenario,
+    e2e_fixture_dir(scenario),
+  )
+  let result = e2e_run_cli([
+    e2e_join_path(workspace, "workflow.yml"),
+    "--event",
+    e2e_join_path(workspace, "event.json"),
+  ])
+  e2e_expect_ok(result, scenario)
+  e2e_expect_contains(
+    result.stdout,
+    "workflow=e2e-artifact-if-no-files-found",
+    scenario,
+  )
+  e2e_expect_contains(result.stdout, "state=completed", scenario)
+  e2e_expect_contains(result.stdout, "build/upload_warn: success", scenario)
+  e2e_expect_contains(result.stdout, "build/upload_ignore: success", scenario)
+  e2e_expect_contains(result.stdout, "build/upload_error: success", scenario)
+  e2e_expect_eq(
+    e2e_read_text(e2e_join_path(workspace, "artifacts/result.txt")),
+    "success|success|success|success|failure|success",
+    scenario + " result artifact",
+  )
+}
+
+///|
+#cfg(target="native")
 async fn run_cache_actions_roundtrip() -> Unit {
   let scenario = "cache-actions-roundtrip"
   e2e_remove_tree("_build/action_runner/cache")
@@ -3855,6 +3886,10 @@ async fn main {
   println("e2e: artifact-glob-directory")
   run_artifact_glob_directory()
   println("e2e: artifact-glob-directory ok")
+
+  println("e2e: artifact-if-no-files-found")
+  run_artifact_if_no_files_found()
+  println("e2e: artifact-if-no-files-found ok")
 
   println("e2e: cache-actions-roundtrip")
   run_cache_actions_roundtrip()

@@ -1895,6 +1895,20 @@ fn parse_cache_fail_on_cache_miss(value : String) -> Bool {
 }
 
 ///|
+fn parse_artifact_if_no_files_found(value : String) -> String? {
+  let normalized = value.trim(chars=" \t\r\n").to_lower()
+  if normalized.length() == 0 || normalized == "warn" {
+    Some("warn")
+  } else if normalized == "ignore" {
+    Some("ignore")
+  } else if normalized == "error" {
+    Some("error")
+  } else {
+    None
+  }
+}
+
+///|
 fn parse_checkout_ref(value : String) -> String {
   value.trim(chars=" \t\r\n").to_string()
 }
@@ -3383,12 +3397,26 @@ fn execute_upload_artifact_native(
     )
   }
   let selection = artifact_select_upload_files(workspace_root, upload_paths)
+  let if_no_files_found = match
+    parse_artifact_if_no_files_found(
+      resolved_plan_env.get("INPUT_IF_NO_FILES_FOUND").unwrap_or(""),
+    ) {
+    Some(value) => value
+    None =>
+      return task_report_failure(
+        plan, workspace_root, "upload-artifact if-no-files-found must be one of warn, ignore, error",
+      )
+  }
   if selection.file_paths.length() == 0 {
-    return task_report_failure(
-      plan,
-      workspace_root,
-      "upload-artifact found no files for '\{path_input}'",
-    )
+    return if if_no_files_found == "error" {
+      task_report_failure(
+        plan,
+        workspace_root,
+        "upload-artifact found no files for '\{path_input}'",
+      )
+    } else {
+      task_report_success(plan, workspace_root)
+    }
   }
   let artifact_root_path = artifact_common_ancestor(selection.root_paths)
   for absolute_path in selection.file_paths {

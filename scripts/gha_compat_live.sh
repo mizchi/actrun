@@ -16,6 +16,8 @@ dispatch_args=()
 case "$workflow_file" in
   compat-artifact-glob-directory.yml)
     ;;
+  compat-artifact-if-no-files-found.yml)
+    ;;
   compat-cache-auto-save.yml)
     compat_key="compat-cache-auto-save-$(date +%s)-$$"
     dispatch_args=(-f "compat_key=$compat_key")

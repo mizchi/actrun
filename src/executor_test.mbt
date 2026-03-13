@@ -1485,6 +1485,70 @@ async test "executor: builtin artifact actions support directory, wildcard, and 
 
 ///|
 #cfg(target="native")
+async test "executor: upload-artifact if-no-files-found supports warn ignore and error" {
+  let workspace = prepare_workspace("executor-builtin-artifacts-missing")
+
+  let workflow = new_workflow("ci", [
+    new_job(
+      "build",
+      [
+        new_uses_step("upload_warn", "actions/upload-artifact@v4", with_values={
+          "name": "warn-bundle",
+          "path": "missing/*.txt",
+        }),
+        new_uses_step("upload_ignore", "actions/upload-artifact@v4", with_values={
+          "name": "ignore-bundle",
+          "path": "missing/*.txt",
+          "if-no-files-found": "ignore",
+        }),
+        new_uses_step(
+          "upload_error",
+          "actions/upload-artifact@v4",
+          with_values={
+            "name": "error-bundle",
+            "path": "missing/*.txt",
+            "if-no-files-found": "error",
+          },
+          continue_on_error="true",
+        ),
+        new_run_step(
+          "verify",
+          "printf '%s|%s|%s|%s|%s|%s' " +
+          "\"${{ steps.upload_warn.outcome }}\" " +
+          "\"${{ steps.upload_warn.conclusion }}\" " +
+          "\"${{ steps.upload_ignore.outcome }}\" " +
+          "\"${{ steps.upload_ignore.conclusion }}\" " +
+          "\"${{ steps.upload_error.outcome }}\" " +
+          "\"${{ steps.upload_error.conclusion }}\"",
+          shell=Some("bash"),
+        ),
+      ],
+      defaults=new_run_defaults(shell=Some("bash")),
+    ),
+  ])
+
+  let lowered = lower_push_workflow(workflow)
+  inspect(lowered.errors, content="[]")
+
+  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  inspect(report.ok, content="true")
+
+  let upload_warn = expect_task_report(report, "build/upload_warn")
+  inspect(upload_warn.status, content="success")
+  let upload_ignore = expect_task_report(report, "build/upload_ignore")
+  inspect(upload_ignore.status, content="success")
+  let upload_error = expect_task_report(report, "build/upload_error")
+  inspect(upload_error.status, content="failed")
+  let verify = expect_task_report(report, "build/verify")
+  inspect(verify.status, content="success")
+  inspect(
+    verify.stdout.trim(chars=" \n\r\t").to_string(),
+    content="success|success|success|success|failure|success",
+  )
+}
+
+///|
+#cfg(target="native")
 async test "executor: builtin cache save and restore roundtrip across jobs" {
   let workspace = prepare_workspace("executor-builtin-cache")
   test_support_remove_tree(executor_test_cache_store_root(workspace))

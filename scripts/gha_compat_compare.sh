@@ -45,6 +45,9 @@ case "$workflow_file" in
   compat-artifact-glob-directory.yml)
     report_name="compat-artifact-glob-directory-report"
     ;;
+  compat-artifact-if-no-files-found.yml)
+    report_name="compat-artifact-if-no-files-found-report"
+    ;;
   compat-cache-roundtrip.yml)
     report_name="compat-cache-report"
     ;;
