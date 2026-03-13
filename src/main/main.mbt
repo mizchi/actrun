@@ -149,7 +149,7 @@ struct WorkflowListRecord {
 
 ///|
 fn usage_text() -> String {
-  "Usage: action_runner <workflow.yml> [--repo <repo_root>] [--workspace <workspace_root>] [--run-root <run_root>] [--artifact-root <artifact_root>] [--cache-root <cache_root>] [--github-action-cache-root <github_action_cache_root>] [--registry-root <registry_root>] [--wasm-action-root <wasm_action_root>] [--workspace-mode <worktree|tmp|docker>] [--event <push-event.json>] [--repository <owner/repo>] [--ref <ref_name>] [--before <sha>] [--after <sha>] [--changed <path>]...\n       action_runner workflow list [--repo <repo_root>] [--json]\n       action_runner run list [--run-root <run_root>] [--json]\n       action_runner run view <run-id> [--run-root <run_root>] [--json]\n       action_runner run watch <run-id> [--run-root <run_root>] [--json]\n       action_runner run logs <run-id> [--run-root <run_root>] [--task <task-id>]\n       action_runner run download <run-id> [--dir <dest_dir>] [--run-root <run_root>] [--artifact-root <artifact_root>]\n       action_runner artifact list <run-id> [--run-root <run_root>] [--json]\n       action_runner artifact download <run-id> --name <artifact-name> [--dir <dest_dir>] [--run-root <run_root>] [--artifact-root <artifact_root>]\n       action_runner cache list [--cache-root <cache_root>] [--key <cache-key>] [--workspace-key <workspace_key>] [--json]\n       action_runner cache prune [--cache-root <cache_root>] --key <cache-key> [--workspace-key <workspace_key>] [--json]"
+  "Usage: action_runner <workflow.yml> [--repo <repo_root>] [--workspace <workspace_root>] [--run-root <run_root>] [--artifact-root <artifact_root>] [--cache-root <cache_root>] [--github-action-cache-root <github_action_cache_root>] [--registry-root <registry_root>] [--wasm-action-root <wasm_action_root>] [--workspace-mode <worktree|tmp|docker>] [--event <push-event.json>] [--repository <owner/repo>] [--ref <ref_name>] [--before <sha>] [--after <sha>] [--changed <path>]...\n       action_runner workflow run <workflow.yml> [--repo <repo_root>] [--workspace <workspace_root>] [--run-root <run_root>] [--artifact-root <artifact_root>] [--cache-root <cache_root>] [--github-action-cache-root <github_action_cache_root>] [--registry-root <registry_root>] [--wasm-action-root <wasm_action_root>] [--workspace-mode <worktree|tmp|docker>] [--event <push-event.json>] [--repository <owner/repo>] [--ref <ref_name>] [--before <sha>] [--after <sha>] [--changed <path>]...\n       action_runner workflow list [--repo <repo_root>] [--json]\n       action_runner run list [--run-root <run_root>] [--json]\n       action_runner run view <run-id> [--run-root <run_root>] [--json]\n       action_runner run watch <run-id> [--run-root <run_root>] [--json]\n       action_runner run logs <run-id> [--run-root <run_root>] [--task <task-id>]\n       action_runner run download <run-id> [--dir <dest_dir>] [--run-root <run_root>] [--artifact-root <artifact_root>]\n       action_runner artifact list <run-id> [--run-root <run_root>] [--json]\n       action_runner artifact download <run-id> --name <artifact-name> [--dir <dest_dir>] [--run-root <run_root>] [--artifact-root <artifact_root>]\n       action_runner cache list [--cache-root <cache_root>] [--key <cache-key>] [--workspace-key <workspace_key>] [--json]\n       action_runner cache prune [--cache-root <cache_root>] --key <cache-key> [--workspace-key <workspace_key>] [--json]"
 }
 
 ///|
@@ -1670,6 +1670,22 @@ fn parse_workflow_read_args(args : Array[String]) -> WorkflowReadParseResult {
 }
 
 ///|
+fn parse_workflow_run_args(args : Array[String]) -> CliParseResult {
+  if args.length() < 3 {
+    return { options: None, errors: ["workflow subcommand requires an action"] }
+  }
+  let action = args[2]
+  if action != "run" {
+    return { options: None, errors: ["unknown workflow subcommand: " + action] }
+  }
+  let normalized : Array[String] = ["action_runner"]
+  for i in 3..<args.length() {
+    normalized.push(args[i])
+  }
+  parse_cli_args(normalized)
+}
+
+///|
 fn print_errors(errors : Array[String]) -> Unit {
   for err in errors {
     println("error: " + err)
@@ -2516,23 +2532,261 @@ fn print_skipped_report(workflow_name : String, run_id : String) -> Unit {
 
 ///|
 #cfg(target="native")
+async fn handle_workflow_run_command(options : CliOptions) -> Int {
+  let run_started_at_ms = @env.now()
+  apply_cli_root_overrides(options)
+  let run_root = options.run_root.unwrap_or(default_run_root())
+  let workspace_mode = resolved_workspace_mode(options)
+  if options.repo_root is Some(_) {
+    if workspace_mode != "tmp" {
+      print_errors([
+        "workspace mode '\{workspace_mode}' is not implemented yet for --repo execution",
+      ])
+      return 1
+    }
+  } else if workspace_mode != "worktree" {
+    print_errors([
+      "workspace mode '\{workspace_mode}' is not implemented yet for local workflow execution",
+    ])
+    return 1
+  }
+
+  let mut workflow_path = options.workflow_path
+  let mut execution_root = local_workspace_root(workflow_path)
+  let base_event = match options.event_path {
+    Some(event_path) =>
+      match read_text(event_path) {
+        Some(event_text) => {
+          let parsed_event = @ar.parse_github_push_event_json(event_text)
+          if parsed_event.errors.length() > 0 {
+            print_errors(parsed_event.errors)
+            return 1
+          }
+          parsed_event.event.unwrap()
+        }
+        None => {
+          print_errors(["failed to read " + event_path])
+          return 1
+        }
+      }
+    None => @ar.new_push_event("", [])
+  }
+  let mut trigger_event = merge_cli_push_event(base_event, options)
+  let mut changed_paths = trigger_event.changed_paths
+  let mut repository = trigger_event.repository
+  let mut origin_remote_url = ""
+  match options.repo_root {
+    Some(repo_root) => {
+      origin_remote_url = origin_remote_url_from_repo_root(repo_root).unwrap_or(
+        "",
+      )
+      if repository.length() == 0 {
+        repository = github_repository_from_repo_root(repo_root).unwrap_or("")
+      }
+    }
+    None => ()
+  }
+  trigger_event = @ar.new_push_event(
+    trigger_event.ref_name,
+    trigger_event.changed_paths,
+    before_sha=trigger_event.before_sha,
+    after_sha=trigger_event.after_sha,
+    repository~,
+    actor=trigger_event.actor,
+  )
+
+  if options.repo_root is Some(repo_root) {
+    let workspace_root = options.workspace_root.unwrap_or(
+      default_workspace_root(),
+    )
+    let workspace_result = @ar.materialize_bit_push_workspace_native(
+      repo_root,
+      trigger_event,
+      workspace_root,
+      remote_url=origin_remote_url,
+    )
+    if workspace_result.errors.length() > 0 {
+      print_errors(workspace_result.errors)
+      return 1
+    }
+    guard workspace_result.workspace is Some(workspace) else {
+      print_errors(["failed to materialize bit workspace"])
+      return 1
+    }
+    workflow_path = join_path(workspace.workspace_root, options.workflow_path)
+    execution_root = workspace.workspace_root
+    let computed_event = @ar.new_push_event(
+      workspace.refname,
+      [],
+      before_sha=options.before_sha,
+      after_sha=workspace.commit_sha,
+      repository~,
+      actor=trigger_event.actor,
+    )
+    if changed_paths.length() == 0 {
+      let changed_result = @ar.compute_bit_changed_paths_native(
+        repo_root, computed_event,
+      )
+      if changed_result.errors.length() > 0 {
+        print_errors(changed_result.errors)
+        return 1
+      }
+      changed_paths = changed_result.paths
+      trigger_event = @ar.new_push_event(
+        workspace.refname,
+        changed_paths,
+        before_sha=changed_result.base_sha,
+        after_sha=changed_result.head_sha,
+        repository~,
+        actor=trigger_event.actor,
+      )
+    } else {
+      trigger_event = @ar.new_push_event(
+        workspace.refname,
+        changed_paths,
+        before_sha=options.before_sha,
+        after_sha=workspace.commit_sha,
+        repository~,
+        actor=trigger_event.actor,
+      )
+    }
+  }
+
+  let text = match read_text(workflow_path) {
+    Some(content) => content
+    None => {
+      print_errors(["failed to read " + workflow_path])
+      return 1
+    }
+  }
+
+  let parsed = @ar.parse_workflow_yaml(text)
+  if parsed.errors.length() > 0 {
+    print_errors(parsed.errors)
+    return 1
+  }
+  guard parsed.workflow is Some(workflow) else {
+    print_errors(["workflow parse failed"])
+    return 1
+  }
+
+  if should_check_trigger(options) &&
+    not(@ar.matches_push_trigger(workflow.trigger, trigger_event)) {
+    let skipped_run_dir = persist_run_record(run_root, {
+      run_id: "",
+      workflow_name: workflow.name,
+      workflow_path,
+      workspace_root: execution_root,
+      workspace_mode,
+      started_at_ms: run_started_at_ms,
+      finished_at_ms: @env.now(),
+      state: "skipped",
+      ok: true,
+      repository,
+      ref_name: trigger_event.ref_name,
+      before_sha: trigger_event.before_sha,
+      after_sha: trigger_event.after_sha,
+      changed_paths: trigger_event.changed_paths,
+    })
+    let skipped_run_id = skipped_run_dir.unwrap_or("")
+    print_skipped_report(workflow.name, skipped_run_id)
+    return 0
+  }
+
+  let prefetch = @ar.prefetch_workflow_github_actions_native(
+    workflow, execution_root,
+  )
+  if prefetch.errors.length() > 0 {
+    print_errors(prefetch.errors)
+    return 1
+  }
+
+  let lowered = @ar.lower_push_workflow_in_workspace(workflow, execution_root)
+  if lowered.errors.length() > 0 {
+    print_errors(lowered.errors)
+    return 1
+  }
+
+  let report = @ar.execute_lowered_native(
+    lowered,
+    workspace_root=execution_root,
+    push_event=Some(trigger_event),
+  )
+  if report.issues.length() > 0 {
+    print_errors(report.issues)
+  }
+  let run_dir = persist_run_record(
+    run_root,
+    {
+      run_id: "",
+      workflow_name: workflow.name,
+      workflow_path,
+      workspace_root: execution_root,
+      workspace_mode,
+      started_at_ms: run_started_at_ms,
+      finished_at_ms: @env.now(),
+      state: report.state,
+      ok: report.ok,
+      repository,
+      ref_name: trigger_event.ref_name,
+      before_sha: trigger_event.before_sha,
+      after_sha: trigger_event.after_sha,
+      changed_paths: trigger_event.changed_paths,
+    },
+    report=Some(report),
+    plan=Some(lowered.plan),
+  )
+  let run_id = run_dir.unwrap_or("")
+  print_report(workflow, report, run_id~)
+  if not(report.ok) {
+    return 1
+  }
+  0
+}
+
+///|
+#cfg(target="native")
 async fn main {
   let cli_args = @xsys.get_cli_args()
   if cli_args.length() > 1 && cli_args[1] == "workflow" {
-    let parsed_workflow_args = parse_workflow_read_args(cli_args)
-    if parsed_workflow_args.errors.length() > 0 {
-      print_errors(parsed_workflow_args.errors)
+    if cli_args.length() < 3 {
+      print_errors(["workflow subcommand requires an action"])
       @xsys.exit(1)
     }
-    guard parsed_workflow_args.options is Some(workflow_options) else {
-      print_errors([usage_text()])
-      @xsys.exit(1)
+    if cli_args[2] == "list" {
+      let parsed_workflow_args = parse_workflow_read_args(cli_args)
+      if parsed_workflow_args.errors.length() > 0 {
+        print_errors(parsed_workflow_args.errors)
+        @xsys.exit(1)
+      }
+      guard parsed_workflow_args.options is Some(workflow_options) else {
+        print_errors([usage_text()])
+        @xsys.exit(1)
+      }
+      let exit_code = handle_workflow_read_command(workflow_options)
+      if exit_code != 0 {
+        @xsys.exit(exit_code)
+      }
+      return
     }
-    let exit_code = handle_workflow_read_command(workflow_options)
-    if exit_code != 0 {
-      @xsys.exit(exit_code)
+    if cli_args[2] == "run" {
+      let parsed_workflow_run_args = parse_workflow_run_args(cli_args)
+      if parsed_workflow_run_args.errors.length() > 0 {
+        print_errors(parsed_workflow_run_args.errors)
+        @xsys.exit(1)
+      }
+      guard parsed_workflow_run_args.options is Some(workflow_run_options) else {
+        print_errors([usage_text()])
+        @xsys.exit(1)
+      }
+      let exit_code = handle_workflow_run_command(workflow_run_options)
+      if exit_code != 0 {
+        @xsys.exit(exit_code)
+      }
+      return
     }
-    return
+    print_errors(["unknown workflow subcommand: " + cli_args[2]])
+    @xsys.exit(1)
   }
   if cli_args.length() > 1 && cli_args[1] == "run" {
     let parsed_run_args = parse_run_read_args(cli_args)
@@ -2590,7 +2844,6 @@ async fn main {
     return
   }
 
-  let run_started_at_ms = @env.now()
   let parsed_args = parse_cli_args(cli_args)
   if parsed_args.errors.length() > 0 {
     print_errors(parsed_args.errors)
@@ -2600,214 +2853,9 @@ async fn main {
     print_errors([usage_text()])
     @xsys.exit(1)
   }
-  apply_cli_root_overrides(options)
-  let run_root = options.run_root.unwrap_or(default_run_root())
-  let workspace_mode = resolved_workspace_mode(options)
-  if options.repo_root is Some(_) {
-    if workspace_mode != "tmp" {
-      print_errors([
-        "workspace mode '\{workspace_mode}' is not implemented yet for --repo execution",
-      ])
-      @xsys.exit(1)
-    }
-  } else if workspace_mode != "worktree" {
-    print_errors([
-      "workspace mode '\{workspace_mode}' is not implemented yet for local workflow execution",
-    ])
-    @xsys.exit(1)
-  }
-
-  let mut workflow_path = options.workflow_path
-  let mut execution_root = local_workspace_root(workflow_path)
-  let base_event = match options.event_path {
-    Some(event_path) =>
-      match read_text(event_path) {
-        Some(event_text) => {
-          let parsed_event = @ar.parse_github_push_event_json(event_text)
-          if parsed_event.errors.length() > 0 {
-            print_errors(parsed_event.errors)
-            @xsys.exit(1)
-          }
-          parsed_event.event.unwrap()
-        }
-        None => {
-          print_errors(["failed to read " + event_path])
-          @xsys.exit(1)
-          @ar.new_push_event("", [])
-        }
-      }
-    None => @ar.new_push_event("", [])
-  }
-  let mut trigger_event = merge_cli_push_event(base_event, options)
-  let mut changed_paths = trigger_event.changed_paths
-  let mut repository = trigger_event.repository
-  let mut origin_remote_url = ""
-  match options.repo_root {
-    Some(repo_root) => {
-      origin_remote_url = origin_remote_url_from_repo_root(repo_root).unwrap_or(
-        "",
-      )
-      if repository.length() == 0 {
-        repository = github_repository_from_repo_root(repo_root).unwrap_or("")
-      }
-    }
-    None => ()
-  }
-  trigger_event = @ar.new_push_event(
-    trigger_event.ref_name,
-    trigger_event.changed_paths,
-    before_sha=trigger_event.before_sha,
-    after_sha=trigger_event.after_sha,
-    repository~,
-    actor=trigger_event.actor,
-  )
-
-  if options.repo_root is Some(repo_root) {
-    let workspace_root = options.workspace_root.unwrap_or(
-      default_workspace_root(),
-    )
-    let workspace_result = @ar.materialize_bit_push_workspace_native(
-      repo_root,
-      trigger_event,
-      workspace_root,
-      remote_url=origin_remote_url,
-    )
-    if workspace_result.errors.length() > 0 {
-      print_errors(workspace_result.errors)
-      @xsys.exit(1)
-    }
-    guard workspace_result.workspace is Some(workspace) else {
-      print_errors(["failed to materialize bit workspace"])
-      @xsys.exit(1)
-    }
-    workflow_path = join_path(workspace.workspace_root, options.workflow_path)
-    execution_root = workspace.workspace_root
-    let computed_event = @ar.new_push_event(
-      workspace.refname,
-      [],
-      before_sha=options.before_sha,
-      after_sha=workspace.commit_sha,
-      repository~,
-      actor=trigger_event.actor,
-    )
-    if changed_paths.length() == 0 {
-      let changed_result = @ar.compute_bit_changed_paths_native(
-        repo_root, computed_event,
-      )
-      if changed_result.errors.length() > 0 {
-        print_errors(changed_result.errors)
-        @xsys.exit(1)
-      }
-      changed_paths = changed_result.paths
-      trigger_event = @ar.new_push_event(
-        workspace.refname,
-        changed_paths,
-        before_sha=changed_result.base_sha,
-        after_sha=changed_result.head_sha,
-        repository~,
-        actor=trigger_event.actor,
-      )
-    } else {
-      trigger_event = @ar.new_push_event(
-        workspace.refname,
-        changed_paths,
-        before_sha=options.before_sha,
-        after_sha=workspace.commit_sha,
-        repository~,
-        actor=trigger_event.actor,
-      )
-    }
-  }
-
-  let text = match read_text(workflow_path) {
-    Some(content) => content
-    None => {
-      println("error: failed to read " + workflow_path)
-      @xsys.exit(1)
-      ""
-    }
-  }
-
-  let parsed = @ar.parse_workflow_yaml(text)
-  if parsed.errors.length() > 0 {
-    print_errors(parsed.errors)
-    @xsys.exit(1)
-  }
-  guard parsed.workflow is Some(workflow) else {
-    println("error: workflow parse failed")
-    @xsys.exit(1)
-  }
-
-  if should_check_trigger(options) &&
-    not(@ar.matches_push_trigger(workflow.trigger, trigger_event)) {
-    let skipped_run_dir = persist_run_record(run_root, {
-      run_id: "",
-      workflow_name: workflow.name,
-      workflow_path,
-      workspace_root: execution_root,
-      workspace_mode,
-      started_at_ms: run_started_at_ms,
-      finished_at_ms: @env.now(),
-      state: "skipped",
-      ok: true,
-      repository,
-      ref_name: trigger_event.ref_name,
-      before_sha: trigger_event.before_sha,
-      after_sha: trigger_event.after_sha,
-      changed_paths: trigger_event.changed_paths,
-    })
-    let skipped_run_id = skipped_run_dir.unwrap_or("")
-    print_skipped_report(workflow.name, skipped_run_id)
-    return
-  }
-
-  let prefetch = @ar.prefetch_workflow_github_actions_native(
-    workflow, execution_root,
-  )
-  if prefetch.errors.length() > 0 {
-    print_errors(prefetch.errors)
-    @xsys.exit(1)
-  }
-
-  let lowered = @ar.lower_push_workflow_in_workspace(workflow, execution_root)
-  if lowered.errors.length() > 0 {
-    print_errors(lowered.errors)
-    @xsys.exit(1)
-  }
-
-  let report = @ar.execute_lowered_native(
-    lowered,
-    workspace_root=execution_root,
-    push_event=Some(trigger_event),
-  )
-  if report.issues.length() > 0 {
-    print_errors(report.issues)
-  }
-  let run_dir = persist_run_record(
-    run_root,
-    {
-      run_id: "",
-      workflow_name: workflow.name,
-      workflow_path,
-      workspace_root: execution_root,
-      workspace_mode,
-      started_at_ms: run_started_at_ms,
-      finished_at_ms: @env.now(),
-      state: report.state,
-      ok: report.ok,
-      repository,
-      ref_name: trigger_event.ref_name,
-      before_sha: trigger_event.before_sha,
-      after_sha: trigger_event.after_sha,
-      changed_paths: trigger_event.changed_paths,
-    },
-    report=Some(report),
-    plan=Some(lowered.plan),
-  )
-  let run_id = run_dir.unwrap_or("")
-  print_report(workflow, report, run_id~)
-  if not(report.ok) {
-    @xsys.exit(1)
+  let exit_code = handle_workflow_run_command(options)
+  if exit_code != 0 {
+    @xsys.exit(exit_code)
   }
 }
 

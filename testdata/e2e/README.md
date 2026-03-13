@@ -4,6 +4,7 @@
 
 - `local-push-basic`: local workflow + push event + `env` / `output` / `needs`
 - `workflow-list-basic`: `workflow list --repo <repo_root>` が `.github/workflows/*.yml|*.yaml` を列挙し、name 未指定 workflow は file stem を fallback に使うことを確認する
+- `workflow-run-basic`: `workflow run <workflow>` が従来の positional 実行と同じ経路で run record を保存しつつ workflow を実行することを確認する
 - `run-store-basic`: `--run-root` / `--artifact-root` / `--cache-root` 指定時に custom store 配下へ保存され、`run.json` に timestamps と job/artifact/cache index が入り、`jobs.json` / `artifacts.json` / `caches.json` と task log/summary が生成され、`run list` / `run view` / `run watch` / `run logs` / `run download` / `artifact list` / `artifact download` / `cache list` / `cache prune` で読めることと CLI が `run_id=` を返すことを確認する
 - `local-composite-nested`: local composite action + nested `uses`
 - `local-reusable-workflow`: local reusable workflow (`jobs.<id>.uses`) を caller workflow から展開して `with` / `needs.<id>.outputs.*` / secret mapping まで通す

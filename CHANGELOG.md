@@ -44,6 +44,8 @@
 - whitebox/E2E coverage for cache store pruning by exact key
 - `action_runner workflow list --repo <repo_root>` の最小 read-only subcommand を追加
 - whitebox/E2E coverage for listing `.github/workflows/*.yml|*.yaml` with file-stem fallback for unnamed workflows
+- `action_runner workflow run <workflow>` の最小 subcommand を追加
+- positional 実行と `workflow run` を同じ code path に整理
 - CLI に `--artifact-root`, `--cache-root`, `--github-action-cache-root`, `--registry-root`, `--wasm-action-root` を追加し、local injection point を env override ではなく flag で制御できるようにした
 - black-box coverage for CLI root override flags via run store / remote reusable workflow / custom registry / wasm scenarios
 - `wasm://...` action を Wasm backend contract として resolve / lower し、`ACTION_RUNNER_WASM_BIN` + `ACTION_RUNNER_WASM_ACTION_ROOT` で file-based Wasm module を実行する最小 adapter

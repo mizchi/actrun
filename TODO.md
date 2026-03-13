@@ -78,7 +78,7 @@
 
 - [ ] command family の導入
   - [x] `action_runner workflow list`
-  - [ ] `action_runner workflow run <workflow>`
+  - [x] `action_runner workflow run <workflow>`
   - [x] `action_runner run list`
   - [x] `action_runner run view <run-id>`
   - [x] `action_runner run watch <run-id>`

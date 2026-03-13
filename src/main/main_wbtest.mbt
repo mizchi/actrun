@@ -138,6 +138,29 @@ test "cli: parse workflow list flags" {
 }
 
 ///|
+test "cli: parse workflow run flags" {
+  let result = parse_workflow_run_args([
+    "action_runner", "workflow", "run", ".github/workflows/ci.yml", "--repo", "/repo",
+    "--workspace", "/tmp/work", "--run-root", "/tmp/runs", "--workspace-mode", "tmp",
+    "--event", "push.json", "--repository", "mizchi/action_runner", "--ref", "main",
+    "--before", "def456", "--after", "abc123", "--changed", "src/lib.mbt",
+  ])
+  inspect(result.errors, content="[]")
+  let options = expect_cli_options(result)
+  inspect(options.workflow_path, content=".github/workflows/ci.yml")
+  inspect(options.repo_root.unwrap_or(""), content="/repo")
+  inspect(options.workspace_root.unwrap_or(""), content="/tmp/work")
+  inspect(options.run_root.unwrap_or(""), content="/tmp/runs")
+  inspect(options.workspace_mode, content="tmp")
+  inspect(options.event_path.unwrap_or(""), content="push.json")
+  inspect(options.repository, content="mizchi/action_runner")
+  inspect(options.ref_name, content="main")
+  inspect(options.before_sha, content="def456")
+  inspect(options.after_sha, content="abc123")
+  inspect(options.changed_paths, content="[\"src/lib.mbt\"]")
+}
+
+///|
 test "cli: parse run view flags" {
   let result = parse_run_read_args([
     "action_runner", "run", "view", "run-1", "--run-root", "/tmp/runs", "--json",
