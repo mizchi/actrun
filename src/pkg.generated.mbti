@@ -29,7 +29,9 @@ pub fn materialize_bit_push_workspace(&@types.FileSystem, &@types.RepoFileSystem
 
 pub fn materialize_bit_push_workspace_native(String, PushEvent, String, remote_url? : String) -> BitWorkspaceResult
 
-pub fn new_job(String, Array[StepSpec], name? : String, if_condition? : String, needs? : Array[String], outputs? : Map[String, String], permissions? : PermissionsSpec?, runs_on? : Array[String], env? : Map[String, String], defaults? : RunDefaults, matrix? : JobMatrixSpec?, reusable_workflow? : String?, container_image? : String?) -> JobSpec
+pub fn new_concurrency_spec(String, cancel_in_progress? : String?) -> ConcurrencySpec
+
+pub fn new_job(String, Array[StepSpec], name? : String, if_condition? : String, needs? : Array[String], outputs? : Map[String, String], permissions? : PermissionsSpec?, concurrency? : ConcurrencySpec?, runs_on? : Array[String], env? : Map[String, String], defaults? : RunDefaults, matrix? : JobMatrixSpec?, reusable_workflow? : String?, container_image? : String?) -> JobSpec
 
 pub fn new_job_matrix(Array[Map[String, String]], fail_fast? : Bool, max_parallel? : Int?) -> JobMatrixSpec
 
@@ -49,7 +51,7 @@ pub fn new_task_plan(String, String, String, String, String, String, String, Str
 
 pub fn new_uses_step(String, String, name? : String, env? : Map[String, String], if_condition? : String, with_values? : Map[String, String], continue_on_error? : String) -> StepSpec
 
-pub fn new_workflow(String, Array[JobSpec], trigger? : PushTrigger, permissions? : PermissionsSpec?, env? : Map[String, String], defaults? : RunDefaults) -> WorkflowSpec
+pub fn new_workflow(String, Array[JobSpec], trigger? : PushTrigger, permissions? : PermissionsSpec?, concurrency? : ConcurrencySpec?, env? : Map[String, String], defaults? : RunDefaults) -> WorkflowSpec
 
 pub fn parse_action_ref(String) -> ActionRefParseResult
 
@@ -106,6 +108,11 @@ pub struct BitWorkspaceResult {
   errors : Array[String]
 }
 
+pub struct ConcurrencySpec {
+  group : String
+  cancel_in_progress : String?
+}
+
 pub struct ExecutionPlan {
   tasks : Array[TaskPlan]
   job_outputs : Map[String, Map[String, String]]
@@ -134,6 +141,7 @@ pub struct JobSpec {
   needs : Array[String]
   outputs : Map[String, String]
   permissions : PermissionsSpec?
+  concurrency : ConcurrencySpec?
   runs_on : Array[String]
   env : Map[String, String]
   defaults : RunDefaults
@@ -263,6 +271,7 @@ pub struct WorkflowSpec {
   name : String
   trigger : PushTrigger
   permissions : PermissionsSpec?
+  concurrency : ConcurrencySpec?
   env : Map[String, String]
   defaults : RunDefaults
   jobs : Array[JobSpec]

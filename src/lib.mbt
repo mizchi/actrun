@@ -10,10 +10,24 @@ pub struct PermissionsSpec {
 }
 
 ///|
+pub struct ConcurrencySpec {
+  group : String
+  cancel_in_progress : String?
+}
+
+///|
 pub fn new_permissions_spec(
   values? : Map[String, String] = {},
 ) -> PermissionsSpec {
   { values, }
+}
+
+///|
+pub fn new_concurrency_spec(
+  group : String,
+  cancel_in_progress? : String? = None,
+) -> ConcurrencySpec {
+  { group, cancel_in_progress }
 }
 
 ///|
@@ -136,6 +150,7 @@ pub struct JobSpec {
   needs : Array[String]
   outputs : Map[String, String]
   permissions : PermissionsSpec?
+  concurrency : ConcurrencySpec?
   runs_on : Array[String]
   env : Map[String, String]
   defaults : RunDefaults
@@ -170,6 +185,7 @@ pub fn new_job(
   needs? : Array[String] = [],
   outputs? : Map[String, String] = {},
   permissions? : PermissionsSpec? = None,
+  concurrency? : ConcurrencySpec? = None,
   runs_on? : Array[String] = ["ubuntu-latest"],
   env? : Map[String, String] = {},
   defaults? : RunDefaults = new_run_defaults(),
@@ -184,6 +200,7 @@ pub fn new_job(
     needs,
     outputs,
     permissions,
+    concurrency,
     runs_on,
     env,
     defaults,
@@ -199,6 +216,7 @@ pub struct WorkflowSpec {
   name : String
   trigger : PushTrigger
   permissions : PermissionsSpec?
+  concurrency : ConcurrencySpec?
   env : Map[String, String]
   defaults : RunDefaults
   jobs : Array[JobSpec]
@@ -210,10 +228,11 @@ pub fn new_workflow(
   jobs : Array[JobSpec],
   trigger? : PushTrigger = new_push_trigger(),
   permissions? : PermissionsSpec? = None,
+  concurrency? : ConcurrencySpec? = None,
   env? : Map[String, String] = {},
   defaults? : RunDefaults = new_run_defaults(),
 ) -> WorkflowSpec {
-  { name, trigger, permissions, env, defaults, jobs }
+  { name, trigger, permissions, concurrency, env, defaults, jobs }
 }
 
 ///|

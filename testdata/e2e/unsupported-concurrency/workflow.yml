@@ -1,0 +1,14 @@
+name: unsupported-concurrency
+on: push
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: ${{ github.ref_name == 'main' }}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: job-build
+      cancel-in-progress: true
+    steps:
+      - id: show
+        run: printf '%s' hi

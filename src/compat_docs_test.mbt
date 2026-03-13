@@ -145,6 +145,32 @@ test "compat docs: parse and reject permissions fixture" {
 }
 
 ///|
+test "compat docs: parse and reject concurrency fixture" {
+  let (fixture, workflow, lowered) = compat_expect_lowered_docs_fixture(
+    "concurrency-parse",
+  )
+
+  inspect(fixture.id, content="docs-concurrency-parse")
+  inspect(
+    workflow.concurrency.unwrap().group,
+    content="release-${{ github.ref_name }}",
+  )
+  inspect(
+    workflow.concurrency.unwrap().cancel_in_progress.unwrap_or(""),
+    content="${{ github.ref_name == 'main' }}",
+  )
+  inspect(workflow.jobs[0].concurrency.unwrap().group, content="job-build")
+  inspect(
+    workflow.jobs[0].concurrency.unwrap().cancel_in_progress.unwrap_or(""),
+    content="true",
+  )
+  inspect(
+    lowered.errors,
+    content="[\"workflow concurrency is not supported in MVP\", \"job 'build' concurrency is not supported in MVP\"]",
+  )
+}
+
+///|
 test "compat docs: lower jobs needs fixture" {
   let (fixture, workflow, lowered) = compat_expect_lowered_docs_fixture(
     "jobs-needs",

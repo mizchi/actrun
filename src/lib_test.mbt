@@ -1387,3 +1387,32 @@ test "parser/lowering: workflow and job permissions are parsed and rejected in M
     content="[\"workflow permissions are not supported in MVP\", \"job 'build' permissions are not supported in MVP\"]",
   )
 }
+
+///|
+test "parser/lowering: workflow and job concurrency are parsed and rejected in MVP" {
+  let workflow = new_workflow(
+    "ci",
+    [
+      new_job(
+        "build",
+        [new_run_step("show", "printf '%s' hi")],
+        concurrency=Some(
+          new_concurrency_spec("job-group", cancel_in_progress=Some("true")),
+        ),
+      ),
+    ],
+    concurrency=Some(
+      new_concurrency_spec(
+        "workflow-group",
+        cancel_in_progress=Some("${{ github.ref_name == 'main' }}"),
+      ),
+    ),
+  )
+
+  let result = lower_push_workflow(workflow)
+
+  inspect(
+    result.errors,
+    content="[\"workflow concurrency is not supported in MVP\", \"job 'build' concurrency is not supported in MVP\"]",
+  )
+}

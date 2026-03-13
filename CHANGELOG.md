@@ -29,6 +29,8 @@
 - docs/E2E coverage for `${{ secrets.* }}` in script/env
 - workflow/job `permissions` parse + contract support with explicit lowering reject in MVP
 - docs/E2E coverage for unsupported `permissions`
+- workflow/job `concurrency` parse + contract support with explicit lowering reject in MVP
+- docs/E2E coverage for unsupported `concurrency`
 
 - `push` trigger matcher for MVP CI workflows
 - workflow YAML subset parser for `on.push`, `jobs`, `steps`, `env`, and `defaults.run`

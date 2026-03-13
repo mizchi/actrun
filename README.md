@@ -22,7 +22,7 @@
 - minimal expression functions (`contains`, `startsWith`, `endsWith`, `fromJSON`, `toJSON`, `hashFiles`)
 - `${{ vars.* }}` の最小対応 (`ACTION_RUNNER_VAR_<NAME>` から供給)
 - `${{ secrets.* }}` の最小対応 (`ACTION_RUNNER_SECRET_<NAME>` から供給, `if:` 直接参照は未対応)
-- workflow/job `permissions` の parse / contract 対応と lowering reject
+- workflow/job `permissions` / `concurrency` の parse / contract 対応と lowering reject
 - step-level `continue-on-error`
 - `${{ steps.<id>.outcome }}` / `${{ steps.<id>.conclusion }}` の最小対応
 - `uses: actions/upload-artifact@*` / `uses: actions/download-artifact@*` の最小 builtin emulator (`directory`, wildcard path, `if-no-files-found`, `overwrite`, download-all directory mode, `merge-multiple`)
@@ -60,7 +60,7 @@
 - job 内の後続 step に対する `${{ steps.<id>.outputs.<name> }}` の最小対応
 - `uses: docker://...` の native docker 実行
 - MVP 非対応機能の reject
-- `permissions` は parse して contract に保持するが、MVP では lowering で reject する
+- `permissions` / `concurrency` は parse して contract に保持するが、MVP では lowering で reject する
 
 ## まだないもの
 

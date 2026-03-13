@@ -854,6 +854,38 @@ fn parse_permissions(
 }
 
 ///|
+fn parse_concurrency(
+  value : YamlValue?,
+  errors : Array[String],
+  ctx : String,
+) -> ConcurrencySpec? {
+  match value {
+    None => None
+    Some(Str(text)) => Some(new_concurrency_spec(text))
+    Some(Obj(fields)) =>
+      Some(
+        new_concurrency_spec(
+          yaml_as_optional_string(
+            yaml_obj_get(fields, "group"),
+            errors,
+            ctx + ".group",
+          ).unwrap_or(""),
+          cancel_in_progress=yaml_as_optional_string(
+            yaml_obj_get(fields, "cancel-in-progress"),
+            errors,
+            ctx + ".cancel-in-progress",
+          ),
+        ),
+      )
+    Some(Null) => None
+    Some(_) => {
+      errors.push(ctx + " must be a string or mapping")
+      None
+    }
+  }
+}
+
+///|
 fn parse_push_trigger_value(
   value : YamlValue,
   errors : Array[String],
@@ -1064,6 +1096,11 @@ fn parse_job(id : String, value : YamlValue, errors : Array[String]) -> JobSpec 
       yaml_obj_get(fields, "permissions"),
       errors,
       ctx + ".permissions",
+    ),
+    concurrency=parse_concurrency(
+      yaml_obj_get(fields, "concurrency"),
+      errors,
+      ctx + ".concurrency",
     ),
     runs_on=yaml_as_string_list(
       yaml_obj_get(fields, "runs-on"),
@@ -1333,6 +1370,11 @@ pub fn parse_workflow_yaml(text : String) -> WorkflowParseResult {
       yaml_obj_get(root_fields, "permissions"),
       errors,
       "permissions",
+    ),
+    concurrency=parse_concurrency(
+      yaml_obj_get(root_fields, "concurrency"),
+      errors,
+      "concurrency",
     ),
     env=yaml_to_string_map(yaml_obj_get(root_fields, "env"), errors, "env"),
     defaults=parse_run_defaults(

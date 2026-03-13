@@ -453,6 +453,7 @@ fn substitute_matrix_job(
     needs=actual_needs,
     outputs=substitute_matrix_map(job.outputs, matrix_values),
     permissions=job.permissions,
+    concurrency=job.concurrency,
     runs_on=substitute_matrix_list(job.runs_on, matrix_values),
     env=substitute_matrix_map(job.env, matrix_values),
     defaults=new_run_defaults(
@@ -559,6 +560,7 @@ fn expand_matrix_jobs(jobs : Array[JobSpec]) -> Array[ExpandedJob] {
             needs=actual_needs,
             outputs=job.outputs,
             permissions=job.permissions,
+            concurrency=job.concurrency,
             runs_on=job.runs_on,
             env=job.env,
             defaults=job.defaults,
@@ -1490,6 +1492,10 @@ pub fn lower_push_workflow_in_workspace(
       errors.push("workflow permissions are not supported in MVP")
     _ => ()
   }
+  match workflow.concurrency {
+    Some(_) => errors.push("workflow concurrency is not supported in MVP")
+    None => ()
+  }
   let expanded_specs : Array[JobSpec] = []
   for expanded in expanded_jobs {
     expanded_specs.push(expanded.job)
@@ -1532,6 +1538,11 @@ pub fn lower_push_workflow_in_workspace(
       Some(spec) if spec.values.length() > 0 =>
         errors.push("job '\{job.id}' permissions are not supported in MVP")
       _ => ()
+    }
+    match job.concurrency {
+      Some(_) =>
+        errors.push("job '\{job.id}' concurrency is not supported in MVP")
+      None => ()
     }
     if job.container_image is Some(image) {
       errors.push("job '\{job.id}' container is not supported in MVP: \{image}")

@@ -42,6 +42,7 @@
 - `unsupported-uses`: unsupported `uses:` を CLI error として reject
 - `unsupported-matrix`: invalid / unsupported な matrix 設定を CLI error として reject
 - `unsupported-permissions`: workflow/job `permissions` を CLI error として reject
+- `unsupported-concurrency`: workflow/job `concurrency` を CLI error として reject
 - `event-cli-overrides`: `--event` より CLI flag (`--ref` / `--repository` / `--after` / `--changed`) が優先される
 - `event-head-commit-fallback`: `commits` が無くても `head_commit` から changed paths を読んで trigger 判定する
 - `docker-image-basic`: direct `docker://...` action を native docker adapter で実行する

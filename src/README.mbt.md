@@ -16,7 +16,7 @@ MVP の GitHub Actions 互換 push CI ランナー向けコア API。
 - minimal expression functions (`contains`, `startsWith`, `endsWith`, `fromJSON`, `toJSON`, `hashFiles`)
 - `${{ vars.* }}` の最小対応 (`ACTION_RUNNER_VAR_<NAME>` から供給)
 - `${{ secrets.* }}` の最小対応 (`ACTION_RUNNER_SECRET_<NAME>` から供給, `if:` 直接参照は未対応)
-- workflow/job `permissions` の parse / contract 対応と lowering reject
+- workflow/job `permissions` / `concurrency` の parse / contract 対応と lowering reject
 - step-level `continue-on-error`
 - `${{ steps.<id>.outcome }}` / `${{ steps.<id>.conclusion }}` の最小対応
 - native host executor

@@ -1,0 +1,8 @@
+id=docs-concurrency-parse
+source=docs
+mode=supported
+kind=lower
+url=https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#concurrency
+docs_urls=https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#concurrency,https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idconcurrency
+added_at=2026-03-13
+notes=concurrency is parsed into contract but rejected during lowering in MVP
