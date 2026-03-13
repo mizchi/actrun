@@ -1,0 +1,8 @@
+name: Remote Docker In Container
+runs:
+  using: docker
+  image: Dockerfile
+  entrypoint: /bin/sh
+  args:
+    - -c
+    - printf '%s' "${CONTAINER_FLAG:-}" > "$GITHUB_WORKSPACE/docker.txt"

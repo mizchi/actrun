@@ -34,6 +34,35 @@ fn executor_test_restore_env_var(key : String, previous : String?) -> Unit {
 }
 
 ///|
+fn executor_test_parent_dir(path : String) -> String {
+  let mut idx = path.length()
+  while idx > 0 {
+    idx -= 1
+    if path.unsafe_get(idx) == '/' {
+      if idx == 0 {
+        return "/"
+      }
+      return String::unsafe_substring(path, start=0, end=idx)
+    }
+  }
+  "."
+}
+
+///|
+fn executor_test_ensure_dir_all(path : String) -> Unit raise {
+  if path.length() == 0 || path == "." || path == "/" || @xfs.path_exists(path) {
+    return
+  }
+  let parent = executor_test_parent_dir(path)
+  if parent != path {
+    executor_test_ensure_dir_all(parent)
+  }
+  if not(@xfs.path_exists(path)) {
+    @xfs.create_dir(path)
+  }
+}
+
+///|
 fn prepare_workspace(name : String) -> String raise {
   ensure_dir("_build")
   ensure_dir("_build/test-workspaces")
@@ -301,6 +330,18 @@ fn prepare_cached_github_action_root_for_executor(
     }
     ensure_dir(current)
   }
+  executor_test_absolute_path(action_root)
+}
+
+///|
+fn prepare_custom_registry_action_root_for_executor(
+  root : String,
+  scheme : String,
+  name : String,
+  version : String,
+) -> String raise {
+  let action_root = root + "/" + scheme + "/" + name + "/" + version
+  executor_test_ensure_dir_all(action_root)
   executor_test_absolute_path(action_root)
 }
 
@@ -1088,6 +1129,55 @@ async test "executor: checkout clean false preserves untracked files" {
 
 ///|
 #cfg(target="native")
+async test "executor: checkout materialized on host is visible to job container run step" {
+  let workspace = prepare_git_checkout_workspace(
+    "executor-checkout-job-container",
+  )
+  let tools_root = prepare_workspace("executor-checkout-job-container-tools")
+  let docker_log_path = tools_root + "/docker.log"
+  let docker_bin = test_support_prepare_fake_docker_bin(
+    tools_root, docker_log_path,
+  )
+
+  let workflow = new_workflow("ci", [
+    new_job(
+      "build",
+      [
+        new_uses_step("checkout", "actions/checkout@v4"),
+        new_run_step(
+          "verify",
+          "printf '%s|%s' \"$(cat tracked.txt)\" \"$(test -f .git/shallow && echo yes || echo no)\"",
+          shell=Some("bash"),
+        ),
+      ],
+      env={ "ACTION_RUNNER_DOCKER_BIN": docker_bin },
+      container=Some(new_job_container_spec("node:20-bookworm")),
+      defaults=new_run_defaults(shell=Some("bash")),
+    ),
+  ])
+
+  let lowered = lower_push_workflow(workflow)
+  inspect(lowered.errors, content="[]")
+
+  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  inspect(report.ok, content="true")
+  inspect(report.state, content="completed")
+  inspect(
+    expect_task_report(report, "build/checkout").status,
+    content="success",
+  )
+  inspect(
+    expect_task_report(report, "build/verify").stdout
+    .trim(chars=" \n\r\t")
+    .to_string(),
+    content="second|yes",
+  )
+  let docker_log = @xfs.read_file_to_string(docker_log_path)
+  assert_eq(docker_log.contains("node:20-bookworm"), true)
+}
+
+///|
+#cfg(target="native")
 async test "executor: checkout submodules true initializes direct submodules" {
   let workspace = prepare_git_checkout_workspace_with_submodules(
     "executor-checkout-submodules",
@@ -1271,6 +1361,70 @@ async test "executor: cached github repo node action runs main entrypoint" {
 
 ///|
 #cfg(target="native")
+async test "executor: job container runs github repo node action via docker adapter" {
+  let workspace = prepare_workspace("executor-job-container-node-action")
+  let action_root = prepare_cached_github_action_root_for_executor(
+    "mizchi-test",
+    "node-action-container",
+    "v1",
+    subpath="action",
+  )
+  let action_src =
+    #|name: Remote Node In Container
+    #|runs:
+    #|  using: node20
+    #|  main: main.sh
+  let main_src =
+    #|printf '%s|%s|%s' "$CONTAINER_FLAG" "$GITHUB_WORKSPACE" "$PWD" > "$GITHUB_WORKSPACE/node.txt"
+  @xfs.write_string_to_file(action_root + "/action.yml", action_src)
+  @xfs.write_string_to_file(action_root + "/main.sh", main_src)
+  let node_log_path = workspace + "/node.log"
+  let node_bin = test_support_prepare_fake_node_bin(workspace, node_log_path)
+  let docker_log_path = workspace + "/docker.log"
+  let docker_bin = test_support_prepare_fake_docker_bin(
+    workspace, docker_log_path,
+  )
+
+  let workflow = new_workflow(
+    "ci",
+    [
+      new_job(
+        "build",
+        [new_uses_step("remote", "mizchi-test/node-action-container/action@v1")],
+        defaults=new_run_defaults(shell=Some("bash")),
+        container=Some(
+          new_job_container_spec("alpine:3.21", env={
+            "CONTAINER_FLAG": "from-container",
+          }),
+        ),
+      ),
+    ],
+    env={
+      "ACTION_RUNNER_DOCKER_BIN": docker_bin,
+      "ACTION_RUNNER_NODE_BIN": node_bin,
+    },
+  )
+
+  let lowered = lower_push_workflow_in_workspace(workflow, workspace)
+  inspect(lowered.errors, content="[]")
+
+  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  inspect(report.ok, content="true")
+  let remote = expect_task_report(report, "build/remote")
+  inspect(remote.status, content="success")
+  inspect(
+    @xfs.read_file_to_string(workspace + "/node.txt"),
+    content="from-container|" + workspace + "|" + action_root,
+  )
+  let docker_log = @xfs.read_file_to_string(docker_log_path)
+  assert_eq(docker_log.contains("run\n--rm\n"), true)
+  assert_eq(docker_log.contains("alpine:3.21"), true)
+  assert_eq(docker_log.contains(node_bin), true)
+  assert_eq(docker_log.contains(action_root + "/main.sh"), true)
+}
+
+///|
+#cfg(target="native")
 async test "executor: github repo action cache miss fetches and runs inner steps" {
   let workspace = prepare_workspace("executor-github-repo-remote-fetch")
   let action_uses = "mizchi-fetch-exec/demo-action-exec/composite@v1"
@@ -1409,6 +1563,69 @@ async test "executor: builtin artifact actions upload and download files" {
   let verify = expect_task_report(report, "build/verify")
   inspect(verify.status, content="success")
   inspect(verify.stdout.trim(chars=" \n\r\t").to_string(), content="alpha|beta")
+}
+
+///|
+#cfg(target="native")
+async test "executor: builtin artifact actions roundtrip across job container run steps" {
+  let workspace = prepare_workspace("executor-builtin-artifacts-container")
+  let docker_log_path = workspace + "/docker.log"
+  let docker_bin = test_support_prepare_fake_docker_bin(
+    workspace, docker_log_path,
+  )
+
+  let workflow = new_workflow("ci", [
+    new_job(
+      "build",
+      [
+        new_run_step(
+          "write",
+          "mkdir -p dist\nprintf '%s' alpha > dist/alpha.txt\nprintf '%s' beta > dist/beta.txt",
+          shell=Some("bash"),
+        ),
+        new_uses_step("upload", "actions/upload-artifact@v4", with_values={
+          "name": "bundle",
+          "path": "dist/alpha.txt\ndist/beta.txt",
+        }),
+        new_run_step(
+          "remove",
+          "rm -f dist/alpha.txt dist/beta.txt",
+          shell=Some("bash"),
+        ),
+        new_uses_step("download", "actions/download-artifact@v4", with_values={
+          "name": "bundle",
+          "path": "restored",
+        }),
+        new_run_step(
+          "verify",
+          "printf '%s|%s' \"$(cat restored/alpha.txt)\" \"$(cat restored/beta.txt)\"",
+          shell=Some("bash"),
+        ),
+      ],
+      env={ "ACTION_RUNNER_DOCKER_BIN": docker_bin },
+      container=Some(new_job_container_spec("node:20-bookworm")),
+      defaults=new_run_defaults(shell=Some("bash")),
+    ),
+  ])
+
+  let lowered = lower_push_workflow(workflow)
+  inspect(lowered.errors, content="[]")
+
+  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  inspect(report.ok, content="true")
+  inspect(expect_task_report(report, "build/upload").status, content="success")
+  inspect(
+    expect_task_report(report, "build/download").status,
+    content="success",
+  )
+  inspect(
+    expect_task_report(report, "build/verify").stdout
+    .trim(chars=" \n\r\t")
+    .to_string(),
+    content="alpha|beta",
+  )
+  let docker_log = @xfs.read_file_to_string(docker_log_path)
+  assert_eq(docker_log.contains("node:20-bookworm"), true)
 }
 
 ///|
@@ -1809,6 +2026,82 @@ async test "executor: builtin cache action auto-saves on miss and restores on ne
   let verify = expect_task_report(report, "restore/verify")
   inspect(verify.status, content="success")
   inspect(verify.stdout.trim(chars=" \n\r\t").to_string(), content="true|ocean")
+}
+
+///|
+#cfg(target="native")
+async test "executor: builtin cache action auto-saves across job container jobs" {
+  let workspace = prepare_workspace("executor-builtin-cache-container")
+  test_support_remove_tree(executor_test_cache_store_root(workspace))
+  let docker_log_path = workspace + "/docker.log"
+  let docker_bin = test_support_prepare_fake_docker_bin(
+    workspace, docker_log_path,
+  )
+
+  let workflow = new_workflow("ci", [
+    new_job(
+      "save",
+      [
+        new_run_step(
+          "write",
+          "mkdir -p cache-dir\nprintf '%s' ocean > cache-dir/value.txt",
+          shell=Some("bash"),
+        ),
+        new_uses_step("cache", "actions/cache@v4", with_values={
+          "key": "compat-cache-container-v1",
+          "path": "cache-dir",
+        }),
+        new_run_step(
+          "check_miss",
+          "if [ -n \"${{ steps.cache.outputs.cache-hit }}\" ]; then exit 1; fi",
+          shell=Some("bash"),
+        ),
+      ],
+      env={ "ACTION_RUNNER_DOCKER_BIN": docker_bin },
+      container=Some(new_job_container_spec("alpine:3.21")),
+      defaults=new_run_defaults(shell=Some("bash")),
+    ),
+    new_job(
+      "restore",
+      [
+        new_run_step("clear", "rm -rf cache-dir", shell=Some("bash")),
+        new_uses_step("cache", "actions/cache@v4", with_values={
+          "key": "compat-cache-container-v1",
+          "path": "cache-dir",
+        }),
+        new_run_step(
+          "verify",
+          "printf '%s|%s' \"${{ steps.cache.outputs.cache-hit }}\" \"$(cat cache-dir/value.txt)\"",
+          shell=Some("bash"),
+        ),
+      ],
+      needs=["save"],
+      env={ "ACTION_RUNNER_DOCKER_BIN": docker_bin },
+      container=Some(new_job_container_spec("alpine:3.21")),
+      defaults=new_run_defaults(shell=Some("bash")),
+    ),
+  ])
+
+  let lowered = lower_push_workflow(workflow)
+  inspect(lowered.errors, content="[]")
+
+  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  inspect(report.ok, content="true")
+
+  inspect(expect_task_report(report, "save/cache").status, content="success")
+  inspect(
+    expect_task_report(report, "save/cache__post").status,
+    content="success",
+  )
+  inspect(expect_task_report(report, "restore/cache").status, content="success")
+  inspect(
+    expect_task_report(report, "restore/verify").stdout
+    .trim(chars=" \n\r\t")
+    .to_string(),
+    content="true|ocean",
+  )
+  let docker_log = @xfs.read_file_to_string(docker_log_path)
+  assert_eq(docker_log.contains("alpine:3.21"), true)
 }
 
 ///|
@@ -2283,6 +2576,61 @@ async test "executor: builtin setup-node exposes requested node version output a
     verify.stdout.trim(chars=" \n\r\t").to_string(),
     content="v20.0.0|v20.0.0",
   )
+}
+
+///|
+#cfg(target="native")
+async test "executor: builtin setup-node works in job container run step" {
+  let workspace = prepare_workspace("executor-builtin-setup-node-container")
+  let node_log_path = workspace + "/setup-node-container.log"
+  let fake_node = test_support_prepare_fake_version_node_bin(
+    workspace, node_log_path, "24.9.0",
+  )
+  let docker_log_path = workspace + "/docker.log"
+  let docker_bin = test_support_prepare_fake_docker_bin(
+    workspace, docker_log_path,
+  )
+
+  let workflow = new_workflow("ci", [
+    new_job(
+      "build",
+      [
+        new_uses_step("setup", "actions/setup-node@v4", with_values={
+          "node-version": "20",
+        }),
+        new_run_step(
+          "verify",
+          "printf '%s|%s' \"${{ steps.setup.outputs.node-version }}\" \"$(node --version)\"",
+          shell=Some("bash"),
+        ),
+      ],
+      env={
+        "ACTION_RUNNER_SETUP_NODE_BIN": fake_node,
+        "ACTION_RUNNER_DOCKER_BIN": docker_bin,
+      },
+      container=Some(new_job_container_spec("node:20-bookworm")),
+      defaults=new_run_defaults(shell=Some("bash")),
+    ),
+  ])
+
+  let lowered = lower_push_workflow(workflow)
+  inspect(lowered.errors, content="[]")
+
+  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  inspect(report.ok, content="true")
+
+  let setup = expect_task_report(report, "build/setup")
+  inspect(setup.status, content="success")
+  let verify = expect_task_report(report, "build/verify")
+  inspect(verify.status, content="success")
+  inspect(
+    verify.stdout.trim(chars=" \n\r\t").to_string(),
+    content="v20.0.0|v20.0.0",
+  )
+  let docker_log = @xfs.read_file_to_string(docker_log_path)
+  assert_eq(docker_log.contains("node:20-bookworm"), true)
+  let node_log = @xfs.read_file_to_string(node_log_path)
+  assert_eq(node_log.contains("--version"), true)
 }
 
 ///|
@@ -3330,6 +3678,451 @@ async test "executor: docker actions run via docker adapter" {
     true,
   )
   assert_eq(docker_log.contains("run\n--rm\n"), true)
+}
+
+///|
+#cfg(target="native")
+async test "executor: wasm actions run via configured wasm runner" {
+  let workspace = prepare_workspace("executor-wasm-action")
+  let tools_root = prepare_workspace("executor-wasm-action-tools")
+  let wasm_log_path = tools_root + "/wasm.log"
+  let wasm_bin = test_support_prepare_fake_wasm_bin(tools_root, wasm_log_path)
+  let wasm_root = workspace + "/wasm-actions"
+  ensure_dir(wasm_root)
+  ensure_dir(wasm_root + "/std")
+  ensure_dir(wasm_root + "/std/echo")
+  ensure_dir(wasm_root + "/std/echo/v1")
+  @xfs.write_string_to_file(
+    wasm_root + "/std/echo/v1/main.wasm",
+    "#!/bin/sh\n" +
+    "set -eu\n" +
+    "printf '%s|%s' \"${INPUT_MESSAGE:-}\" \"$GITHUB_WORKSPACE\"\n" +
+    "printf 'result=from-wasm\\n' > \"$GITHUB_OUTPUT\"\n",
+  )
+  let workflow = new_workflow("ci", [
+    new_job(
+      "build",
+      [
+        new_uses_step("module", "wasm://std/echo@v1", with_values={
+          "message": "hello",
+        }),
+        new_run_step(
+          "verify",
+          "printf '%s' '${{ steps.module.outputs.result }}'",
+          shell=Some("bash"),
+        ),
+      ],
+      env={
+        "ACTION_RUNNER_WASM_BIN": wasm_bin,
+        "ACTION_RUNNER_WASM_ACTION_ROOT": wasm_root,
+      },
+      defaults=new_run_defaults(shell=Some("bash")),
+    ),
+  ])
+
+  let report = execute_lowered_native(
+    lower_push_workflow(workflow),
+    workspace_root=workspace,
+  )
+
+  inspect(report.ok, content="true")
+  inspect(report.state, content="completed")
+  let module_report = expect_task_report(report, "build/module")
+  inspect(module_report.kind, content="action")
+  inspect(module_report.status, content="success")
+  inspect(
+    module_report.stdout.trim(chars=" \n\r\t").to_string(),
+    content="hello|" + workspace,
+  )
+  let verify = expect_task_report(report, "build/verify")
+  inspect(verify.stdout.trim(chars=" \n\r\t").to_string(), content="from-wasm")
+  let wasm_log = @xfs.read_file_to_string(wasm_log_path)
+  assert_eq(wasm_log.contains("main.wasm"), true)
+}
+
+///|
+#cfg(target="native")
+async test "executor: wasm actions fail when module is missing" {
+  let workspace = prepare_workspace("executor-wasm-action-missing")
+  let tools_root = prepare_workspace("executor-wasm-action-missing-tools")
+  let wasm_log_path = tools_root + "/wasm.log"
+  let wasm_bin = test_support_prepare_fake_wasm_bin(tools_root, wasm_log_path)
+  let workflow = new_workflow("ci", [
+    new_job(
+      "build",
+      [new_uses_step("module", "wasm://std/echo@v1")],
+      env={
+        "ACTION_RUNNER_WASM_BIN": wasm_bin,
+        "ACTION_RUNNER_WASM_ACTION_ROOT": workspace + "/missing-root",
+      },
+      defaults=new_run_defaults(shell=Some("bash")),
+    ),
+  ])
+
+  let report = execute_lowered_native(
+    lower_push_workflow(workflow),
+    workspace_root=workspace,
+  )
+
+  inspect(report.ok, content="false")
+  inspect(report.state, content="partial_failed")
+  let module_report = expect_task_report(report, "build/module")
+  inspect(module_report.kind, content="action")
+  inspect(module_report.status, content="failed")
+  inspect(
+    module_report.stderr,
+    content="wasm module for 'std/echo@v1' was not found",
+  )
+  let wasm_log = @xfs.read_file_to_string(wasm_log_path)
+  inspect(wasm_log, content="")
+}
+
+///|
+#cfg(target="native")
+async test "executor: custom registry node action runs via configured registry root" {
+  let workspace = prepare_workspace("executor-custom-registry-node")
+  let tools_root = prepare_workspace("executor-custom-registry-node-tools")
+  let registry_root = prepare_workspace(
+    "executor-custom-registry-node-registry",
+  )
+  let node_log_path = tools_root + "/node.log"
+  let node_bin = test_support_prepare_fake_node_bin(tools_root, node_log_path)
+  let previous_registry_root = executor_test_set_env_var(
+    "ACTION_RUNNER_ACTION_REGISTRY_ROOT", registry_root,
+  )
+  let action_root = prepare_custom_registry_action_root_for_executor(
+    registry_root, "bit", "std/cache", "v1",
+  )
+  let manifest =
+    #|name: cache
+    #|inputs:
+    #|  message:
+    #|    default: hello
+    #|runs:
+    #|  using: node20
+    #|  main: index.sh
+  @xfs.write_string_to_file(action_root + "/action.yml", manifest)
+  @xfs.write_string_to_file(
+    action_root + "/index.sh",
+    "#!/bin/sh\n" +
+    "set -eu\n" +
+    "printf '%s' \"${INPUT_MESSAGE:-}\" > \"$GITHUB_WORKSPACE/registry-node.txt\"\n" +
+    "printf 'result=from-registry-node\\n' > \"$GITHUB_OUTPUT\"\n",
+  )
+
+  let workflow = new_workflow("ci", [
+    new_job(
+      "build",
+      [
+        new_uses_step("setup", "bit://std/cache@v1", with_values={
+          "message": "from-registry",
+        }),
+        new_run_step(
+          "verify",
+          "printf '%s|%s' '${{ steps.setup.outputs.result }}' \"$(cat registry-node.txt)\"",
+          shell=Some("bash"),
+        ),
+      ],
+      env={ "ACTION_RUNNER_NODE_BIN": node_bin },
+      defaults=new_run_defaults(shell=Some("bash")),
+    ),
+  ])
+
+  let report = execute_lowered_native(
+    lower_push_workflow_in_workspace(workflow, workspace),
+    workspace_root=workspace,
+  )
+  executor_test_restore_env_var(
+    "ACTION_RUNNER_ACTION_REGISTRY_ROOT", previous_registry_root,
+  )
+
+  inspect(report.ok, content="true")
+  inspect(report.state, content="completed")
+  let setup_report = expect_task_report(report, "build/setup")
+  inspect(setup_report.status, content="success")
+  let verify = expect_task_report(report, "build/verify")
+  inspect(
+    verify.stdout.trim(chars=" \n\r\t").to_string(),
+    content="from-registry-node|from-registry",
+  )
+  let node_log = @xfs.read_file_to_string(node_log_path)
+  assert_eq(node_log.contains(action_root + "/index.sh"), true)
+}
+
+///|
+#cfg(target="native")
+async test "executor: job container runs run steps via docker adapter" {
+  let workspace = prepare_workspace("executor-job-container")
+  ensure_dir(workspace + "/nested")
+  let docker_log_path = workspace + "/docker.log"
+  let docker_bin = test_support_prepare_fake_docker_bin(
+    workspace, docker_log_path,
+  )
+
+  let workflow = new_workflow(
+    "ci",
+    [
+      new_job(
+        "build",
+        [
+          new_run_step(
+            "show",
+            "printf '%s|%s|%s' \"$CONTAINER_FLAG\" \"$STEP_FLAG\" \"$PWD\"",
+            env={ "STEP_FLAG": "from-step" },
+          ),
+        ],
+        container=Some(
+          new_job_container_spec("alpine:3.21", env={
+            "CONTAINER_FLAG": "from-container",
+          }),
+        ),
+        defaults=new_run_defaults(working_directory=Some("nested")),
+      ),
+    ],
+    env={ "ACTION_RUNNER_DOCKER_BIN": docker_bin },
+  )
+
+  let lowered = lower_push_workflow(workflow)
+  inspect(lowered.errors, content="[]")
+
+  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  inspect(report.ok, content="true")
+  inspect(report.state, content="completed")
+  inspect(expect_step_report(report, "build/show").status, content="success")
+  inspect(
+    expect_task_report(report, "build/show").stdout,
+    content="from-container|from-step|" + workspace + "/nested",
+  )
+  let docker_log = @xfs.read_file_to_string(docker_log_path)
+  assert_eq(docker_log.contains("run\n--rm\n"), true)
+  assert_eq(docker_log.contains("alpine:3.21"), true)
+  assert_eq(docker_log.contains("-w\n" + workspace + "/nested\n"), true)
+}
+
+///|
+#cfg(target="native")
+async test "executor: job container shares docker network with job services" {
+  let workspace = prepare_workspace("executor-job-container-services-network")
+  let docker_log_path = workspace + "/docker.log"
+  let docker_bin = test_support_prepare_fake_docker_bin(
+    workspace, docker_log_path,
+  )
+
+  let workflow = new_workflow(
+    "ci",
+    [
+      new_job(
+        "build",
+        [new_run_step("show", "printf '%s' hi", shell=Some("bash"))],
+        container=Some(new_job_container_spec("alpine:3.21")),
+        services={
+          "postgres": new_job_container_spec(
+            "postgres:16",
+            ports=["5432:5432"],
+            options=Some("--health-cmd pg_isready"),
+          ),
+        },
+        defaults=new_run_defaults(shell=Some("bash")),
+      ),
+    ],
+    env={ "ACTION_RUNNER_DOCKER_BIN": docker_bin },
+  )
+
+  let lowered = lower_push_workflow(workflow)
+  inspect(lowered.errors, content="[]")
+
+  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  inspect(report.ok, content="true")
+  inspect(report.state, content="completed")
+  inspect(expect_task_report(report, "build/show").status, content="success")
+  let docker_log = @xfs.read_file_to_string(docker_log_path)
+  assert_eq(
+    docker_log.contains("network\ncreate\naction-runner-job-build\n"),
+    true,
+  )
+  assert_eq(docker_log.contains("--network\naction-runner-job-build\n"), true)
+  assert_eq(docker_log.contains("--network-alias\npostgres\n"), true)
+  assert_eq(docker_log.contains("network\nrm\naction-runner-job-build\n"), true)
+}
+
+///|
+#cfg(target="native")
+async test "executor: job services start before steps, expose ports context, and cleanup after job" {
+  let workspace = prepare_workspace("executor-job-services")
+  let docker_log_path = workspace + "/docker.log"
+  let docker_bin = test_support_prepare_fake_docker_bin(
+    workspace, docker_log_path,
+  )
+
+  let workflow = new_workflow(
+    "ci",
+    [
+      new_job(
+        "build",
+        [
+          new_run_step(
+            "show",
+            "printf '%s|%s' \"${{ job.services.postgres.ports[5432] }}\" \"$PORT_FROM_ENV\" > out.txt",
+            shell=Some("bash"),
+            env={ "PORT_FROM_ENV": "${{ job.services.postgres.ports[5432] }}" },
+          ),
+          new_run_step(
+            "verify",
+            "printf '|%s' yes >> out.txt",
+            shell=Some("bash"),
+            if_condition="${{ job.services.postgres.ports[5432] == '5432' }}",
+          ),
+        ],
+        services={
+          "postgres": new_job_container_spec(
+            "postgres:16",
+            env={ "POSTGRES_DB": "app" },
+            ports=["5432:5432"],
+            volumes=["db:/var/lib/postgresql/data"],
+            options=Some("--health-cmd pg_isready"),
+          ),
+        },
+        defaults=new_run_defaults(shell=Some("bash")),
+      ),
+    ],
+    env={ "ACTION_RUNNER_DOCKER_BIN": docker_bin },
+  )
+
+  let lowered = lower_push_workflow(workflow)
+  inspect(lowered.errors, content="[]")
+
+  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  inspect(report.ok, content="true")
+  inspect(report.state, content="completed")
+  inspect(expect_task_report(report, "build/show").status, content="success")
+  inspect(expect_task_report(report, "build/verify").status, content="success")
+  inspect(
+    @xfs.read_file_to_string(workspace + "/out.txt"),
+    content="5432|5432|yes",
+  )
+  let docker_log = @xfs.read_file_to_string(docker_log_path)
+  assert_eq(docker_log.contains("run\n-d\n--rm\n--name\n"), true)
+  assert_eq(docker_log.contains("action-runner-service-build__postgres"), true)
+  assert_eq(docker_log.contains("postgres:16"), true)
+  assert_eq(docker_log.contains("-e\nPOSTGRES_DB=app\n"), true)
+  assert_eq(docker_log.contains("-p\n5432:5432\n"), true)
+  assert_eq(docker_log.contains("-v\ndb:/var/lib/postgresql/data\n"), true)
+  assert_eq(docker_log.contains("--health-cmd\npg_isready\n"), true)
+  assert_eq(docker_log.contains("inspect\n--format\n"), true)
+  assert_eq(
+    docker_log.contains("rm\n-f\naction-runner-service-build__postgres\n"),
+    true,
+  )
+}
+
+///|
+#cfg(target="native")
+async test "executor: job services fail when health check becomes unhealthy" {
+  let workspace = prepare_workspace("executor-job-services-health-fail")
+  let docker_log_path = workspace + "/docker.log"
+  let docker_bin = test_support_prepare_fake_docker_bin(
+    workspace,
+    docker_log_path,
+    inspect_sequence="starting,unhealthy",
+  )
+
+  let workflow = new_workflow(
+    "ci",
+    [
+      new_job(
+        "build",
+        [new_run_step("show", "printf '%s' never", shell=Some("bash"))],
+        services={
+          "postgres": new_job_container_spec(
+            "postgres:16",
+            ports=["5432:5432"],
+            options=Some("--health-cmd pg_isready"),
+          ),
+        },
+        defaults=new_run_defaults(shell=Some("bash")),
+      ),
+    ],
+    env={ "ACTION_RUNNER_DOCKER_BIN": docker_bin },
+  )
+
+  let lowered = lower_push_workflow(workflow)
+  inspect(lowered.errors, content="[]")
+
+  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  inspect(report.ok, content="false")
+  inspect(report.state, content="partial_failed")
+  inspect(expect_task_report(report, "build/show").status, content="failed")
+  inspect(
+    expect_task_report(report, "build/show").stderr.contains("became unhealthy"),
+    content="true",
+  )
+  let docker_log = @xfs.read_file_to_string(docker_log_path)
+  assert_eq(docker_log.contains("inspect\n--format\n"), true)
+  assert_eq(
+    docker_log.contains("rm\n-f\naction-runner-service-build__postgres\n"),
+    true,
+  )
+}
+
+///|
+#cfg(target="native")
+async test "executor: job container runs docker action as sibling container" {
+  let workspace = prepare_workspace("executor-job-container-docker-action")
+  let docker_log_path = workspace + "/docker.log"
+  let docker_bin = test_support_prepare_fake_docker_bin(
+    workspace, docker_log_path,
+  )
+  let action_root = prepare_cached_github_action_root_for_executor(
+    "mizchi-test",
+    "docker-action-container",
+    "v1",
+    subpath="action",
+  )
+  let action_src =
+    #|name: Remote Docker In Container
+    #|runs:
+    #|  using: docker
+    #|  image: Dockerfile
+    #|  entrypoint: /bin/sh
+    #|  args:
+    #|    - -c
+    #|    - printf '%s' "${CONTAINER_FLAG:-}" > "$GITHUB_WORKSPACE/docker.txt"
+  @xfs.write_string_to_file(action_root + "/action.yml", action_src)
+  @xfs.write_string_to_file(action_root + "/Dockerfile", "FROM alpine:3.21\n")
+
+  let workflow = new_workflow(
+    "ci",
+    [
+      new_job(
+        "build",
+        [
+          new_uses_step(
+            "remote", "mizchi-test/docker-action-container/action@v1",
+          ),
+        ],
+        container=Some(
+          new_job_container_spec(
+            "node:20-bookworm",
+            env={ "CONTAINER_FLAG": "from-container" },
+            volumes=["cache:/cache"],
+          ),
+        ),
+      ),
+    ],
+    env={ "ACTION_RUNNER_DOCKER_BIN": docker_bin },
+  )
+
+  let lowered = lower_push_workflow_in_workspace(workflow, workspace)
+  inspect(lowered.errors, content="[]")
+
+  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  inspect(report.ok, content="true")
+  let remote = expect_task_report(report, "build/remote")
+  inspect(remote.status, content="success")
+  inspect(@xfs.read_file_to_string(workspace + "/docker.txt"), content="")
+  let docker_log = @xfs.read_file_to_string(docker_log_path)
+  assert_eq(docker_log.contains("-v\ncache:/cache\n"), true)
+  assert_eq(docker_log.contains("CONTAINER_FLAG=from-container"), false)
 }
 
 ///|

@@ -1,0 +1,8 @@
+id=docs-job-services-parse
+source=docs
+mode=supported
+kind=lower
+url=https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idservices
+docs_urls=https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idservices,https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idservicesservice_idimage,https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idservicesservice_idcredentials,https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idservicesservice_idenv,https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idservicesservice_idports,https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idservicesservice_idvolumes,https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idservicesservice_idoptions
+added_at=2026-03-13
+notes=job services mapping is parsed into contract and lowered into execution plan for native docker-backed lifecycle execution

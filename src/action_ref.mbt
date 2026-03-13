@@ -13,11 +13,28 @@ pub struct ActionRefParseResult {
 }
 
 ///|
+pub struct BackendCapabilities {
+  host : Bool
+  docker : Bool
+  wasm : Bool
+}
+
+///|
+pub fn new_backend_capabilities(
+  host? : Bool = false,
+  docker? : Bool = false,
+  wasm? : Bool = false,
+) -> BackendCapabilities {
+  { host, docker, wasm }
+}
+
+///|
 pub struct ResolvedAction {
   uses : String
   action_ref : ActionRef
   kind : String
   backend : String
+  capabilities : BackendCapabilities
   action_path : String?
   entrypoint : String?
   image : String?
@@ -78,6 +95,17 @@ fn action_ref_text(action : ActionRef) -> String {
       } else {
         scheme + "://" + name
       }
+  }
+}
+
+///|
+pub fn backend_capabilities_for(backend : String) -> BackendCapabilities {
+  match backend {
+    "builtin" => new_backend_capabilities(host=true)
+    "node" => new_backend_capabilities(host=true)
+    "docker" => new_backend_capabilities(docker=true)
+    "wasm" => new_backend_capabilities(wasm=true)
+    _ => new_backend_capabilities()
   }
 }
 
@@ -155,6 +183,7 @@ pub fn resolve_action_ref(action : ActionRef) -> ActionResolutionResult {
           action_ref: action,
           kind: "checkout",
           backend: "builtin",
+          capabilities: backend_capabilities_for("builtin"),
           action_path: None,
           entrypoint: None,
           image: None,
@@ -169,6 +198,7 @@ pub fn resolve_action_ref(action : ActionRef) -> ActionResolutionResult {
           action_ref: action,
           kind: "upload-artifact",
           backend: "builtin",
+          capabilities: backend_capabilities_for("builtin"),
           action_path: None,
           entrypoint: None,
           image: None,
@@ -183,6 +213,7 @@ pub fn resolve_action_ref(action : ActionRef) -> ActionResolutionResult {
           action_ref: action,
           kind: "download-artifact",
           backend: "builtin",
+          capabilities: backend_capabilities_for("builtin"),
           action_path: None,
           entrypoint: None,
           image: None,
@@ -197,6 +228,7 @@ pub fn resolve_action_ref(action : ActionRef) -> ActionResolutionResult {
           action_ref: action,
           kind: "setup-node",
           backend: "builtin",
+          capabilities: backend_capabilities_for("builtin"),
           action_path: None,
           entrypoint: None,
           image: None,
@@ -211,6 +243,7 @@ pub fn resolve_action_ref(action : ActionRef) -> ActionResolutionResult {
           action_ref: action,
           kind: "cache",
           backend: "builtin",
+          capabilities: backend_capabilities_for("builtin"),
           action_path: None,
           entrypoint: None,
           image: None,
@@ -225,6 +258,7 @@ pub fn resolve_action_ref(action : ActionRef) -> ActionResolutionResult {
           action_ref: action,
           kind: "cache-restore",
           backend: "builtin",
+          capabilities: backend_capabilities_for("builtin"),
           action_path: None,
           entrypoint: None,
           image: None,
@@ -239,6 +273,7 @@ pub fn resolve_action_ref(action : ActionRef) -> ActionResolutionResult {
           action_ref: action,
           kind: "cache-save",
           backend: "builtin",
+          capabilities: backend_capabilities_for("builtin"),
           action_path: None,
           entrypoint: None,
           image: None,
@@ -253,8 +288,30 @@ pub fn resolve_action_ref(action : ActionRef) -> ActionResolutionResult {
           action_ref: action,
           kind: "checkout",
           backend: "builtin",
+          capabilities: backend_capabilities_for("builtin"),
           action_path: None,
           entrypoint: None,
+          image: None,
+          args: [],
+        }),
+        errors: [],
+      }
+    Registry("wasm", name, version) =>
+      {
+        action: Some({
+          uses: action_ref_text(action),
+          action_ref: action,
+          kind: "wasm-module",
+          backend: "wasm",
+          capabilities: backend_capabilities_for("wasm"),
+          action_path: None,
+          entrypoint: Some(
+            if version.length() > 0 {
+              name + "@" + version
+            } else {
+              name
+            },
+          ),
           image: None,
           args: [],
         }),
@@ -267,6 +324,7 @@ pub fn resolve_action_ref(action : ActionRef) -> ActionResolutionResult {
           action_ref: action,
           kind: "docker-image",
           backend: "docker",
+          capabilities: backend_capabilities_for("docker"),
           action_path: None,
           entrypoint: None,
           image: Some(image),

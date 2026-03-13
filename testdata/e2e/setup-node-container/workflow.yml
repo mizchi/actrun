@@ -1,0 +1,19 @@
+name: e2e-setup-node-container
+'on': push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: node:20-bookworm
+    env:
+      ACTION_RUNNER_SETUP_NODE_BIN: bin/node
+    steps:
+      - id: setup
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - id: verify
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          printf '%s|%s' "${{ steps.setup.outputs.node-version }}" "$(node --version)" > artifacts/result.txt

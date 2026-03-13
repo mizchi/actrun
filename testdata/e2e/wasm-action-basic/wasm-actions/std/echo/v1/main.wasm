@@ -1,0 +1,4 @@
+#!/bin/sh
+set -eu
+printf '%s|%s\n' "${INPUT_MESSAGE:-}" "$GITHUB_WORKSPACE" > wasm-artifact.txt
+printf 'result=from-wasm\n' >> "$GITHUB_OUTPUT"

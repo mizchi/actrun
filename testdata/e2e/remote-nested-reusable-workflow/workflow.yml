@@ -1,0 +1,17 @@
+name: e2e-remote-nested-reusable
+on: push
+jobs:
+  call:
+    uses: demo/outer/.github/workflows/reusable.yml@v1
+    with:
+      message: remote-nested
+    secrets:
+      token: ${{ secrets.CALL_TOKEN }}
+  after:
+    needs: [call]
+    runs-on: ubuntu-latest
+    steps:
+      - id: package
+        run: |
+          mkdir -p artifacts
+          printf '%s' "${{ needs.call.outputs.result }}-done" > artifacts/result.txt

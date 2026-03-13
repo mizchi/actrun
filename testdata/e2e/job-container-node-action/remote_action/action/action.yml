@@ -1,0 +1,4 @@
+name: Remote Node In Container
+runs:
+  using: node20
+  main: main.sh

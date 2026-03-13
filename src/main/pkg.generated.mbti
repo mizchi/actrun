@@ -6,9 +6,33 @@ package "mizchi/action_runner/main"
 // Errors
 
 // Types and methods
+type ArtifactReadOptions
+
+type ArtifactReadParseResult
+
+type CacheListRecord
+
+type CacheReadOptions
+
+type CacheReadParseResult
+
 type CliOptions
 
 type CliParseResult
+
+type RunArtifactRecord
+
+type RunCacheRecord
+
+type RunJobRecord
+
+type RunReadOptions
+
+type RunReadParseResult
+
+type RunRecord
+
+type RunTaskFiles
 
 // Type aliases
 

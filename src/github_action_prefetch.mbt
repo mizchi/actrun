@@ -6,6 +6,13 @@ priv struct GitHubActionEnsureResult {
 }
 
 ///|
+priv struct GitHubRepoEnsureResult {
+  repo_root : String?
+  did_fetch : Bool
+  errors : Array[String]
+}
+
+///|
 fn prefetch_parent_dir(path : String) -> String {
   let parts : Array[String] = []
   for part in path.split("/") {
@@ -91,29 +98,21 @@ async fn prefetch_mkdir_p(path : String) -> Bool {
 }
 
 ///|
-async fn prefetch_ensure_cached_github_action_root(
+async fn prefetch_ensure_cached_github_repo_root(
   action_ref : ActionRef,
   git_bin : String?,
   github_base_url : String?,
-) -> GitHubActionEnsureResult {
+) -> GitHubRepoEnsureResult {
   match github_action_cache_layout(action_ref) {
-    None => { action_root: None, did_fetch: false, errors: [] }
+    None => { repo_root: None, did_fetch: false, errors: [] }
     Some(layout) =>
-      if has_action_manifest(layout.action_root) {
-        { action_root: Some(layout.action_root), did_fetch: false, errors: [] }
-      } else if @xfs.path_exists(layout.repo_root) {
-        {
-          action_root: None,
-          did_fetch: false,
-          errors: [
-            "action '\{layout.uses}' cache exists at '\{layout.repo_root}' but '\{layout.action_root}' is missing action.yml or action.yaml",
-          ],
-        }
+      if @xfs.path_exists(layout.repo_root) {
+        { repo_root: Some(layout.repo_root), did_fetch: false, errors: [] }
       } else {
         let parent_dir = prefetch_parent_dir(layout.repo_root)
         guard prefetch_mkdir_p(parent_dir) else {
           return {
-            action_root: None,
+            repo_root: None,
             did_fetch: false,
             errors: [
               "action '\{layout.uses}' failed to create cache dir '\{parent_dir}'",
@@ -140,7 +139,7 @@ async fn prefetch_ensure_cached_github_action_root(
         )
         if code != 0 {
           return {
-            action_root: None,
+            repo_root: None,
             did_fetch: false,
             errors: [
               "action '\{layout.uses}' git clone failed: " +
@@ -148,18 +147,67 @@ async fn prefetch_ensure_cached_github_action_root(
             ],
           }
         }
-        if has_action_manifest(layout.action_root) {
-          { action_root: Some(layout.action_root), did_fetch: true, errors: [] }
-        } else {
-          {
-            action_root: None,
-            did_fetch: true,
-            errors: [
-              "action '\{layout.uses}' fetched repo cache but '\{layout.action_root}' is missing action.yml or action.yaml",
-            ],
-          }
+        { repo_root: Some(layout.repo_root), did_fetch: true, errors: [] }
+      }
+  }
+}
+
+///|
+async fn prefetch_ensure_cached_github_action_root(
+  action_ref : ActionRef,
+  git_bin : String?,
+  github_base_url : String?,
+) -> GitHubActionEnsureResult {
+  let repo_result = prefetch_ensure_cached_github_repo_root(
+    action_ref, git_bin, github_base_url,
+  )
+  match github_action_cache_layout(action_ref) {
+    None => { action_root: None, did_fetch: false, errors: [] }
+    Some(layout) =>
+      if repo_result.errors.length() > 0 {
+        {
+          action_root: None,
+          did_fetch: repo_result.did_fetch,
+          errors: repo_result.errors,
+        }
+      } else if has_action_manifest(layout.action_root) {
+        {
+          action_root: Some(layout.action_root),
+          did_fetch: repo_result.did_fetch,
+          errors: [],
+        }
+      } else if @xfs.path_exists(layout.repo_root) {
+        {
+          action_root: None,
+          did_fetch: repo_result.did_fetch,
+          errors: [
+            "action '\{layout.uses}' cache exists at '\{layout.repo_root}' but '\{layout.action_root}' is missing action.yml or action.yaml",
+          ],
+        }
+      } else {
+        {
+          action_root: None,
+          did_fetch: repo_result.did_fetch,
+          errors: [
+            "action '\{layout.uses}' fetched repo cache but '\{layout.action_root}' is missing action.yml or action.yaml",
+          ],
         }
       }
+  }
+}
+
+///|
+fn prefetch_remote_reusable_workflow_ref(path : String) -> ActionRef? {
+  let parsed = parse_action_ref(path)
+  guard parsed.action is Some(action_ref) else { return None }
+  match action_ref {
+    GitHubRepo(_, _, version, Some(subpath)) =>
+      if version.length() > 0 && subpath.length() > 0 {
+        Some(action_ref)
+      } else {
+        None
+      }
+    _ => None
   }
 }
 
@@ -258,16 +306,89 @@ async fn prefetch_action_uses(
 }
 
 ///|
-pub async fn prefetch_workflow_github_actions_native(
+async fn prefetch_workflow_dependencies(
   workflow : WorkflowSpec,
   workspace_root : String,
-  git_bin? : String? = None,
-  github_base_url? : String? = None,
-) -> GitHubActionPrefetchResult {
-  let fetched : Array[String] = []
-  let errors : Array[String] = []
-  let visited : Map[String, Bool] = {}
+  git_bin : String?,
+  github_base_url : String?,
+  visited : Map[String, Bool],
+  fetched : Array[String],
+  errors : Array[String],
+) -> Unit {
   for job in workflow.jobs {
+    match job.reusable_workflow {
+      Some(path) =>
+        if path.has_prefix("./") {
+          let workflow_path = join_path(
+            workspace_root,
+            normalize_local_action_path(path),
+          )
+          let visit_key = "workflow-local:" + workflow_path
+          if visited.get(visit_key) is None {
+            visited[visit_key] = true
+            match read_text(workflow_path) {
+              Some(text) => {
+                let parsed = parse_workflow_yaml(text)
+                for err in parsed.errors {
+                  errors.push("reusable workflow '\{path}' parse error: " + err)
+                }
+                if parsed.workflow is Some(callee) {
+                  prefetch_workflow_dependencies(
+                    callee, workspace_root, git_bin, github_base_url, visited, fetched,
+                    errors,
+                  )
+                }
+              }
+              None => ()
+            }
+          }
+        } else {
+          match prefetch_remote_reusable_workflow_ref(path) {
+            Some(action_ref) =>
+              match github_action_cache_layout(action_ref) {
+                Some(layout) => {
+                  let visit_key = "workflow-github:" + layout.action_root
+                  if visited.get(visit_key) is None {
+                    visited[visit_key] = true
+                    let ensured = prefetch_ensure_cached_github_repo_root(
+                      action_ref, git_bin, github_base_url,
+                    )
+                    for err in ensured.errors {
+                      errors.push(err)
+                    }
+                    if ensured.did_fetch {
+                      fetched.push(layout.uses)
+                    }
+                    guard ensured.repo_root is Some(repo_root) else { () }
+                    match read_text(layout.action_root) {
+                      Some(text) => {
+                        let parsed = parse_workflow_yaml(text)
+                        for err in parsed.errors {
+                          errors.push(
+                            "reusable workflow '\{path}' parse error: " + err,
+                          )
+                        }
+                        if parsed.workflow is Some(callee) {
+                          prefetch_workflow_dependencies(
+                            callee, repo_root, git_bin, github_base_url, visited,
+                            fetched, errors,
+                          )
+                        }
+                      }
+                      None =>
+                        errors.push(
+                          "reusable workflow '\{path}' fetched repo cache but '\{layout.action_root}' is missing",
+                        )
+                    }
+                  }
+                }
+                None => ()
+              }
+            None => ()
+          }
+        }
+      None => ()
+    }
     for step in job.steps {
       if step.uses is Some(uses) {
         prefetch_action_uses(
@@ -283,5 +404,20 @@ pub async fn prefetch_workflow_github_actions_native(
       }
     }
   }
+}
+
+///|
+pub async fn prefetch_workflow_github_actions_native(
+  workflow : WorkflowSpec,
+  workspace_root : String,
+  git_bin? : String? = None,
+  github_base_url? : String? = None,
+) -> GitHubActionPrefetchResult {
+  let fetched : Array[String] = []
+  let errors : Array[String] = []
+  let visited : Map[String, Bool] = {}
+  prefetch_workflow_dependencies(
+    workflow, workspace_root, git_bin, github_base_url, visited, fetched, errors,
+  )
   { fetched, errors }
 }

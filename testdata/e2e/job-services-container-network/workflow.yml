@@ -1,0 +1,18 @@
+name: job-services-container-network
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: alpine:3.21
+    services:
+      postgres:
+        image: postgres:16
+        ports:
+          - "5432:5432"
+        options: --health-cmd pg_isready
+    steps:
+      - id: show
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          printf '%s' hi > artifacts/result.txt

@@ -178,7 +178,345 @@ test "compat docs: parse and reject workflow_call fixture" {
 
   inspect(fixture.id, content="docs-workflow-call-parse")
   inspect(workflow.workflow_call, content="true")
+  let workflow_call = workflow.workflow_call_spec.unwrap()
+  inspect(
+    workflow_call.inputs.get("target").unwrap().description,
+    content="target environment",
+  )
+  inspect(workflow_call.inputs.get("target").unwrap().required, content="true")
+  inspect(
+    workflow_call.inputs.get("target").unwrap().input_type,
+    content="string",
+  )
+  inspect(
+    workflow_call.outputs.get("build_id").unwrap().value,
+    content="${{ jobs.build.outputs.build_id }}",
+  )
+  inspect(workflow_call.secrets.get("token").unwrap().required, content="true")
   inspect(lowered.errors, content="[\"workflow_call is not supported in MVP\"]")
+}
+
+///|
+async test "compat docs: local reusable workflow executes callee jobs" {
+  let (fixture, workflow, workspace) = compat_prepare_suite_fixture_auto(
+    compat_docs_suite(),
+    "workflow-call-local",
+    copy_fixture=true,
+  )
+  let prev_secret = compat_docs_set_env_var(
+    "ACTION_RUNNER_SECRET_CALL_TOKEN", "s3cr3t",
+  )
+  let lowered = lower_push_workflow_in_workspace(workflow, workspace)
+  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  compat_docs_restore_env_var("ACTION_RUNNER_SECRET_CALL_TOKEN", prev_secret)
+
+  inspect(fixture.id, content="docs-workflow-call-local")
+  inspect(lowered.errors, content="[]")
+  inspect(report.state, content="completed")
+  inspect(
+    @xfs.read_file_to_string(workspace + "/artifacts/result.txt"),
+    content="reusable|s3cr3t-done",
+  )
+}
+
+///|
+async test "compat docs: local reusable workflow uses typed input defaults" {
+  let (fixture, workflow, workspace) = compat_prepare_suite_fixture_auto(
+    compat_docs_suite(),
+    "workflow-call-input-types",
+    copy_fixture=true,
+  )
+  let lowered = lower_push_workflow_in_workspace(workflow, workspace)
+  let report = execute_lowered_native(lowered, workspace_root=workspace)
+
+  inspect(fixture.id, content="docs-workflow-call-input-types")
+  inspect(lowered.errors, content="[]")
+  inspect(report.state, content="completed")
+  inspect(
+    @xfs.read_file_to_string(workspace + "/artifacts/result.txt"),
+    content="false|0|hello",
+  )
+}
+
+///|
+async test "compat docs: local reusable workflow caller matrix expands rows" {
+  let (fixture, workflow, workspace) = compat_prepare_suite_fixture_auto(
+    compat_docs_suite(),
+    "workflow-call-local-matrix",
+    copy_fixture=true,
+  )
+  let lowered = lower_push_workflow_in_workspace(workflow, workspace)
+  let report = execute_lowered_native(lowered, workspace_root=workspace)
+
+  inspect(fixture.id, content="docs-workflow-call-local-matrix")
+  inspect(lowered.errors, content="[]")
+  inspect(report.state, content="completed")
+  inspect(
+    @xfs.read_file_to_string(workspace + "/artifacts/result.txt"),
+    content="done",
+  )
+}
+
+///|
+async test "compat docs: local reusable workflow caller matrix aggregates outputs" {
+  let (fixture, workflow, workspace) = compat_prepare_suite_fixture_auto(
+    compat_docs_suite(),
+    "workflow-call-local-matrix-output",
+    copy_fixture=true,
+  )
+  let lowered = lower_push_workflow_in_workspace(workflow, workspace)
+  let report = execute_lowered_native(lowered, workspace_root=workspace)
+
+  inspect(fixture.id, content="docs-workflow-call-local-matrix-output")
+  inspect(lowered.errors, content="[]")
+  inspect(report.state, content="completed")
+  inspect(
+    @xfs.read_file_to_string(workspace + "/artifacts/result.txt"),
+    content="one",
+  )
+}
+
+///|
+async test "compat docs: nested local reusable workflow executes callee jobs" {
+  let (fixture, workflow, workspace) = compat_prepare_suite_fixture_auto(
+    compat_docs_suite(),
+    "workflow-call-nested-local",
+    copy_fixture=true,
+  )
+  let prev_secret = compat_docs_set_env_var(
+    "ACTION_RUNNER_SECRET_CALL_TOKEN", "s3cr3t",
+  )
+  let lowered = lower_push_workflow_in_workspace(workflow, workspace)
+  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  compat_docs_restore_env_var("ACTION_RUNNER_SECRET_CALL_TOKEN", prev_secret)
+
+  inspect(fixture.id, content="docs-workflow-call-nested-local")
+  inspect(lowered.errors, content="[]")
+  inspect(report.state, content="completed")
+  inspect(
+    @xfs.read_file_to_string(workspace + "/artifacts/result.txt"),
+    content="nested|s3cr3t-done",
+  )
+}
+
+///|
+async test "compat docs: local reusable workflow secrets inherit executes callee jobs" {
+  let (fixture, workflow, workspace) = compat_prepare_suite_fixture_auto(
+    compat_docs_suite(),
+    "workflow-call-secrets-inherit",
+    copy_fixture=true,
+  )
+  let prev_secret = compat_docs_set_env_var(
+    "ACTION_RUNNER_SECRET_TOKEN", "s3cr3t",
+  )
+  let lowered = lower_push_workflow_in_workspace(workflow, workspace)
+  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  compat_docs_restore_env_var("ACTION_RUNNER_SECRET_TOKEN", prev_secret)
+
+  inspect(fixture.id, content="docs-workflow-call-secrets-inherit")
+  inspect(lowered.errors, content="[]")
+  inspect(report.state, content="completed")
+  inspect(
+    @xfs.read_file_to_string(workspace + "/artifacts/result.txt"),
+    content="s3cr3t-done",
+  )
+}
+
+///|
+test "compat docs: parse and lower job container fixture" {
+  let (fixture, workflow, lowered) = compat_expect_lowered_docs_fixture(
+    "job-container-parse",
+  )
+
+  inspect(fixture.id, content="docs-job-container-parse")
+  let container = workflow.jobs[0].container.unwrap()
+  inspect(container.image, content="node:20-bookworm")
+  inspect(container.credentials.unwrap().username, content="octocat")
+  inspect(
+    container.credentials.unwrap().password,
+    content="${{ secrets.REGISTRY_TOKEN }}",
+  )
+  inspect(container.env.get("NODE_ENV").unwrap_or(""), content="test")
+  inspect(container.ports, content="[\"80\", \"5432\"]")
+  inspect(container.volumes, content="[\"cache:/cache\"]")
+  inspect(container.options.unwrap_or(""), content="--cpus 1")
+  inspect(lowered.errors, content="[]")
+  inspect(
+    lowered.plan.job_containers.get("build").unwrap().image,
+    content="node:20-bookworm",
+  )
+}
+
+///|
+#cfg(target="native")
+async test "compat docs: job container fixture executes run step via docker adapter" {
+  let (fixture, workflow, workspace) = compat_prepare_suite_fixture_auto(
+    compat_docs_suite(),
+    "job-container-basic",
+    copy_fixture=true,
+  )
+  let docker_log_path = workspace + "/docker.log"
+  let docker_bin = test_support_prepare_fake_docker_bin(
+    workspace, docker_log_path,
+  )
+  let workflow_env = workflow.env
+  workflow_env["ACTION_RUNNER_DOCKER_BIN"] = docker_bin
+  let runtime_workflow = new_workflow(
+    workflow.name,
+    workflow.jobs,
+    trigger=workflow.trigger,
+    workflow_call=workflow.workflow_call,
+    workflow_call_spec=workflow.workflow_call_spec,
+    permissions=workflow.permissions,
+    concurrency=workflow.concurrency,
+    env=workflow_env,
+    defaults=workflow.defaults,
+  )
+  if not(@xfs.path_exists(workspace + "/nested")) {
+    @xfs.create_dir(workspace + "/nested")
+  }
+  let lowered = lower_push_workflow_in_workspace(runtime_workflow, workspace)
+
+  inspect(fixture.id, content="docs-job-container-basic")
+  inspect(lowered.errors, content="[]")
+
+  let report = execute_lowered_native(
+    lowered,
+    workspace_root=workspace,
+    push_event=compat_push_event_fixture(fixture),
+  )
+  inspect(report.ok, content="true")
+  inspect(report.state, content="completed")
+  inspect(expect_step_report(report, "build/show").status, content="success")
+  inspect(
+    @xfs.read_file_to_string(workspace + "/out.txt"),
+    content="from-container|" + workspace + "/nested",
+  )
+  inspect(
+    @xfs.read_file_to_string(docker_log_path).contains("alpine:3.21"),
+    content="true",
+  )
+}
+
+///|
+test "compat docs: parse and lower job services fixture" {
+  let (fixture, workflow, lowered) = compat_expect_lowered_docs_fixture(
+    "job-services-parse",
+  )
+
+  inspect(fixture.id, content="docs-job-services-parse")
+  let service = workflow.jobs[0].services.get("postgres").unwrap()
+  inspect(service.image, content="postgres:16")
+  inspect(service.credentials.unwrap().username, content="octocat")
+  inspect(
+    service.credentials.unwrap().password,
+    content="${{ secrets.REGISTRY_TOKEN }}",
+  )
+  inspect(service.env.get("POSTGRES_DB").unwrap_or(""), content="app")
+  inspect(service.ports, content="[\"5432\"]")
+  inspect(service.volumes, content="[\"db:/var/lib/postgresql/data\"]")
+  inspect(service.options.unwrap_or(""), content="--health-cmd pg_isready")
+  inspect(lowered.errors, content="[]")
+  inspect(
+    lowered.plan.job_services.get("build").unwrap().get("postgres").unwrap().image,
+    content="postgres:16",
+  )
+}
+
+///|
+#cfg(target="native")
+async test "compat docs: job services ports context is available in step script, env, and if" {
+  let (fixture, workflow, workspace) = compat_prepare_suite_fixture_auto(
+    compat_docs_suite(),
+    "context-job-services-ports",
+    copy_fixture=true,
+  )
+  let docker_log_path = workspace + "/docker.log"
+  let docker_bin = test_support_prepare_fake_docker_bin(
+    workspace, docker_log_path,
+  )
+  let workflow_env = workflow.env
+  workflow_env["ACTION_RUNNER_DOCKER_BIN"] = docker_bin
+  let runtime_workflow = new_workflow(
+    workflow.name,
+    workflow.jobs,
+    trigger=workflow.trigger,
+    workflow_call=workflow.workflow_call,
+    workflow_call_spec=workflow.workflow_call_spec,
+    permissions=workflow.permissions,
+    concurrency=workflow.concurrency,
+    env=workflow_env,
+    defaults=workflow.defaults,
+  )
+
+  let report = execute_lowered_native(
+    lower_push_workflow(runtime_workflow),
+    workspace_root=workspace,
+    push_event=compat_push_event_fixture(fixture),
+  )
+  let show = compat_expect_task_report(report, "build/show")
+  let verify = compat_expect_task_report(report, "build/verify")
+
+  inspect(fixture.id, content="docs-context-job-services-ports")
+  inspect(report.ok, content="true")
+  inspect(show.status, content="success")
+  inspect(show.stdout, content="<5432|5432>")
+  inspect(verify.status, content="success")
+  inspect(verify.stdout, content="|yes")
+  inspect(
+    @xfs.read_file_to_string(docker_log_path).contains("inspect\n--format\n"),
+    content="true",
+  )
+}
+
+///|
+#cfg(target="native")
+async test "compat docs: job container shares docker network with services" {
+  let (fixture, workflow, workspace) = compat_prepare_suite_fixture_auto(
+    compat_docs_suite(),
+    "job-services-container-network",
+    copy_fixture=true,
+  )
+  let docker_log_path = workspace + "/docker.log"
+  let docker_bin = test_support_prepare_fake_docker_bin(
+    workspace, docker_log_path,
+  )
+  let workflow_env = workflow.env
+  workflow_env["ACTION_RUNNER_DOCKER_BIN"] = docker_bin
+  let runtime_workflow = new_workflow(
+    workflow.name,
+    workflow.jobs,
+    trigger=workflow.trigger,
+    workflow_call=workflow.workflow_call,
+    workflow_call_spec=workflow.workflow_call_spec,
+    permissions=workflow.permissions,
+    concurrency=workflow.concurrency,
+    env=workflow_env,
+    defaults=workflow.defaults,
+  )
+
+  let report = execute_lowered_native(
+    lower_push_workflow(runtime_workflow),
+    workspace_root=workspace,
+    push_event=compat_push_event_fixture(fixture),
+  )
+
+  inspect(fixture.id, content="docs-job-services-container-network")
+  inspect(report.ok, content="true")
+  inspect(
+    compat_expect_task_report(report, "build/show").status,
+    content="success",
+  )
+  let docker_log = @xfs.read_file_to_string(docker_log_path)
+  inspect(
+    docker_log.contains("network\ncreate\naction-runner-job-build\n"),
+    content="true",
+  )
+  inspect(docker_log.contains("--network-alias\npostgres\n"), content="true")
+  inspect(
+    docker_log.contains("network\nrm\naction-runner-job-build\n"),
+    content="true",
+  )
 }
 
 ///|

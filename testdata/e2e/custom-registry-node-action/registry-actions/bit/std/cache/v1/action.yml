@@ -1,0 +1,7 @@
+name: cache
+inputs:
+  message:
+    default: hello
+runs:
+  using: node20
+  main: index.sh

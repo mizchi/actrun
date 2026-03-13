@@ -1,0 +1,21 @@
+name: job-container-parse
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: node:20-bookworm
+      credentials:
+        username: octocat
+        password: ${{ secrets.REGISTRY_TOKEN }}
+      env:
+        NODE_ENV: test
+      ports:
+        - "80"
+        - "5432"
+      volumes:
+        - "cache:/cache"
+      options: --cpus 1
+    steps:
+      - id: show
+        run: printf '%s' hi

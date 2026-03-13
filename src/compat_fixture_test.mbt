@@ -328,6 +328,11 @@ fn compat_copy_tree(src : String, dst : String) -> Unit raise {
         compat_join_path(dst, entry),
       )
     }
+    let github_dir = compat_join_path(src, ".github")
+    if @xfs.path_exists(github_dir) &&
+      not(@xfs.path_exists(compat_join_path(dst, ".github"))) {
+      compat_copy_tree(github_dir, compat_join_path(dst, ".github"))
+    }
   } else {
     @xfs.write_bytes_to_file(dst, @xfs.read_file_to_bytes(src))
   }
@@ -696,6 +701,39 @@ test "compat fixture: act fixtures include official docs refs" {
     inspect(fixture.docs_urls.length() > 0, content="true")
     for url in fixture.docs_urls {
       inspect(url.has_prefix("https://docs.github.com/"), content="true")
+    }
+  }
+}
+
+///|
+test "compat fixture: upstream fixtures are classified with stable metadata" {
+  let fixture_dirs = compat_fixture_dirs("testdata/upstream")
+  let ids : Map[String, Bool] = {}
+
+  inspect(fixture_dirs.length() > 0, content="true")
+  for dir in fixture_dirs {
+    let fixture = compat_expect_fixture(load_compat_fixture(dir))
+    let valid_source = fixture.source == "actions-languageservices" ||
+      fixture.source == "nektos-act"
+    let valid_mode = fixture.mode == "supported" ||
+      fixture.mode == "unsupported" ||
+      fixture.mode == "known_diff"
+
+    inspect(valid_source, content="true")
+    inspect(valid_mode, content="true")
+    inspect(fixture.url.has_prefix("https://"), content="true")
+    inspect(fixture.notes.length() > 0, content="true")
+    inspect(ids.get(fixture.id) is None, content="true")
+    ids[fixture.id] = true
+
+    if fixture.mode != "supported" {
+      inspect(fixture.notes.length() > 0, content="true")
+    }
+    if fixture.source == "nektos-act" {
+      inspect(fixture.docs_urls.length() > 0, content="true")
+      for url in fixture.docs_urls {
+        inspect(url.has_prefix("https://docs.github.com/"), content="true")
+      }
     }
   }
 }

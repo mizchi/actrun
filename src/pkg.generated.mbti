@@ -7,6 +7,8 @@ import {
 }
 
 // Values
+pub fn backend_capabilities_for(String) -> BackendCapabilities
+
 pub fn compute_bit_changed_paths(&@types.RepoFileSystem, String, PushEvent) -> BitChangedPathsResult
 
 pub fn compute_bit_changed_paths_native(String, PushEvent) -> BitChangedPathsResult
@@ -29,9 +31,15 @@ pub fn materialize_bit_push_workspace(&@types.FileSystem, &@types.RepoFileSystem
 
 pub fn materialize_bit_push_workspace_native(String, PushEvent, String, remote_url? : String) -> BitWorkspaceResult
 
+pub fn new_backend_capabilities(host? : Bool, docker? : Bool, wasm? : Bool) -> BackendCapabilities
+
 pub fn new_concurrency_spec(String, cancel_in_progress? : String?) -> ConcurrencySpec
 
-pub fn new_job(String, Array[StepSpec], name? : String, if_condition? : String, needs? : Array[String], outputs? : Map[String, String], permissions? : PermissionsSpec?, concurrency? : ConcurrencySpec?, runs_on? : Array[String], env? : Map[String, String], defaults? : RunDefaults, matrix? : JobMatrixSpec?, reusable_workflow? : String?, container_image? : String?) -> JobSpec
+pub fn new_job(String, Array[StepSpec], name? : String, if_condition? : String, needs? : Array[String], outputs? : Map[String, String], permissions? : PermissionsSpec?, concurrency? : ConcurrencySpec?, runs_on? : Array[String], env? : Map[String, String], defaults? : RunDefaults, matrix? : JobMatrixSpec?, reusable_workflow? : String?, reusable_workflow_with? : Map[String, String], reusable_workflow_secrets? : Map[String, String], reusable_workflow_inherit_secrets? : Bool, container? : JobContainerSpec?, container_image? : String?, services? : Map[String, JobContainerSpec]) -> JobSpec
+
+pub fn new_job_container_credentials_spec(String, String) -> JobContainerCredentialsSpec
+
+pub fn new_job_container_spec(String, credentials? : JobContainerCredentialsSpec?, env? : Map[String, String], ports? : Array[String], volumes? : Array[String], options? : String?) -> JobContainerSpec
 
 pub fn new_job_matrix(Array[Map[String, String]], fail_fast? : Bool, max_parallel? : Int?) -> JobMatrixSpec
 
@@ -51,7 +59,15 @@ pub fn new_task_plan(String, String, String, String, String, String, String, Str
 
 pub fn new_uses_step(String, String, name? : String, env? : Map[String, String], if_condition? : String, with_values? : Map[String, String], continue_on_error? : String) -> StepSpec
 
-pub fn new_workflow(String, Array[JobSpec], trigger? : PushTrigger, workflow_call? : Bool, permissions? : PermissionsSpec?, concurrency? : ConcurrencySpec?, env? : Map[String, String], defaults? : RunDefaults) -> WorkflowSpec
+pub fn new_workflow(String, Array[JobSpec], trigger? : PushTrigger, workflow_call? : Bool, workflow_call_spec? : WorkflowCallSpec?, permissions? : PermissionsSpec?, concurrency? : ConcurrencySpec?, env? : Map[String, String], defaults? : RunDefaults) -> WorkflowSpec
+
+pub fn new_workflow_call_input_spec(description? : String, required? : Bool, default_value? : String?, input_type? : String) -> WorkflowCallInputSpec
+
+pub fn new_workflow_call_output_spec(description? : String, value? : String) -> WorkflowCallOutputSpec
+
+pub fn new_workflow_call_secret_spec(required? : Bool) -> WorkflowCallSecretSpec
+
+pub fn new_workflow_call_spec(inputs? : Map[String, WorkflowCallInputSpec], outputs? : Map[String, WorkflowCallOutputSpec], secrets? : Map[String, WorkflowCallSecretSpec]) -> WorkflowCallSpec
 
 pub fn parse_action_ref(String) -> ActionRefParseResult
 
@@ -87,6 +103,12 @@ pub struct ActionResolutionResult {
   errors : Array[String]
 }
 
+pub struct BackendCapabilities {
+  host : Bool
+  docker : Bool
+  wasm : Bool
+}
+
 pub struct BitChangedPathsResult {
   paths : Array[String]
   base_sha : String
@@ -119,13 +141,31 @@ pub struct ExecutionPlan {
   job_if_conditions : Map[String, String]
   job_needs : Map[String, Array[String]]
   job_need_targets : Map[String, Map[String, Array[String]]]
+  job_virtual_targets : Map[String, Array[String]]
+  job_virtual_output_targets : Map[String, Map[String, Array[String]]]
   job_matrix_groups : Map[String, String]
   job_matrix_fail_fast : Map[String, Bool]
+  job_containers : Map[String, JobContainerSpec]
+  job_services : Map[String, Map[String, JobContainerSpec]]
 }
 
 pub struct GitHubActionPrefetchResult {
   fetched : Array[String]
   errors : Array[String]
+}
+
+pub struct JobContainerCredentialsSpec {
+  username : String
+  password : String
+}
+
+pub struct JobContainerSpec {
+  image : String
+  credentials : JobContainerCredentialsSpec?
+  env : Map[String, String]
+  ports : Array[String]
+  volumes : Array[String]
+  options : String?
 }
 
 pub struct JobMatrixSpec {
@@ -148,6 +188,11 @@ pub struct JobSpec {
   steps : Array[StepSpec]
   matrix : JobMatrixSpec?
   reusable_workflow : String?
+  reusable_workflow_with : Map[String, String]
+  reusable_workflow_secrets : Map[String, String]
+  reusable_workflow_inherit_secrets : Bool
+  services : Map[String, JobContainerSpec]
+  container : JobContainerSpec?
   container_image : String?
 }
 
@@ -198,6 +243,7 @@ pub struct ResolvedAction {
   action_ref : ActionRef
   kind : String
   backend : String
+  capabilities : BackendCapabilities
   action_path : String?
   entrypoint : String?
   image : String?
@@ -253,6 +299,28 @@ pub struct TaskRunReport {
   summary : String
 }
 
+pub struct WorkflowCallInputSpec {
+  description : String
+  required : Bool
+  default_value : String?
+  input_type : String
+}
+
+pub struct WorkflowCallOutputSpec {
+  description : String
+  value : String
+}
+
+pub struct WorkflowCallSecretSpec {
+  required : Bool
+}
+
+pub struct WorkflowCallSpec {
+  inputs : Map[String, WorkflowCallInputSpec]
+  outputs : Map[String, WorkflowCallOutputSpec]
+  secrets : Map[String, WorkflowCallSecretSpec]
+}
+
 pub struct WorkflowParseResult {
   workflow : WorkflowSpec?
   errors : Array[String]
@@ -271,6 +339,7 @@ pub struct WorkflowSpec {
   name : String
   trigger : PushTrigger
   workflow_call : Bool
+  workflow_call_spec : WorkflowCallSpec?
   permissions : PermissionsSpec?
   concurrency : ConcurrencySpec?
   env : Map[String, String]

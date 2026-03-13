@@ -1,0 +1,52 @@
+name: e2e-cache-auto-save-container
+
+on:
+  push:
+    paths:
+      - workflow.yml
+
+jobs:
+  save:
+    runs-on: ubuntu-latest
+    container:
+      image: alpine:3.21
+    steps:
+      - id: prepare
+        name: Prepare cache
+        run: |
+          mkdir -p cache-dir
+          printf '%s' ocean > cache-dir/value.txt
+      - id: cache
+        name: Cache
+        uses: actions/cache@v4
+        with:
+          key: compat-cache-auto-save-container-v1
+          path: cache-dir
+      - id: check-miss
+        name: Verify miss output
+        run: |
+          test -z "${{ steps.cache.outputs.cache-hit }}"
+
+  restore:
+    needs:
+      - save
+    runs-on: ubuntu-latest
+    container:
+      image: alpine:3.21
+    steps:
+      - id: clear
+        name: Clear path
+        run: rm -rf cache-dir
+      - id: cache
+        name: Cache
+        uses: actions/cache@v4
+        with:
+          key: compat-cache-auto-save-container-v1
+          path: cache-dir
+      - id: build-report
+        name: Build artifact
+        run: |
+          mkdir -p artifacts
+          printf '%s|%s' \
+            "${{ steps.cache.outputs.cache-hit }}" \
+            "$(cat cache-dir/value.txt)" > artifacts/result.txt

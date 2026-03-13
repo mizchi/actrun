@@ -1,0 +1,20 @@
+name: local-reusable-workflow-matrix
+on: push
+jobs:
+  call:
+    strategy:
+      matrix:
+        message: [one, two]
+    uses: ./.github/workflows/reusable.yml
+    with:
+      message: ${{ matrix.message }}
+  after:
+    needs: [call]
+    runs-on: ubuntu-latest
+    steps:
+      - id: verify
+        run: |
+          test -f one.txt
+          test -f two.txt
+          mkdir -p artifacts
+          printf '%s' done > artifacts/result.txt

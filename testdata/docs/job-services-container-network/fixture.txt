@@ -1,0 +1,8 @@
+id=docs-job-services-container-network
+source=docs
+mode=supported
+kind=run
+url=https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idservices
+docs_urls=https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idcontainer;https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idservices
+added_at=2026-03-13
+notes=job container and services share a docker network so service name resolution can work through service_id aliases

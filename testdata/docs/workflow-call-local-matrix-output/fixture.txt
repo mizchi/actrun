@@ -1,0 +1,8 @@
+id=docs-workflow-call-local-matrix-output
+source=docs
+mode=supported
+kind=run
+url=https://docs.github.com/en/actions/reference/workflows-and-actions/reusing-workflow-configurations#using-outputs-from-a-reusable-workflow
+docs_urls=https://docs.github.com/en/actions/reference/workflows-and-actions/reusing-workflow-configurations#using-outputs-from-a-reusable-workflow
+added_at=2026-03-13
+notes=matrix reusable workflow outputs use the last successful completing row that sets a non-empty value

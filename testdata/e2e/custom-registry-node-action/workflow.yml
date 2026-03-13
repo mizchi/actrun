@@ -1,0 +1,13 @@
+name: e2e-custom-registry-node
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: setup
+        uses: bit://std/cache@v1
+        with:
+          message: from-registry
+      - id: verify
+        run: printf '%s' '${{ steps.setup.outputs.result }}' > verify.txt
+        shell: bash

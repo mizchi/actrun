@@ -1,0 +1,14 @@
+name: e2e-reusable-inherit
+on: push
+jobs:
+  call:
+    uses: ./.github/workflows/reusable.yml
+    secrets: inherit
+  after:
+    needs: [call]
+    runs-on: ubuntu-latest
+    steps:
+      - id: package
+        run: |
+          mkdir -p artifacts
+          printf '%s' "${{ needs.call.outputs.result }}-done" > artifacts/result.txt

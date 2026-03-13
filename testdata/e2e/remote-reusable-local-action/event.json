@@ -1,0 +1,18 @@
+{
+  "ref": "refs/heads/main",
+  "before": "0000000000000000000000000000000000000000",
+  "after": "1111111111111111111111111111111111111111",
+  "head_commit": {
+    "added": [
+      ".github/workflows/ci.yml"
+    ],
+    "modified": [],
+    "removed": []
+  },
+  "repository": {
+    "full_name": "mizchi/action_runner"
+  },
+  "sender": {
+    "login": "mizchi"
+  }
+}

@@ -1,0 +1,21 @@
+name: job-services-parse
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        credentials:
+          username: octocat
+          password: ${{ secrets.REGISTRY_TOKEN }}
+        env:
+          POSTGRES_DB: app
+        ports:
+          - "5432"
+        volumes:
+          - "db:/var/lib/postgresql/data"
+        options: --health-cmd pg_isready
+    steps:
+      - id: show
+        run: printf '%s' hi

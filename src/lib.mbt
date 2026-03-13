@@ -16,6 +16,48 @@ pub struct ConcurrencySpec {
 }
 
 ///|
+pub struct WorkflowCallInputSpec {
+  description : String
+  required : Bool
+  default_value : String?
+  input_type : String
+}
+
+///|
+pub struct WorkflowCallOutputSpec {
+  description : String
+  value : String
+}
+
+///|
+pub struct WorkflowCallSecretSpec {
+  required : Bool
+}
+
+///|
+pub struct JobContainerCredentialsSpec {
+  username : String
+  password : String
+}
+
+///|
+pub struct JobContainerSpec {
+  image : String
+  credentials : JobContainerCredentialsSpec?
+  env : Map[String, String]
+  ports : Array[String]
+  volumes : Array[String]
+  options : String?
+}
+
+///|
+pub struct WorkflowCallSpec {
+  inputs : Map[String, WorkflowCallInputSpec]
+  outputs : Map[String, WorkflowCallOutputSpec]
+  secrets : Map[String, WorkflowCallSecretSpec]
+}
+
+///|
 pub fn new_permissions_spec(
   values? : Map[String, String] = {},
 ) -> PermissionsSpec {
@@ -28,6 +70,60 @@ pub fn new_concurrency_spec(
   cancel_in_progress? : String? = None,
 ) -> ConcurrencySpec {
   { group, cancel_in_progress }
+}
+
+///|
+pub fn new_workflow_call_input_spec(
+  description? : String = "",
+  required? : Bool = false,
+  default_value? : String? = None,
+  input_type? : String = "",
+) -> WorkflowCallInputSpec {
+  { description, required, default_value, input_type }
+}
+
+///|
+pub fn new_workflow_call_output_spec(
+  description? : String = "",
+  value? : String = "",
+) -> WorkflowCallOutputSpec {
+  { description, value }
+}
+
+///|
+pub fn new_workflow_call_secret_spec(
+  required? : Bool = false,
+) -> WorkflowCallSecretSpec {
+  { required, }
+}
+
+///|
+pub fn new_job_container_credentials_spec(
+  username : String,
+  password : String,
+) -> JobContainerCredentialsSpec {
+  { username, password }
+}
+
+///|
+pub fn new_job_container_spec(
+  image : String,
+  credentials? : JobContainerCredentialsSpec? = None,
+  env? : Map[String, String] = {},
+  ports? : Array[String] = [],
+  volumes? : Array[String] = [],
+  options? : String? = None,
+) -> JobContainerSpec {
+  { image, credentials, env, ports, volumes, options }
+}
+
+///|
+pub fn new_workflow_call_spec(
+  inputs? : Map[String, WorkflowCallInputSpec] = {},
+  outputs? : Map[String, WorkflowCallOutputSpec] = {},
+  secrets? : Map[String, WorkflowCallSecretSpec] = {},
+) -> WorkflowCallSpec {
+  { inputs, outputs, secrets }
 }
 
 ///|
@@ -157,6 +253,11 @@ pub struct JobSpec {
   steps : Array[StepSpec]
   matrix : JobMatrixSpec?
   reusable_workflow : String?
+  reusable_workflow_with : Map[String, String]
+  reusable_workflow_secrets : Map[String, String]
+  reusable_workflow_inherit_secrets : Bool
+  services : Map[String, JobContainerSpec]
+  container : JobContainerSpec?
   container_image : String?
 }
 
@@ -191,8 +292,25 @@ pub fn new_job(
   defaults? : RunDefaults = new_run_defaults(),
   matrix? : JobMatrixSpec? = None,
   reusable_workflow? : String? = None,
+  reusable_workflow_with? : Map[String, String] = {},
+  reusable_workflow_secrets? : Map[String, String] = {},
+  reusable_workflow_inherit_secrets? : Bool = false,
+  container? : JobContainerSpec? = None,
   container_image? : String? = None,
+  services? : Map[String, JobContainerSpec] = {},
 ) -> JobSpec {
+  let actual_container = match container {
+    Some(spec) => Some(spec)
+    None =>
+      match container_image {
+        Some(image) => Some(new_job_container_spec(image))
+        None => None
+      }
+  }
+  let actual_container_image = match actual_container {
+    Some(spec) => Some(spec.image)
+    None => None
+  }
   {
     id,
     name,
@@ -207,7 +325,12 @@ pub fn new_job(
     steps,
     matrix,
     reusable_workflow,
-    container_image,
+    reusable_workflow_with,
+    reusable_workflow_secrets,
+    reusable_workflow_inherit_secrets,
+    services,
+    container: actual_container,
+    container_image: actual_container_image,
   }
 }
 
@@ -216,6 +339,7 @@ pub struct WorkflowSpec {
   name : String
   trigger : PushTrigger
   workflow_call : Bool
+  workflow_call_spec : WorkflowCallSpec?
   permissions : PermissionsSpec?
   concurrency : ConcurrencySpec?
   env : Map[String, String]
@@ -229,6 +353,7 @@ pub fn new_workflow(
   jobs : Array[JobSpec],
   trigger? : PushTrigger = new_push_trigger(),
   workflow_call? : Bool = false,
+  workflow_call_spec? : WorkflowCallSpec? = None,
   permissions? : PermissionsSpec? = None,
   concurrency? : ConcurrencySpec? = None,
   env? : Map[String, String] = {},
@@ -238,6 +363,7 @@ pub fn new_workflow(
     name,
     trigger,
     workflow_call,
+    workflow_call_spec,
     permissions,
     concurrency,
     env,
@@ -309,8 +435,12 @@ pub struct ExecutionPlan {
   job_if_conditions : Map[String, String]
   job_needs : Map[String, Array[String]]
   job_need_targets : Map[String, Map[String, Array[String]]]
+  job_virtual_targets : Map[String, Array[String]]
+  job_virtual_output_targets : Map[String, Map[String, Array[String]]]
   job_matrix_groups : Map[String, String]
   job_matrix_fail_fast : Map[String, Bool]
+  job_containers : Map[String, JobContainerSpec]
+  job_services : Map[String, Map[String, JobContainerSpec]]
 }
 
 ///|

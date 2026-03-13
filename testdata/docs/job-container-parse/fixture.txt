@@ -1,0 +1,8 @@
+id=docs-job-container-parse
+source=docs
+mode=supported
+kind=lower
+url=https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idcontainer
+docs_urls=https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idcontainer,https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idcontainerimage,https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idcontainercredentials,https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idcontainerenv,https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idcontainerports,https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idcontainervolumes,https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idcontaineroptions
+added_at=2026-03-13
+notes=job container mapping is parsed into contract and lowered into job-level container metadata

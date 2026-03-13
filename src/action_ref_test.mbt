@@ -54,8 +54,12 @@ test "action ref: resolve builtin checkout aliases" {
 
   inspect(github_checkout.kind, content="checkout")
   inspect(github_checkout.backend, content="builtin")
+  inspect(github_checkout.capabilities.host, content="true")
+  inspect(github_checkout.capabilities.docker, content="false")
+  inspect(github_checkout.capabilities.wasm, content="false")
   inspect(builtin_checkout.kind, content="checkout")
   inspect(builtin_checkout.backend, content="builtin")
+  inspect(builtin_checkout.capabilities.host, content="true")
 }
 
 ///|
@@ -69,8 +73,10 @@ test "action ref: resolve builtin artifact aliases" {
 
   inspect(upload.kind, content="upload-artifact")
   inspect(upload.backend, content="builtin")
+  inspect(upload.capabilities.host, content="true")
   inspect(download.kind, content="download-artifact")
   inspect(download.backend, content="builtin")
+  inspect(download.capabilities.host, content="true")
 }
 
 ///|
@@ -80,8 +86,10 @@ test "action ref: resolve builtin cache aliases" {
 
   inspect(restore.kind, content="cache-restore")
   inspect(restore.backend, content="builtin")
+  inspect(restore.capabilities.host, content="true")
   inspect(save.kind, content="cache-save")
   inspect(save.backend, content="builtin")
+  inspect(save.capabilities.host, content="true")
 }
 
 ///|
@@ -90,6 +98,7 @@ test "action ref: resolve builtin cache main alias" {
 
   inspect(cache.kind, content="cache")
   inspect(cache.backend, content="builtin")
+  inspect(cache.capabilities.host, content="true")
 }
 
 ///|
@@ -98,6 +107,7 @@ test "action ref: resolve builtin setup-node alias" {
 
   inspect(setup.kind, content="setup-node")
   inspect(setup.backend, content="builtin")
+  inspect(setup.capabilities.host, content="true")
 }
 
 ///|
@@ -108,9 +118,38 @@ test "action ref: resolve docker image action" {
 
   inspect(docker_action.kind, content="docker-image")
   inspect(docker_action.backend, content="docker")
+  inspect(docker_action.capabilities.host, content="false")
+  inspect(docker_action.capabilities.docker, content="true")
+  inspect(docker_action.capabilities.wasm, content="false")
   inspect(docker_action.uses, content="docker://alpine:3.21")
   inspect(docker_action.image.unwrap_or(""), content="alpine:3.21")
   inspect(docker_action.args, content="[]")
+}
+
+///|
+test "action ref: resolve wasm registry action" {
+  let wasm_action = expect_resolved(resolve_action_uses("wasm://std/echo@v1"))
+
+  inspect(wasm_action.kind, content="wasm-module")
+  inspect(wasm_action.backend, content="wasm")
+  inspect(wasm_action.capabilities.host, content="false")
+  inspect(wasm_action.capabilities.docker, content="false")
+  inspect(wasm_action.capabilities.wasm, content="true")
+  inspect(wasm_action.entrypoint.unwrap_or(""), content="std/echo@v1")
+}
+
+///|
+test "action ref: backend capability presets include wasm" {
+  let host = backend_capabilities_for("node")
+  let docker = backend_capabilities_for("docker")
+  let wasm = backend_capabilities_for("wasm")
+
+  inspect(host.host, content="true")
+  inspect(host.docker, content="false")
+  inspect(docker.host, content="false")
+  inspect(docker.docker, content="true")
+  inspect(wasm.host, content="false")
+  inspect(wasm.wasm, content="true")
 }
 
 ///|

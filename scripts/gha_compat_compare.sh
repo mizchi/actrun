@@ -22,6 +22,7 @@ compat_key="${ACTION_RUNNER_COMPAT_CACHE_KEY:-}"
 compat_node_version="${ACTION_RUNNER_COMPAT_NODE_VERSION:-}"
 seed_license=0
 seed_git_history=0
+extra_workflow_copy=""
 
 case "$workflow_file" in
   compat-checkout-artifact.yml)
@@ -102,6 +103,10 @@ case "$workflow_file" in
       compat_node_version="$(node --version | sed 's/^v//')"
     fi
     ;;
+  compat-workflow-call-secrets-inherit.yml)
+    report_name="compat-workflow-call-secrets-inherit-report"
+    extra_workflow_copy=".github/workflows/__compat_reusable_secrets_inherit.yml"
+    ;;
   *)
     echo "unsupported compat workflow: $workflow_file" >&2
     exit 1
@@ -121,6 +126,12 @@ fi
 rm -rf "$local_root"
 mkdir -p "$(dirname "$workflow_dst")"
 cp "$workflow_src" "$workflow_dst"
+if [ -n "$extra_workflow_copy" ]; then
+  extra_src="$repo_root/$extra_workflow_copy"
+  extra_dst="$workspace_root/$extra_workflow_copy"
+  mkdir -p "$(dirname "$extra_dst")"
+  cp "$extra_src" "$extra_dst"
+fi
 cp "$repo_root/README.md" "$workspace_root/README.md"
 if [ "$seed_license" = "1" ]; then
   cp "$repo_root/LICENSE" "$workspace_root/LICENSE"
@@ -179,7 +190,12 @@ if [ ! -x "$cli_bin" ]; then
   exit 1
 fi
 
-"$cli_bin" "$workflow_dst" --event "$event_path" >/dev/null
+if [ "$workflow_file" = "compat-workflow-call-secrets-inherit.yml" ]; then
+  ACTION_RUNNER_SECRET_COMPAT_SECRET="compat-local-token" \
+    "$cli_bin" "$workflow_dst" --event "$event_path" >/dev/null
+else
+  "$cli_bin" "$workflow_dst" --event "$event_path" >/dev/null
+fi
 
 local_report="$workspace_root/report/result.txt"
 remote_report="$download_dir/$report_name/result.txt"

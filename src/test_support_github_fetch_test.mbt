@@ -74,6 +74,36 @@ async fn test_support_prepare_fake_github_git_bin(
 
 ///|
 #cfg(target="native")
+async fn test_support_prepare_fake_git_bin_from_source(
+  workspace : String,
+  source_dir : String,
+  log_path : String,
+) -> String {
+  let bin_dir = workspace + "/bin"
+  test_support_ensure_dir(bin_dir)
+  let git_path = bin_dir + "/git"
+  let absolute_log_path = test_support_absolute_path(log_path)
+  let absolute_source_dir = test_support_absolute_path(source_dir)
+  let script = "#!/bin/sh\n" +
+    "set -eu\n" +
+    "printf '%s\\n' \"$@\" >> '" +
+    absolute_log_path +
+    "'\n" +
+    "dest=\"\"\n" +
+    "for arg in \"$@\"; do\n" +
+    "  dest=\"$arg\"\n" +
+    "done\n" +
+    "mkdir -p \"$dest\"\n" +
+    "cp -R '" +
+    absolute_source_dir +
+    "/.' \"$dest/\"\n"
+  @xfs.write_string_to_file(git_path, script)
+  test_support_make_executable(git_path)
+  test_support_absolute_path(git_path)
+}
+
+///|
+#cfg(target="native")
 async fn test_support_prepare_fake_node_bin(
   workspace : String,
   log_path : String,
@@ -132,15 +162,44 @@ async fn test_support_prepare_fake_version_node_bin(
 
 ///|
 #cfg(target="native")
-async fn test_support_prepare_fake_docker_bin(
+async fn test_support_prepare_fake_wasm_bin(
   workspace : String,
   log_path : String,
 ) -> String {
   let bin_dir = workspace + "/bin"
   test_support_ensure_dir(bin_dir)
-  let docker_path = bin_dir + "/docker"
+  let wasm_path = bin_dir + "/wasm-runner"
   let absolute_log_path = test_support_absolute_path(log_path)
   @xfs.write_string_to_file(absolute_log_path, "")
+  let script = "#!/bin/sh\n" +
+    "set -eu\n" +
+    "printf '%s\\n' \"$@\" >> '" +
+    absolute_log_path +
+    "'\n" +
+    "module=\"$1\"\n" +
+    "shift || true\n" +
+    "exec sh \"$module\" \"$@\"\n"
+  @xfs.write_string_to_file(wasm_path, script)
+  test_support_make_executable(wasm_path)
+  test_support_absolute_path(wasm_path)
+}
+
+///|
+#cfg(target="native")
+async fn test_support_prepare_fake_docker_bin(
+  workspace : String,
+  log_path : String,
+  inspect_sequence? : String = "healthy",
+) -> String {
+  let bin_dir = workspace + "/bin"
+  test_support_ensure_dir(bin_dir)
+  let docker_path = bin_dir + "/docker"
+  let absolute_log_path = test_support_absolute_path(log_path)
+  let inspect_count_path = test_support_absolute_path(
+    log_path + ".inspect-count",
+  )
+  @xfs.write_string_to_file(absolute_log_path, "")
+  @xfs.write_string_to_file(inspect_count_path, "0")
   let script = "#!/bin/sh\n" +
     "set -eu\n" +
     "printf '%s\\n' \"$@\" >> '" +
@@ -151,24 +210,60 @@ async fn test_support_prepare_fake_docker_bin(
     "if [ \"$cmd\" = build ]; then\n" +
     "  exit 0\n" +
     "fi\n" +
+    "if [ \"$cmd\" = login ] || [ \"$cmd\" = logout ] || [ \"$cmd\" = rm ]; then\n" +
+    "  exit 0\n" +
+    "fi\n" +
+    "if [ \"$cmd\" = network ]; then\n" +
+    "  exit 0\n" +
+    "fi\n" +
+    "if [ \"$cmd\" = inspect ]; then\n" +
+    "  sequence=\"${ACTION_RUNNER_FAKE_DOCKER_INSPECT_SEQUENCE:-" +
+    inspect_sequence +
+    "}\"\n" +
+    "  count=$(cat '" +
+    inspect_count_path +
+    "' 2>/dev/null || printf '0')\n" +
+    "  count=$((count + 1))\n" +
+    "  printf '%s' \"$count\" > '" +
+    inspect_count_path +
+    "'\n" +
+    "  old_ifs=\"$IFS\"\n" +
+    "  IFS=,\n" +
+    "  set -- $sequence\n" +
+    "  IFS=\"$old_ifs\"\n" +
+    "  status=\"\"\n" +
+    "  last=\"healthy\"\n" +
+    "  idx=1\n" +
+    "  for item in \"$@\"; do\n" +
+    "    last=\"$item\"\n" +
+    "    if [ \"$idx\" -eq \"$count\" ]; then\n" +
+    "      status=\"$item\"\n" +
+    "      break\n" +
+    "    fi\n" +
+    "    idx=$((idx + 1))\n" +
+    "  done\n" +
+    "  if [ -z \"$status\" ]; then\n" +
+    "    status=\"$last\"\n" +
+    "  fi\n" +
+    "  printf '%s\\n' \"$status\"\n" +
+    "  exit 0\n" +
+    "fi\n" +
     "if [ \"$cmd\" = run ]; then\n" +
-    "  workspace=\"\"\n" +
-    "  input_message=\"\"\n" +
-    "  github_state=\"\"\n" +
-    "  state_phase=\"\"\n" +
+    "  workdir=\".\"\n" +
     "  entrypoint=\"\"\n" +
     "  while [ \"$#\" -gt 0 ]; do\n" +
     "    case \"$1\" in\n" +
     "      -e)\n" +
-    "        case \"$2\" in\n" +
-    "          GITHUB_WORKSPACE=*) workspace=\"${2#GITHUB_WORKSPACE=}\" ;;\n" +
-    "          INPUT_MESSAGE=*) input_message=\"${2#INPUT_MESSAGE=}\" ;;\n" +
-    "          GITHUB_STATE=*) github_state=\"${2#GITHUB_STATE=}\" ;;\n" +
-    "          STATE_phase=*) state_phase=\"${2#STATE_phase=}\" ;;\n" +
-    "        esac\n" +
+    "        name=\"${2%%=*}\"\n" +
+    "        value=\"${2#*=}\"\n" +
+    "        export \"$name=$value\"\n" +
     "        shift 2\n" +
     "        ;;\n" +
-    "      -v|-w)\n" +
+    "      -w)\n" +
+    "        workdir=\"$2\"\n" +
+    "        shift 2\n" +
+    "        ;;\n" +
+    "      -v|-p)\n" +
     "        shift 2\n" +
     "        ;;\n" +
     "      --entrypoint)\n" +
@@ -178,35 +273,67 @@ async fn test_support_prepare_fake_docker_bin(
     "      --rm)\n" +
     "        shift\n" +
     "        ;;\n" +
+    "      --*)\n" +
+    "        if [ \"$#\" -gt 1 ] && [ \"${2#-}\" = \"$2\" ]; then\n" +
+    "          shift 2\n" +
+    "        else\n" +
+    "          shift\n" +
+    "        fi\n" +
+    "        ;;\n" +
+    "      -*)\n" +
+    "        shift\n" +
+    "        ;;\n" +
     "      *)\n" +
+    "        image=\"$1\"\n" +
+    "        shift\n" +
     "        break\n" +
     "        ;;\n" +
     "    esac\n" +
     "  done\n" +
-    "  if [ -n \"$workspace\" ] && [ -n \"$input_message\" ]; then\n" +
-    "    printf '%s' \"$input_message\" > \"$workspace/docker.txt\"\n" +
+    "  if [ -n \"$entrypoint\" ]; then\n" +
+    "    if [ \"$#\" -gt 0 ]; then\n" +
+    "      set -- \"$entrypoint\" \"$@\"\n" +
+    "    else\n" +
+    "      set -- sh \"$entrypoint\"\n" +
+    "    fi\n" +
     "  fi\n" +
     "  case \"$entrypoint\" in\n" +
     "    *pre.sh)\n" +
-    "      if [ -n \"$github_state\" ]; then\n" +
-    "        printf 'phase=pre\\n' >> \"$github_state\"\n" +
+    "      if [ -n \"${GITHUB_STATE:-}\" ]; then\n" +
+    "        printf 'phase=pre\\n' >> \"$GITHUB_STATE\"\n" +
     "      fi\n" +
+    "      exit 0\n" +
     "      ;;\n" +
     "    *main.sh)\n" +
-    "      if [ -n \"$workspace\" ]; then\n" +
-    "        printf '%s' \"$state_phase\" > \"$workspace/main.txt\"\n" +
+    "      if [ -n \"${GITHUB_WORKSPACE:-}\" ]; then\n" +
+    "        printf '%s' \"${STATE_phase:-}\" > \"$GITHUB_WORKSPACE/main.txt\"\n" +
     "      fi\n" +
-    "      if [ -n \"$github_state\" ]; then\n" +
-    "        printf 'phase=main\\n' >> \"$github_state\"\n" +
+    "      if [ -n \"${GITHUB_STATE:-}\" ]; then\n" +
+    "        printf 'phase=main\\n' >> \"$GITHUB_STATE\"\n" +
     "      fi\n" +
+    "      exit 0\n" +
+    "      ;;\n" +
+    "    *fail.sh)\n" +
+    "      if [ -n \"${GITHUB_WORKSPACE:-}\" ]; then\n" +
+    "        printf '%s' \"${STATE_phase:-}\" > \"$GITHUB_WORKSPACE/main.txt\"\n" +
+    "      fi\n" +
+    "      if [ -n \"${GITHUB_STATE:-}\" ]; then\n" +
+    "        printf 'phase=main\\n' >> \"$GITHUB_STATE\"\n" +
+    "      fi\n" +
+    "      exit 7\n" +
     "      ;;\n" +
     "    *post.sh)\n" +
-    "      if [ -n \"$workspace\" ]; then\n" +
-    "        printf '%s|%s' \"$state_phase\" \"$workspace\" > \"$workspace/post.txt\"\n" +
+    "      if [ -n \"${GITHUB_WORKSPACE:-}\" ]; then\n" +
+    "        printf '%s|%s' \"${STATE_phase:-}\" \"$GITHUB_WORKSPACE\" > \"$GITHUB_WORKSPACE/post.txt\"\n" +
     "      fi\n" +
+    "      exit 0\n" +
     "      ;;\n" +
     "  esac\n" +
-    "  exit 0\n" +
+    "  if [ \"$#\" -eq 0 ]; then\n" +
+    "    exit 0\n" +
+    "  fi\n" +
+    "  cd \"$workdir\"\n" +
+    "  exec \"$@\"\n" +
     "fi\n" +
     "echo \"unexpected docker command: $cmd\" >&2\n" +
     "exit 1\n"

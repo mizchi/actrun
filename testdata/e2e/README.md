@@ -3,16 +3,27 @@
 `just e2e` で実行する CLI black-box scenario の fixture 置き場。
 
 - `local-push-basic`: local workflow + push event + `env` / `output` / `needs`
+- `run-store-basic`: `--run-root` / `--artifact-root` / `--cache-root` 指定時に custom store 配下へ保存され、`run.json` に timestamps と job/artifact/cache index が入り、`jobs.json` / `artifacts.json` / `caches.json` と task log/summary が生成され、`run list` / `run view` / `run watch` / `run logs` / `run download` / `artifact list` / `artifact download` / `cache list` で読めることと CLI が `run_id=` を返すことを確認する
 - `local-composite-nested`: local composite action + nested `uses`
+- `local-reusable-workflow`: local reusable workflow (`jobs.<id>.uses`) を caller workflow から展開して `with` / `needs.<id>.outputs.*` / secret mapping まで通す
+- `local-reusable-workflow-inherit`: local reusable workflow (`jobs.<id>.uses`) の `secrets: inherit` が declared `workflow_call.secrets` に渡ることを確認する
+- `local-reusable-workflow-input-types`: local reusable workflow の optional `workflow_call.inputs` が declared type に応じて `false` / `0` / string default に束縛されることを確認する
+- `local-reusable-workflow-matrix`: reusable workflow caller job の `strategy.matrix` が row ごとに callee jobs へ展開され、downstream `needs` が全 row を待つことを確認する
+- `local-reusable-workflow-matrix-output`: reusable workflow caller matrix で `workflow_call.outputs` が「最後に成功して空でない row」の値へ集約されることを確認する
+- `remote-reusable-workflow`: remote reusable workflow (`owner/repo/.github/workflows/*.yml@ref`) を prefetch して caller workflow から展開し、`with` / `needs.<id>.outputs.*` / secret mapping まで通す
+- `remote-reusable-local-action`: remote reusable workflow 内の `uses: ./.github/actions/*` local action を fetched repo root 相対で解決して caller workflow から実行する
+- `remote-nested-reusable-workflow`: remote reusable workflow が別の remote reusable workflow を呼び出す nested reusable chain を prefetch して、caller workflow から `needs.<id>.outputs.*` まで通す
 - `trigger-skipped`: branch/path filter mismatch で CLI が `state=skipped` を返す
 - `file-commands`: `GITHUB_ENV` / `GITHUB_OUTPUT` / `GITHUB_PATH` / `GITHUB_STEP_SUMMARY`
 - `artifact-actions-roundtrip`: `actions/upload-artifact` / `actions/download-artifact` の roundtrip
+- `artifact-actions-roundtrip-container`: job `container` 配下で `actions/upload-artifact` / `actions/download-artifact` の roundtrip が後続 container `run` step から見えることを確認する
 - `artifact-glob-directory`: `upload-artifact` の directory / wildcard path と `download-artifact` の download-all directory mode
 - `artifact-if-no-files-found`: `upload-artifact` の missing path に対する `warn` / `ignore` / `error` を確認する
 - `artifact-overwrite`: `upload-artifact` の duplicate name が default で fail し、`overwrite: true` で置換されることを確認する
 - `artifact-merge-multiple`: `download-artifact` の `merge-multiple: true` が download-all を同一 directory に展開することを確認する
 - `cache-actions-roundtrip`: `actions/cache/save` / `actions/cache/restore` の roundtrip
 - `cache-auto-save-roundtrip`: `actions/cache` 本体の miss -> deferred save -> next job hit
+- `cache-auto-save-container`: job `container` 配下で `actions/cache` 本体の miss -> deferred save -> next job hit が後続 container `run` step から見えることを確認する
 - `cache-restore-keys`: `actions/cache/restore` が `restore-keys` の prefix hit を復元し、`cache-hit=false` を返す
 - `cache-lookup-only`: `actions/cache/restore` の `lookup-only` が hit 判定だけ返し、workspace には download しない
 - `cache-fail-on-cache-miss`: `actions/cache/restore` の `fail-on-cache-miss` が miss を failure outcome にする
@@ -21,8 +32,10 @@
 - `checkout-ref`: `actions/checkout` の `ref` で非 default branch を shallow checkout する
 - `checkout-clean`: `actions/checkout` の default clean と `clean: false` の差を root workspace 再 checkout で確認する
 - `checkout-submodules`: `actions/checkout` の `submodules: true` と `submodules: recursive` の差を確認する
+- `checkout-container`: job `container` 配下で `actions/checkout` が host 側に materialize した workspace を後続 container `run` step から見えることを確認する
 - `setup-node-basic`: `actions/setup-node` の `node-version` と `registry-url` を確認する
 - `setup-node-cache-npm`: `actions/setup-node` の `cache: npm` が deferred save 後の次 job restore で hit する
+- `setup-node-container`: job `container` 配下で `actions/setup-node` の PATH shim と output が後続 `run` step に見える
 - `expression-string-functions`: `contains()` / `startsWith()` / `endsWith()` が script/env と `if:` で動く
 - `expression-json-functions`: `fromJSON()` / `toJSON()` と `contains(fromJSON(...), ...)` が script/env と `if:` で動く
 - `expression-hash-files`: `hashFiles()` が script/env と `if:` で動き、no match では空文字を返す
@@ -44,9 +57,16 @@
 - `unsupported-permissions`: workflow/job `permissions` を CLI error として reject
 - `unsupported-concurrency`: workflow/job `concurrency` を CLI error として reject
 - `unsupported-workflow-call`: `on: workflow_call` を CLI error として reject
+- `job-container-basic`: job `container` 内で `run` step が docker adapter 経由で実行される
+- `job-container-node-action`: job `container` 内で cache 済み remote `node20` action が docker adapter 経由で実行される
+- `job-container-docker-action`: job `container` 内で cache 済み remote `runs.using: docker` action が sibling container として走り、volume mount を共有する
+- `job-services-basic`: job `services` が detached service container を起動し、`${{ job.services.<id>.ports[...] }}` を解決し、health check 完了後に job を進め、job 後に cleanup されることを確認する
+- `job-services-container-network`: job `container` が job `services` と同じ docker network に参加し、service alias 経由で疎通できる前提の起動引数になることを確認する
 - `event-cli-overrides`: `--event` より CLI flag (`--ref` / `--repository` / `--after` / `--changed`) が優先される
 - `event-head-commit-fallback`: `commits` が無くても `head_commit` から changed paths を読んで trigger 判定する
 - `docker-image-basic`: direct `docker://...` action を native docker adapter で実行する
+- `custom-registry-node-action`: manifest-backed custom registry `node20` action を `ACTION_RUNNER_ACTION_REGISTRY_ROOT` 配下から解決して実行する
+- `wasm-action-basic`: `wasm://...` action が file-based Wasm module と fake runner 経由で実行される
 - `remote-composite-fetch`: GitHub repo action prefetch + remote composite action
 - `remote-composite-nested-prefetch`: remote composite action が nested remote action を再帰 prefetch する
 - `remote-composite-nested-cache-hit`: nested remote action が cache 済みなら fetch なしで解決される

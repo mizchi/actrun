@@ -1,0 +1,8 @@
+id=docs-context-job-services-ports
+source=docs
+mode=supported
+kind=run
+url=https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#job-context
+docs_urls=https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#job-context;https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idservices;https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idservicesservice_idports
+added_at=2026-03-13
+notes=job.services.<service>.ports[<container-port>] is available in step script, env, and step if

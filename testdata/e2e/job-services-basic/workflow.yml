@@ -1,0 +1,28 @@
+name: job-services-basic
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: app
+        ports:
+          - "5432:5432"
+        volumes:
+          - "db:/var/lib/postgresql/data"
+        options: --health-cmd pg_isready
+    steps:
+      - id: show
+        shell: bash
+        env:
+          PORT_FROM_ENV: ${{ job.services.postgres.ports[5432] }}
+        run: |
+          mkdir -p artifacts
+          printf '%s|%s' "${{ job.services.postgres.ports[5432] }}" "$PORT_FROM_ENV" > artifacts/result.txt
+      - id: verify
+        if: ${{ job.services.postgres.ports[5432] == '5432' }}
+        shell: bash
+        run: |
+          printf '|%s' yes >> artifacts/result.txt

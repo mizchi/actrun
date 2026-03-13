@@ -156,6 +156,11 @@ fn e2e_copy_tree(src : String, dst : String) -> Unit {
     for entry in e2e_read_dir(src) {
       e2e_copy_tree(e2e_join_path(src, entry), e2e_join_path(dst, entry))
     }
+    let github_dir = e2e_join_path(src, ".github")
+    let dst_github_dir = e2e_join_path(dst, ".github")
+    if @xfs.path_exists(github_dir) && not(@xfs.path_exists(dst_github_dir)) {
+      e2e_copy_tree(github_dir, dst_github_dir)
+    }
   } else {
     e2e_ensure_dir(e2e_parent_dir(dst))
     let ok = try
@@ -210,6 +215,17 @@ fn e2e_expect_contains(
 ) -> Unit {
   if not(text.contains(needle)) {
     abort(context + ": missing <" + needle + "> in\n" + text)
+  }
+}
+
+///|
+fn e2e_expect_not_contains(
+  text : String,
+  needle : String,
+  context : String,
+) -> Unit {
+  if text.contains(needle) {
+    abort(context + ": unexpected <" + needle + "> in\n" + text)
   }
 }
 
@@ -609,15 +625,42 @@ async fn e2e_prepare_fake_version_node_bin(
 
 ///|
 #cfg(target="native")
-async fn e2e_prepare_fake_docker_bin(
+async fn e2e_prepare_fake_wasm_bin(
   workspace : String,
   log_path : String,
 ) -> String {
   let bin_dir = e2e_join_path(workspace, "bin")
   e2e_ensure_dir(bin_dir)
-  let docker_path = e2e_join_path(bin_dir, "docker")
+  let wasm_path = e2e_join_path(bin_dir, "wasm-runner")
   let absolute_log_path = e2e_absolute_path(log_path)
   @xfs.write_string_to_file(absolute_log_path, "")
+  let script = "#!/bin/sh\n" +
+    "set -eu\n" +
+    "printf '%s\\n' \"$@\" >> '" +
+    absolute_log_path +
+    "'\n" +
+    "module=\"$1\"\n" +
+    "shift || true\n" +
+    "exec sh \"$module\" \"$@\"\n"
+  @xfs.write_string_to_file(wasm_path, script)
+  e2e_make_executable(wasm_path)
+  e2e_absolute_path(wasm_path)
+}
+
+///|
+#cfg(target="native")
+async fn e2e_prepare_fake_docker_bin(
+  workspace : String,
+  log_path : String,
+  inspect_sequence? : String = "healthy",
+) -> String {
+  let bin_dir = e2e_join_path(workspace, "bin")
+  e2e_ensure_dir(bin_dir)
+  let docker_path = e2e_join_path(bin_dir, "docker")
+  let absolute_log_path = e2e_absolute_path(log_path)
+  let inspect_count_path = e2e_absolute_path(log_path + ".inspect-count")
+  @xfs.write_string_to_file(absolute_log_path, "")
+  @xfs.write_string_to_file(inspect_count_path, "0")
   let script = "#!/bin/sh\n" +
     "set -eu\n" +
     "printf '%s\\n' \"$@\" >> '" +
@@ -628,24 +671,60 @@ async fn e2e_prepare_fake_docker_bin(
     "if [ \"$cmd\" = build ]; then\n" +
     "  exit 0\n" +
     "fi\n" +
+    "if [ \"$cmd\" = login ] || [ \"$cmd\" = logout ] || [ \"$cmd\" = rm ]; then\n" +
+    "  exit 0\n" +
+    "fi\n" +
+    "if [ \"$cmd\" = network ]; then\n" +
+    "  exit 0\n" +
+    "fi\n" +
+    "if [ \"$cmd\" = inspect ]; then\n" +
+    "  sequence=\"${ACTION_RUNNER_FAKE_DOCKER_INSPECT_SEQUENCE:-" +
+    inspect_sequence +
+    "}\"\n" +
+    "  count=$(cat '" +
+    inspect_count_path +
+    "' 2>/dev/null || printf '0')\n" +
+    "  count=$((count + 1))\n" +
+    "  printf '%s' \"$count\" > '" +
+    inspect_count_path +
+    "'\n" +
+    "  old_ifs=\"$IFS\"\n" +
+    "  IFS=,\n" +
+    "  set -- $sequence\n" +
+    "  IFS=\"$old_ifs\"\n" +
+    "  status=\"\"\n" +
+    "  last=\"healthy\"\n" +
+    "  idx=1\n" +
+    "  for item in \"$@\"; do\n" +
+    "    last=\"$item\"\n" +
+    "    if [ \"$idx\" -eq \"$count\" ]; then\n" +
+    "      status=\"$item\"\n" +
+    "      break\n" +
+    "    fi\n" +
+    "    idx=$((idx + 1))\n" +
+    "  done\n" +
+    "  if [ -z \"$status\" ]; then\n" +
+    "    status=\"$last\"\n" +
+    "  fi\n" +
+    "  printf '%s\\n' \"$status\"\n" +
+    "  exit 0\n" +
+    "fi\n" +
     "if [ \"$cmd\" = run ]; then\n" +
-    "  workspace=\"\"\n" +
-    "  input_message=\"\"\n" +
-    "  github_state=\"\"\n" +
-    "  state_phase=\"\"\n" +
+    "  workdir=\".\"\n" +
     "  entrypoint=\"\"\n" +
     "  while [ \"$#\" -gt 0 ]; do\n" +
     "    case \"$1\" in\n" +
     "      -e)\n" +
-    "        case \"$2\" in\n" +
-    "          GITHUB_WORKSPACE=*) workspace=\"${2#GITHUB_WORKSPACE=}\" ;;\n" +
-    "          INPUT_MESSAGE=*) input_message=\"${2#INPUT_MESSAGE=}\" ;;\n" +
-    "          GITHUB_STATE=*) github_state=\"${2#GITHUB_STATE=}\" ;;\n" +
-    "          STATE_phase=*) state_phase=\"${2#STATE_phase=}\" ;;\n" +
-    "        esac\n" +
+    "        name=\"${2%%=*}\"\n" +
+    "        value=\"${2#*=}\"\n" +
+    "        export \"$name=$value\"\n" +
     "        shift 2\n" +
     "        ;;\n" +
-    "      -v|-w)\n" +
+    "      -w)\n" +
+    "        workdir=\"$2\"\n" +
+    "        shift 2\n" +
+    "        ;;\n" +
+    "      -v|-p)\n" +
     "        shift 2\n" +
     "        ;;\n" +
     "      --entrypoint)\n" +
@@ -655,44 +734,67 @@ async fn e2e_prepare_fake_docker_bin(
     "      --rm)\n" +
     "        shift\n" +
     "        ;;\n" +
+    "      --*)\n" +
+    "        if [ \"$#\" -gt 1 ] && [ \"${2#-}\" = \"$2\" ]; then\n" +
+    "          shift 2\n" +
+    "        else\n" +
+    "          shift\n" +
+    "        fi\n" +
+    "        ;;\n" +
+    "      -*)\n" +
+    "        shift\n" +
+    "        ;;\n" +
     "      *)\n" +
+    "        image=\"$1\"\n" +
+    "        shift\n" +
     "        break\n" +
     "        ;;\n" +
     "    esac\n" +
     "  done\n" +
-    "  if [ -n \"$workspace\" ] && [ -n \"$input_message\" ]; then\n" +
-    "    printf '%s' \"$input_message\" > \"$workspace/docker.txt\"\n" +
+    "  if [ -n \"$entrypoint\" ]; then\n" +
+    "    if [ \"$#\" -gt 0 ]; then\n" +
+    "      set -- \"$entrypoint\" \"$@\"\n" +
+    "    else\n" +
+    "      set -- sh \"$entrypoint\"\n" +
+    "    fi\n" +
     "  fi\n" +
     "  case \"$entrypoint\" in\n" +
     "    *pre.sh)\n" +
-    "      if [ -n \"$github_state\" ]; then\n" +
-    "        printf 'phase=pre\\n' >> \"$github_state\"\n" +
+    "      if [ -n \"${GITHUB_STATE:-}\" ]; then\n" +
+    "        printf 'phase=pre\\n' >> \"$GITHUB_STATE\"\n" +
     "      fi\n" +
+    "      exit 0\n" +
     "      ;;\n" +
     "    *main.sh)\n" +
-    "      if [ -n \"$workspace\" ]; then\n" +
-    "        printf '%s' \"$state_phase\" > \"$workspace/main.txt\"\n" +
+    "      if [ -n \"${GITHUB_WORKSPACE:-}\" ]; then\n" +
+    "        printf '%s' \"${STATE_phase:-}\" > \"$GITHUB_WORKSPACE/main.txt\"\n" +
     "      fi\n" +
-    "      if [ -n \"$github_state\" ]; then\n" +
-    "        printf 'phase=main\\n' >> \"$github_state\"\n" +
+    "      if [ -n \"${GITHUB_STATE:-}\" ]; then\n" +
+    "        printf 'phase=main\\n' >> \"$GITHUB_STATE\"\n" +
     "      fi\n" +
+    "      exit 0\n" +
     "      ;;\n" +
     "    *fail.sh)\n" +
-    "      if [ -n \"$workspace\" ]; then\n" +
-    "        printf '%s' \"$state_phase\" > \"$workspace/main.txt\"\n" +
+    "      if [ -n \"${GITHUB_WORKSPACE:-}\" ]; then\n" +
+    "        printf '%s' \"${STATE_phase:-}\" > \"$GITHUB_WORKSPACE/main.txt\"\n" +
     "      fi\n" +
-    "      if [ -n \"$github_state\" ]; then\n" +
-    "        printf 'phase=main\\n' >> \"$github_state\"\n" +
+    "      if [ -n \"${GITHUB_STATE:-}\" ]; then\n" +
+    "        printf 'phase=main\\n' >> \"$GITHUB_STATE\"\n" +
     "      fi\n" +
     "      exit 7\n" +
     "      ;;\n" +
     "    *post.sh)\n" +
-    "      if [ -n \"$workspace\" ]; then\n" +
-    "        printf '%s|%s' \"$state_phase\" \"$workspace\" > \"$workspace/post.txt\"\n" +
+    "      if [ -n \"${GITHUB_WORKSPACE:-}\" ]; then\n" +
+    "        printf '%s|%s' \"${STATE_phase:-}\" \"$GITHUB_WORKSPACE\" > \"$GITHUB_WORKSPACE/post.txt\"\n" +
     "      fi\n" +
+    "      exit 0\n" +
     "      ;;\n" +
     "  esac\n" +
-    "  exit 0\n" +
+    "  if [ \"$#\" -eq 0 ]; then\n" +
+    "    exit 0\n" +
+    "  fi\n" +
+    "  cd \"$workdir\"\n" +
+    "  exec \"$@\"\n" +
     "fi\n" +
     "echo \"unexpected docker command: $cmd\" >&2\n" +
     "exit 1\n"
@@ -780,11 +882,14 @@ async fn run_local_push_basic() -> Unit {
     scenario,
     e2e_fixture_dir(scenario),
   )
-  let result = e2e_run_cli([
-    e2e_join_path(workspace, "workflow.yml"),
-    "--event",
-    e2e_join_path(workspace, "event.json"),
-  ])
+  let result = e2e_run_cli(
+    [
+      e2e_join_path(workspace, "workflow.yml"),
+      "--event",
+      e2e_join_path(workspace, "event.json"),
+    ],
+    env={ "ACTION_RUNNER_SECRET_CALL_TOKEN": "s3cr3t" },
+  )
   e2e_expect_ok(result, scenario)
   e2e_expect_contains(result.stdout, "workflow=e2e-basic", scenario)
   e2e_expect_contains(result.stdout, "state=completed", scenario)
@@ -805,8 +910,345 @@ async fn run_local_push_basic() -> Unit {
 
 ///|
 #cfg(target="native")
+async fn run_store_basic() -> Unit {
+  let scenario = "run-store-basic"
+  let workspace = e2e_prepare_copied_dir(
+    "_build/e2e/workspaces",
+    scenario,
+    e2e_fixture_dir(scenario),
+  )
+  let run_root = e2e_join_path(workspace, "runs")
+  let artifact_root = e2e_join_path(workspace, "custom-artifacts")
+  let cache_root = e2e_join_path(workspace, "custom-cache")
+  let result = e2e_run_cli([
+    e2e_join_path(workspace, "workflow.yml"),
+    "--event",
+    e2e_join_path(workspace, "event.json"),
+    "--run-root",
+    run_root,
+    "--artifact-root",
+    artifact_root,
+    "--cache-root",
+    cache_root,
+  ])
+  e2e_expect_ok(result, scenario)
+  e2e_expect_contains(result.stdout, "run_id=run-1", scenario)
+  e2e_expect_contains(result.stdout, "workflow=e2e-run-store", scenario)
+  e2e_expect_contains(result.stdout, "state=completed", scenario)
+  let run_json = e2e_read_text(e2e_join_path(run_root, "run-1/run.json"))
+  e2e_expect_contains(run_json, "\"run_id\": \"run-1\"", scenario)
+  e2e_expect_contains(
+    run_json, "\"workflow_name\": \"e2e-run-store\"", scenario,
+  )
+  e2e_expect_contains(run_json, "\"workspace_mode\": \"worktree\"", scenario)
+  e2e_expect_contains(run_json, "\"started_at_ms\": ", scenario)
+  e2e_expect_contains(run_json, "\"finished_at_ms\": ", scenario)
+  e2e_expect_contains(run_json, "\"steps\": [{", scenario)
+  e2e_expect_contains(
+    run_json, "\"stdout_path\": \"tasks/build__record.stdout.log\"", scenario,
+  )
+  e2e_expect_contains(
+    run_json, "\"summary_path\": \"tasks/build__record.summary.md\"", scenario,
+  )
+  e2e_expect_contains(run_json, "\"jobs\": [{", scenario)
+  e2e_expect_contains(run_json, "\"id\": \"build\"", scenario)
+  e2e_expect_contains(run_json, "\"status\": \"success\"", scenario)
+  e2e_expect_contains(run_json, "\"artifacts\": [{", scenario)
+  e2e_expect_contains(run_json, "\"name\": \"report\"", scenario)
+  e2e_expect_contains(run_json, "\"files\": [\"result.txt\"]", scenario)
+  e2e_expect_contains(run_json, "\"caches\": [{", scenario)
+  e2e_expect_contains(run_json, "\"key\": \"run-store-basic-key\"", scenario)
+  e2e_expect_contains(
+    run_json, "\"files\": [\"artifacts/result.txt\"]", scenario,
+  )
+  let jobs_json = e2e_read_text(e2e_join_path(run_root, "run-1/jobs.json"))
+  e2e_expect_contains(jobs_json, "\"id\": \"build\"", scenario)
+  e2e_expect_contains(jobs_json, "\"status\": \"success\"", scenario)
+  let artifacts_json = e2e_read_text(
+    e2e_join_path(run_root, "run-1/artifacts.json"),
+  )
+  e2e_expect_contains(artifacts_json, "\"name\": \"report\"", scenario)
+  e2e_expect_contains(artifacts_json, "\"files\": [\"result.txt\"]", scenario)
+  let caches_json = e2e_read_text(e2e_join_path(run_root, "run-1/caches.json"))
+  e2e_expect_contains(caches_json, "\"key\": \"run-store-basic-key\"", scenario)
+  e2e_expect_contains(
+    caches_json, "\"files\": [\"artifacts/result.txt\"]", scenario,
+  )
+  e2e_expect_eq(
+    e2e_read_text(
+      e2e_join_path(run_root, "run-1/tasks/build__record.stdout.log"),
+    ),
+    "hello-run-store",
+    scenario + " stdout",
+  )
+  e2e_expect_eq(
+    e2e_read_text(
+      e2e_join_path(run_root, "run-1/tasks/build__record.summary.md"),
+    ),
+    "summary-run-store",
+    scenario + " summary",
+  )
+  let view_result = e2e_run_cli(["run", "view", "run-1", "--run-root", run_root])
+  e2e_expect_ok(view_result, scenario + " view")
+  e2e_expect_contains(view_result.stdout, "workflow=e2e-run-store", scenario)
+  e2e_expect_contains(view_result.stdout, "state=completed", scenario)
+  e2e_expect_contains(view_result.stdout, "job/build=success", scenario)
+  e2e_expect_contains(
+    view_result.stdout,
+    "artifact/report=result.txt",
+    scenario,
+  )
+  let view_json_result = e2e_run_cli([
+    "run", "view", "run-1", "--run-root", run_root, "--json",
+  ])
+  e2e_expect_ok(view_json_result, scenario + " view json")
+  e2e_expect_contains(
+    view_json_result.stdout,
+    "\"run_id\": \"run-1\"",
+    scenario,
+  )
+  let watch_result = e2e_run_cli([
+    "run", "watch", "run-1", "--run-root", run_root,
+  ])
+  e2e_expect_ok(watch_result, scenario + " watch")
+  e2e_expect_contains(watch_result.stdout, "run_id=run-1", scenario)
+  e2e_expect_contains(watch_result.stdout, "state=completed", scenario)
+  let watch_json_result = e2e_run_cli([
+    "run", "watch", "run-1", "--run-root", run_root, "--json",
+  ])
+  e2e_expect_ok(watch_json_result, scenario + " watch json")
+  e2e_expect_contains(
+    watch_json_result.stdout,
+    "\"run_id\": \"run-1\"",
+    scenario,
+  )
+  let logs_result = e2e_run_cli([
+    "run", "logs", "run-1", "--run-root", run_root, "--task", "build/record",
+  ])
+  e2e_expect_ok(logs_result, scenario + " logs")
+  e2e_expect_contains(logs_result.stdout, "==> build/record stdout", scenario)
+  e2e_expect_contains(logs_result.stdout, "hello-run-store", scenario)
+  e2e_expect_contains(logs_result.stdout, "==> build/record summary", scenario)
+  e2e_expect_contains(logs_result.stdout, "summary-run-store", scenario)
+  let second_result = e2e_run_cli([
+    e2e_join_path(workspace, "workflow.yml"),
+    "--event",
+    e2e_join_path(workspace, "event.json"),
+    "--run-root",
+    run_root,
+    "--artifact-root",
+    artifact_root,
+    "--cache-root",
+    cache_root,
+  ])
+  e2e_expect_ok(second_result, scenario + " second run")
+  e2e_expect_contains(second_result.stdout, "run_id=run-2", scenario)
+  let list_result = e2e_run_cli(["run", "list", "--run-root", run_root])
+  e2e_expect_ok(list_result, scenario + " list")
+  e2e_expect_contains(
+    list_result.stdout,
+    "run-2\tcompleted\te2e-run-store",
+    scenario,
+  )
+  e2e_expect_contains(
+    list_result.stdout,
+    "run-1\tcompleted\te2e-run-store",
+    scenario,
+  )
+  let list_json_result = e2e_run_cli([
+    "run", "list", "--run-root", run_root, "--json",
+  ])
+  e2e_expect_ok(list_json_result, scenario + " list json")
+  e2e_expect_contains(
+    list_json_result.stdout,
+    "\"run_id\": \"run-1\"",
+    scenario,
+  )
+  e2e_expect_contains(
+    list_json_result.stdout,
+    "\"run_id\": \"run-2\"",
+    scenario,
+  )
+  let artifact_list_result = e2e_run_cli([
+    "artifact", "list", "run-1", "--run-root", run_root,
+  ])
+  e2e_expect_ok(artifact_list_result, scenario + " artifact list")
+  e2e_expect_contains(
+    artifact_list_result.stdout,
+    "report\tresult.txt",
+    scenario,
+  )
+  let artifact_list_json_result = e2e_run_cli([
+    "artifact", "list", "run-1", "--run-root", run_root, "--json",
+  ])
+  e2e_expect_ok(artifact_list_json_result, scenario + " artifact list json")
+  e2e_expect_contains(
+    artifact_list_json_result.stdout,
+    "\"name\": \"report\"",
+    scenario,
+  )
+  let download_dir = e2e_join_path(workspace, "downloaded")
+  let artifact_download_result = e2e_run_cli([
+    "artifact", "download", "run-1", "--run-root", run_root, "--artifact-root", artifact_root,
+    "--name", "report", "--dir", download_dir,
+  ])
+  e2e_expect_ok(artifact_download_result, scenario + " artifact download")
+  e2e_expect_contains(
+    artifact_download_result.stdout,
+    "artifact=report",
+    scenario,
+  )
+  e2e_expect_eq(
+    e2e_read_text(e2e_join_path(download_dir, "result.txt")),
+    "push|mizchi/action_runner",
+    scenario + " artifact download file",
+  )
+  let run_download_dir = e2e_join_path(workspace, "run-downloaded")
+  let run_download_result = e2e_run_cli([
+    "run", "download", "run-1", "--run-root", run_root, "--artifact-root", artifact_root,
+    "--dir", run_download_dir,
+  ])
+  e2e_expect_ok(run_download_result, scenario + " run download")
+  e2e_expect_contains(run_download_result.stdout, "run_id=run-1", scenario)
+  e2e_expect_contains(run_download_result.stdout, "artifacts=report", scenario)
+  e2e_expect_eq(
+    e2e_read_text(e2e_join_path(run_download_dir, "report/result.txt")),
+    "push|mizchi/action_runner",
+    scenario + " run download file",
+  )
+  let cache_list_result = e2e_run_cli([
+    "cache", "list", "--cache-root", cache_root,
+  ])
+  e2e_expect_ok(cache_list_result, scenario + " cache list")
+  e2e_expect_contains(
+    cache_list_result.stdout,
+    "run-store-basic-key\t",
+    scenario,
+  )
+  e2e_expect_contains(
+    cache_list_result.stdout,
+    "artifacts/result.txt",
+    scenario,
+  )
+  let cache_list_json_result = e2e_run_cli([
+    "cache", "list", "--cache-root", cache_root, "--json",
+  ])
+  e2e_expect_ok(cache_list_json_result, scenario + " cache list json")
+  e2e_expect_contains(
+    cache_list_json_result.stdout,
+    "\"key\": \"run-store-basic-key\"",
+    scenario,
+  )
+  let workspace_key = e2e_absolute_path(workspace)
+    .replace_all(old="/", new="__")
+    .replace_all(old=":", new="_")
+  e2e_expect_eq(
+    e2e_read_text(
+      e2e_join_path(artifact_root, workspace_key + "/report/result.txt"),
+    ),
+    "push|mizchi/action_runner",
+    scenario + " artifact root override",
+  )
+  e2e_expect_eq(
+    e2e_read_text(
+      e2e_join_path(
+        cache_root,
+        workspace_key + "/run-store-basic-key/artifacts/result.txt",
+      ),
+    ),
+    "push|mizchi/action_runner",
+    scenario + " cache root override",
+  )
+}
+
+///|
+#cfg(target="native")
 async fn run_local_composite_nested() -> Unit {
   let scenario = "local-composite-nested"
+  let workspace = e2e_prepare_copied_dir(
+    "_build/e2e/workspaces",
+    scenario,
+    e2e_fixture_dir(scenario),
+  )
+  let result = e2e_run_cli(
+    [
+      e2e_join_path(workspace, "workflow.yml"),
+      "--event",
+      e2e_join_path(workspace, "event.json"),
+    ],
+    env={ "ACTION_RUNNER_SECRET_CALL_TOKEN": "s3cr3t" },
+  )
+  e2e_expect_ok(result, scenario)
+  e2e_expect_contains(result.stdout, "workflow=e2e-composite", scenario)
+  e2e_expect_contains(result.stdout, "state=completed", scenario)
+  e2e_expect_contains(result.stdout, "build/verify: success", scenario)
+  e2e_expect_eq(
+    e2e_read_text(e2e_join_path(workspace, "artifacts/result.txt")),
+    "hello-nested|outer|hello-nested",
+    scenario + " artifact",
+  )
+}
+
+///|
+#cfg(target="native")
+async fn run_local_reusable_workflow() -> Unit {
+  let scenario = "local-reusable-workflow"
+  let workspace = e2e_prepare_copied_dir(
+    "_build/e2e/workspaces",
+    scenario,
+    e2e_fixture_dir(scenario),
+  )
+  let result = e2e_run_cli(
+    [
+      e2e_join_path(workspace, "workflow.yml"),
+      "--event",
+      e2e_join_path(workspace, "event.json"),
+    ],
+    env={ "ACTION_RUNNER_SECRET_CALL_TOKEN": "s3cr3t" },
+  )
+  e2e_expect_ok(result, scenario)
+  e2e_expect_contains(result.stdout, "workflow=e2e-reusable", scenario)
+  e2e_expect_contains(result.stdout, "state=completed", scenario)
+  e2e_expect_contains(result.stdout, "after/package: success", scenario)
+  e2e_expect_eq(
+    e2e_read_text(e2e_join_path(workspace, "artifacts/result.txt")),
+    "reusable|s3cr3t-done",
+    scenario + " artifact",
+  )
+}
+
+///|
+#cfg(target="native")
+async fn run_local_reusable_workflow_inherit() -> Unit {
+  let scenario = "local-reusable-workflow-inherit"
+  let workspace = e2e_prepare_copied_dir(
+    "_build/e2e/workspaces",
+    scenario,
+    e2e_fixture_dir(scenario),
+  )
+  let result = e2e_run_cli(
+    [
+      e2e_join_path(workspace, "workflow.yml"),
+      "--event",
+      e2e_join_path(workspace, "event.json"),
+    ],
+    env={ "ACTION_RUNNER_SECRET_TOKEN": "s3cr3t" },
+  )
+  e2e_expect_ok(result, scenario)
+  e2e_expect_contains(result.stdout, "workflow=e2e-reusable-inherit", scenario)
+  e2e_expect_contains(result.stdout, "state=completed", scenario)
+  e2e_expect_contains(result.stdout, "after/package: success", scenario)
+  e2e_expect_eq(
+    e2e_read_text(e2e_join_path(workspace, "artifacts/result.txt")),
+    "s3cr3t-done",
+    scenario + " artifact",
+  )
+}
+
+///|
+#cfg(target="native")
+async fn run_local_reusable_workflow_input_types() -> Unit {
+  let scenario = "local-reusable-workflow-input-types"
   let workspace = e2e_prepare_copied_dir(
     "_build/e2e/workspaces",
     scenario,
@@ -818,13 +1260,231 @@ async fn run_local_composite_nested() -> Unit {
     e2e_join_path(workspace, "event.json"),
   ])
   e2e_expect_ok(result, scenario)
-  e2e_expect_contains(result.stdout, "workflow=e2e-composite", scenario)
+  e2e_expect_contains(
+    result.stdout,
+    "workflow=local-reusable-workflow-input-types",
+    scenario,
+  )
   e2e_expect_contains(result.stdout, "state=completed", scenario)
-  e2e_expect_contains(result.stdout, "build/verify: success", scenario)
+  e2e_expect_contains(result.stdout, "after/package: success", scenario)
   e2e_expect_eq(
     e2e_read_text(e2e_join_path(workspace, "artifacts/result.txt")),
-    "hello-nested|outer|hello-nested",
+    "false|0|hello",
     scenario + " artifact",
+  )
+}
+
+///|
+#cfg(target="native")
+async fn run_local_reusable_workflow_matrix() -> Unit {
+  let scenario = "local-reusable-workflow-matrix"
+  let workspace = e2e_prepare_copied_dir(
+    "_build/e2e/workspaces",
+    scenario,
+    e2e_fixture_dir(scenario),
+  )
+  let result = e2e_run_cli([
+    e2e_join_path(workspace, "workflow.yml"),
+    "--event",
+    e2e_join_path(workspace, "event.json"),
+  ])
+  e2e_expect_ok(result, scenario)
+  e2e_expect_contains(
+    result.stdout,
+    "workflow=local-reusable-workflow-matrix",
+    scenario,
+  )
+  e2e_expect_contains(result.stdout, "state=completed", scenario)
+  e2e_expect_contains(result.stdout, "after/verify: success", scenario)
+  e2e_expect_eq(
+    e2e_read_text(e2e_join_path(workspace, "artifacts/result.txt")),
+    "done",
+    scenario + " artifact",
+  )
+}
+
+///|
+#cfg(target="native")
+async fn run_local_reusable_workflow_matrix_output() -> Unit {
+  let scenario = "local-reusable-workflow-matrix-output"
+  let workspace = e2e_prepare_copied_dir(
+    "_build/e2e/workspaces",
+    scenario,
+    e2e_fixture_dir(scenario),
+  )
+  let result = e2e_run_cli([
+    e2e_join_path(workspace, "workflow.yml"),
+    "--event",
+    e2e_join_path(workspace, "event.json"),
+  ])
+  e2e_expect_ok(result, scenario)
+  e2e_expect_contains(
+    result.stdout,
+    "workflow=local-reusable-workflow-matrix-output",
+    scenario,
+  )
+  e2e_expect_contains(result.stdout, "state=completed", scenario)
+  e2e_expect_contains(result.stdout, "after/show: success", scenario)
+  e2e_expect_eq(
+    e2e_read_text(e2e_join_path(workspace, "artifacts/result.txt")),
+    "one",
+    scenario + " artifact",
+  )
+}
+
+///|
+#cfg(target="native")
+async fn run_remote_reusable_workflow() -> Unit {
+  let scenario = "remote-reusable-workflow"
+  let workspace = e2e_prepare_copied_dir(
+    "_build/e2e/workspaces",
+    scenario,
+    e2e_fixture_dir(scenario),
+  )
+  let log_path = e2e_join_path(workspace, "git.log")
+  let fake_git = e2e_prepare_fake_git_bin_from_source(
+    workspace,
+    e2e_join_path(workspace, "remote_repo"),
+    log_path,
+  )
+  let env : Map[String, String] = {
+    "ACTION_RUNNER_GIT_BIN": fake_git,
+    "ACTION_RUNNER_SECRET_CALL_TOKEN": "s3cr3t",
+  }
+  let result = e2e_run_cli(
+    [
+      e2e_join_path(workspace, "workflow.yml"),
+      "--event",
+      e2e_join_path(workspace, "event.json"),
+      "--github-action-cache-root",
+      e2e_join_path(workspace, "github_actions_cache"),
+    ],
+    env~,
+  )
+  e2e_expect_ok(result, scenario)
+  e2e_expect_contains(result.stdout, "workflow=e2e-remote-reusable", scenario)
+  e2e_expect_contains(result.stdout, "state=completed", scenario)
+  e2e_expect_contains(result.stdout, "after/package: success", scenario)
+  e2e_expect_eq(
+    e2e_read_text(e2e_join_path(workspace, "artifacts/result.txt")),
+    "remote-reusable|s3cr3t-done",
+    scenario + " artifact",
+  )
+  let git_log = e2e_read_text(log_path)
+  e2e_expect_contains(
+    git_log,
+    "https://github.com/demo/tools.git",
+    scenario + " git url",
+  )
+}
+
+///|
+#cfg(target="native")
+async fn run_remote_reusable_local_action() -> Unit {
+  let scenario = "remote-reusable-local-action"
+  let workspace = e2e_prepare_copied_dir(
+    "_build/e2e/workspaces",
+    scenario,
+    e2e_fixture_dir(scenario),
+  )
+  let log_path = e2e_join_path(workspace, "git.log")
+  let fake_git = e2e_prepare_fake_git_bin_from_source(
+    workspace,
+    e2e_join_path(workspace, "remote_repo"),
+    log_path,
+  )
+  let env : Map[String, String] = {
+    "ACTION_RUNNER_GIT_BIN": fake_git,
+    "ACTION_RUNNER_GITHUB_ACTION_CACHE_ROOT": e2e_join_path(
+      workspace, "github_actions_cache",
+    ),
+    "ACTION_RUNNER_SECRET_CALL_TOKEN": "s3cr3t",
+  }
+  let result = e2e_run_cli(
+    [
+      e2e_join_path(workspace, "workflow.yml"),
+      "--event",
+      e2e_join_path(workspace, "event.json"),
+    ],
+    env~,
+  )
+  e2e_expect_ok(result, scenario)
+  e2e_expect_contains(
+    result.stdout,
+    "workflow=e2e-remote-reusable-local-action",
+    scenario,
+  )
+  e2e_expect_contains(result.stdout, "state=completed", scenario)
+  e2e_expect_contains(result.stdout, "after/package: success", scenario)
+  e2e_expect_eq(
+    e2e_read_text(e2e_join_path(workspace, "artifacts/result.txt")),
+    "remote-local|s3cr3t-done",
+    scenario + " artifact",
+  )
+}
+
+///|
+#cfg(target="native")
+async fn run_remote_nested_reusable_workflow() -> Unit {
+  let scenario = "remote-nested-reusable-workflow"
+  let workspace = e2e_prepare_copied_dir(
+    "_build/e2e/workspaces",
+    scenario,
+    e2e_fixture_dir(scenario),
+  )
+  let log_path = e2e_join_path(workspace, "git.log")
+  let fake_git = e2e_prepare_fake_git_router_bin(
+    workspace,
+    [
+      {
+        match_text: "https://github.com/demo/outer.git",
+        source_dir: e2e_join_path(workspace, "outer_repo"),
+      },
+      {
+        match_text: "https://github.com/demo/inner.git",
+        source_dir: e2e_join_path(workspace, "inner_repo"),
+      },
+    ],
+    log_path,
+  )
+  let env : Map[String, String] = {
+    "ACTION_RUNNER_GIT_BIN": fake_git,
+    "ACTION_RUNNER_GITHUB_ACTION_CACHE_ROOT": e2e_join_path(
+      workspace, "github_actions_cache",
+    ),
+    "ACTION_RUNNER_SECRET_CALL_TOKEN": "s3cr3t",
+  }
+  let result = e2e_run_cli(
+    [
+      e2e_join_path(workspace, "workflow.yml"),
+      "--event",
+      e2e_join_path(workspace, "event.json"),
+    ],
+    env~,
+  )
+  e2e_expect_ok(result, scenario)
+  e2e_expect_contains(
+    result.stdout,
+    "workflow=e2e-remote-nested-reusable",
+    scenario,
+  )
+  e2e_expect_contains(result.stdout, "state=completed", scenario)
+  e2e_expect_contains(result.stdout, "after/package: success", scenario)
+  e2e_expect_eq(
+    e2e_read_text(e2e_join_path(workspace, "artifacts/result.txt")),
+    "remote-nested|s3cr3t-done",
+    scenario + " artifact",
+  )
+  let git_log = e2e_read_text(log_path)
+  e2e_expect_contains(
+    git_log,
+    "https://github.com/demo/outer.git",
+    scenario + " outer git url",
+  )
+  e2e_expect_contains(
+    git_log,
+    "https://github.com/demo/inner.git",
+    scenario + " inner git url",
   )
 }
 
@@ -906,6 +1566,44 @@ async fn run_artifact_actions_roundtrip() -> Unit {
     "alpha|beta",
     scenario + " result artifact",
   )
+}
+
+///|
+#cfg(target="native")
+async fn run_artifact_actions_roundtrip_container() -> Unit {
+  let scenario = "artifact-actions-roundtrip-container"
+  let workspace = e2e_prepare_copied_dir(
+    "_build/e2e/workspaces",
+    scenario,
+    e2e_fixture_dir(scenario),
+  )
+  let docker_log_path = e2e_join_path(workspace, "docker.log")
+  let fake_docker = e2e_prepare_fake_docker_bin(workspace, docker_log_path)
+  let result = e2e_run_cli(
+    [
+      e2e_join_path(workspace, "workflow.yml"),
+      "--event",
+      e2e_join_path(workspace, "event.json"),
+    ],
+    env={ "ACTION_RUNNER_DOCKER_BIN": fake_docker },
+  )
+  e2e_expect_ok(result, scenario)
+  e2e_expect_contains(
+    result.stdout,
+    "workflow=e2e-artifact-actions-container",
+    scenario,
+  )
+  e2e_expect_contains(result.stdout, "state=completed", scenario)
+  e2e_expect_contains(result.stdout, "build/upload: success", scenario)
+  e2e_expect_contains(result.stdout, "build/download: success", scenario)
+  e2e_expect_eq(
+    e2e_read_text(e2e_join_path(workspace, "artifacts/result.txt")),
+    "alpha|beta",
+    scenario + " result artifact",
+  )
+  let docker_log = e2e_read_text(docker_log_path)
+  e2e_expect_contains(docker_log, "run", scenario + " docker run")
+  e2e_expect_contains(docker_log, "alpine:3.21", scenario + " docker image")
 }
 
 ///|
@@ -1089,6 +1787,46 @@ async fn run_cache_auto_save_roundtrip() -> Unit {
     "true|ocean",
     scenario + " result artifact",
   )
+}
+
+///|
+#cfg(target="native")
+async fn run_cache_auto_save_container() -> Unit {
+  let scenario = "cache-auto-save-container"
+  e2e_remove_tree("_build/action_runner/cache")
+  let workspace = e2e_prepare_copied_dir(
+    "_build/e2e/workspaces",
+    scenario,
+    e2e_fixture_dir(scenario),
+  )
+  let docker_log_path = e2e_join_path(workspace, "docker.log")
+  let fake_docker = e2e_prepare_fake_docker_bin(workspace, docker_log_path)
+  let result = e2e_run_cli(
+    [
+      e2e_join_path(workspace, "workflow.yml"),
+      "--event",
+      e2e_join_path(workspace, "event.json"),
+    ],
+    env={ "ACTION_RUNNER_DOCKER_BIN": fake_docker },
+  )
+  e2e_expect_ok(result, scenario)
+  e2e_expect_contains(
+    result.stdout,
+    "workflow=e2e-cache-auto-save-container",
+    scenario,
+  )
+  e2e_expect_contains(result.stdout, "state=completed", scenario)
+  e2e_expect_contains(result.stdout, "save/cache: success", scenario)
+  e2e_expect_contains(result.stdout, "save/cache__post: success", scenario)
+  e2e_expect_contains(result.stdout, "restore/cache: success", scenario)
+  e2e_expect_eq(
+    e2e_read_text(e2e_join_path(workspace, "artifacts/result.txt")),
+    "true|ocean",
+    scenario + " result artifact",
+  )
+  let docker_log = e2e_read_text(docker_log_path)
+  e2e_expect_contains(docker_log, "run", scenario + " docker run")
+  e2e_expect_contains(docker_log, "alpine:3.21", scenario + " docker image")
 }
 
 ///|
@@ -1334,6 +2072,50 @@ async fn run_checkout_submodules() -> Unit {
 
 ///|
 #cfg(target="native")
+async fn run_checkout_container() -> Unit {
+  let scenario = "checkout-container"
+  let workspace = e2e_prepare_copied_dir(
+    "_build/e2e/workspaces",
+    scenario,
+    e2e_fixture_dir(scenario),
+  )
+  e2e_prepare_git_checkout_workspace(workspace)
+  let tools_root = e2e_join_path("_build/e2e/tools", scenario)
+  e2e_remove_tree(tools_root)
+  e2e_ensure_dir(tools_root)
+  let docker_log_path = e2e_join_path(tools_root, "docker.log")
+  let fake_docker = e2e_prepare_fake_docker_bin(tools_root, docker_log_path)
+  let result = e2e_run_cli(
+    [
+      e2e_join_path(workspace, "workflow.yml"),
+      "--event",
+      e2e_join_path(workspace, "event.json"),
+    ],
+    env={ "ACTION_RUNNER_DOCKER_BIN": fake_docker },
+  )
+  e2e_expect_ok(result, scenario)
+  e2e_expect_contains(
+    result.stdout,
+    "workflow=e2e-checkout-container",
+    scenario,
+  )
+  e2e_expect_contains(result.stdout, "state=completed", scenario)
+  e2e_expect_contains(result.stdout, "build/checkout: success", scenario)
+  e2e_expect_eq(
+    e2e_read_text(e2e_join_path(workspace, "artifacts/result.txt")),
+    "second|yes",
+    scenario + " result artifact",
+  )
+  let docker_log = e2e_read_text(docker_log_path)
+  e2e_expect_contains(
+    docker_log,
+    "node:20-bookworm",
+    scenario + " container image",
+  )
+}
+
+///|
+#cfg(target="native")
 async fn run_setup_node_basic() -> Unit {
   let scenario = "setup-node-basic"
   let workspace = e2e_prepare_copied_dir(
@@ -1395,6 +2177,48 @@ async fn run_setup_node_cache_npm() -> Unit {
     e2e_read_text(e2e_join_path(workspace, "artifacts/result.txt")),
     "true|ocean|false|v20.19.5",
     scenario + " result artifact",
+  )
+}
+
+///|
+#cfg(target="native")
+async fn run_setup_node_container() -> Unit {
+  let scenario = "setup-node-container"
+  let workspace = e2e_prepare_copied_dir(
+    "_build/e2e/workspaces",
+    scenario,
+    e2e_fixture_dir(scenario),
+  )
+  let node_log_path = e2e_join_path(workspace, "setup-node.log")
+  ignore(e2e_prepare_fake_version_node_bin(workspace, node_log_path, "24.9.0"))
+  let docker_log_path = e2e_join_path(workspace, "docker.log")
+  let fake_docker = e2e_prepare_fake_docker_bin(workspace, docker_log_path)
+  let result = e2e_run_cli(
+    [
+      e2e_join_path(workspace, "workflow.yml"),
+      "--event",
+      e2e_join_path(workspace, "event.json"),
+    ],
+    env={ "ACTION_RUNNER_DOCKER_BIN": fake_docker },
+  )
+  e2e_expect_ok(result, scenario)
+  e2e_expect_contains(
+    result.stdout,
+    "workflow=e2e-setup-node-container",
+    scenario,
+  )
+  e2e_expect_contains(result.stdout, "state=completed", scenario)
+  e2e_expect_contains(result.stdout, "build/setup: success", scenario)
+  e2e_expect_eq(
+    e2e_read_text(e2e_join_path(workspace, "artifacts/result.txt")),
+    "v20.0.0|v20.0.0",
+    scenario + " result artifact",
+  )
+  let docker_log = e2e_read_text(docker_log_path)
+  e2e_expect_contains(
+    docker_log,
+    "node:20-bookworm",
+    scenario + " container image",
   )
 }
 
@@ -2059,6 +2883,221 @@ async fn run_unsupported_workflow_call() -> Unit {
 
 ///|
 #cfg(target="native")
+async fn run_job_container_basic() -> Unit {
+  let scenario = "job-container-basic"
+  let workspace = e2e_prepare_copied_dir(
+    "_build/e2e/workspaces",
+    scenario,
+    e2e_fixture_dir(scenario),
+  )
+  let docker_log_path = e2e_join_path(workspace, "docker.log")
+  let fake_docker = e2e_prepare_fake_docker_bin(workspace, docker_log_path)
+  let result = e2e_run_cli([e2e_join_path(workspace, "workflow.yml")], env={
+    "ACTION_RUNNER_DOCKER_BIN": fake_docker,
+  })
+  e2e_expect_ok(result, scenario)
+  e2e_expect_contains(result.stdout, "workflow=job-container-basic", scenario)
+  e2e_expect_contains(result.stdout, "state=completed", scenario)
+  e2e_expect_contains(result.stdout, "build/show: success", scenario)
+  e2e_expect_eq(
+    @xfs.read_file_to_string(e2e_join_path(workspace, "out.txt")),
+    "from-container|" + workspace + "/nested",
+    scenario + " output",
+  )
+  let docker_log = @xfs.read_file_to_string(docker_log_path)
+  e2e_expect_contains(docker_log, "run", scenario + " docker run")
+  e2e_expect_contains(docker_log, "alpine:3.21", scenario + " docker image")
+}
+
+///|
+#cfg(target="native")
+async fn run_job_container_node_action() -> Unit {
+  let scenario = "job-container-node-action"
+  let workspace = e2e_prepare_copied_dir(
+    "_build/e2e/workspaces",
+    scenario,
+    e2e_fixture_dir(scenario),
+  )
+  let cache_root = e2e_join_path(workspace, "github_actions_cache")
+  let cached_action_root = e2e_join_path(cache_root, "demo/tools/v1/action")
+  e2e_copy_tree(
+    e2e_join_path(workspace, "remote_action/action"),
+    cached_action_root,
+  )
+  let node_log_path = e2e_join_path(workspace, "node.log")
+  let fake_node = e2e_prepare_fake_node_bin(workspace, node_log_path)
+  let docker_log_path = e2e_join_path(workspace, "docker.log")
+  let fake_docker = e2e_prepare_fake_docker_bin(workspace, docker_log_path)
+  let result = e2e_run_cli([e2e_join_path(workspace, "workflow.yml")], env={
+    "ACTION_RUNNER_DOCKER_BIN": fake_docker,
+    "ACTION_RUNNER_GITHUB_ACTION_CACHE_ROOT": cache_root,
+    "ACTION_RUNNER_NODE_BIN": fake_node,
+  })
+  e2e_expect_ok(result, scenario)
+  e2e_expect_contains(
+    result.stdout,
+    "workflow=e2e-job-container-node-action",
+    scenario,
+  )
+  e2e_expect_contains(result.stdout, "state=completed", scenario)
+  e2e_expect_contains(result.stdout, "build/remote: success", scenario)
+  e2e_expect_eq(
+    e2e_read_text(e2e_join_path(workspace, "node.txt")),
+    "from-container|" + workspace + "|" + cached_action_root,
+    scenario + " output",
+  )
+  let docker_log = e2e_read_text(docker_log_path)
+  e2e_expect_contains(docker_log, "run", scenario + " docker run")
+  e2e_expect_contains(docker_log, "alpine:3.21", scenario + " docker image")
+  e2e_expect_contains(docker_log, fake_node, scenario + " node bin")
+  e2e_expect_contains(
+    docker_log,
+    cached_action_root + "/main.sh",
+    scenario + " entrypoint",
+  )
+}
+
+///|
+#cfg(target="native")
+async fn run_job_container_docker_action() -> Unit {
+  let scenario = "job-container-docker-action"
+  let workspace = e2e_prepare_copied_dir(
+    "_build/e2e/workspaces",
+    scenario,
+    e2e_fixture_dir(scenario),
+  )
+  let cache_root = e2e_join_path(workspace, "github_actions_cache")
+  let cached_action_root = e2e_join_path(
+    cache_root, "demo/docker-action/v1/action",
+  )
+  e2e_copy_tree(
+    e2e_join_path(workspace, "remote_action/action"),
+    cached_action_root,
+  )
+  let docker_log_path = e2e_join_path(workspace, "docker.log")
+  let fake_docker = e2e_prepare_fake_docker_bin(workspace, docker_log_path)
+  let result = e2e_run_cli([e2e_join_path(workspace, "workflow.yml")], env={
+    "ACTION_RUNNER_DOCKER_BIN": fake_docker,
+    "ACTION_RUNNER_GITHUB_ACTION_CACHE_ROOT": cache_root,
+  })
+  e2e_expect_ok(result, scenario)
+  e2e_expect_contains(
+    result.stdout,
+    "workflow=e2e-job-container-docker-action",
+    scenario,
+  )
+  e2e_expect_contains(result.stdout, "state=completed", scenario)
+  e2e_expect_contains(result.stdout, "build/remote: success", scenario)
+  e2e_expect_eq(
+    e2e_read_text(e2e_join_path(workspace, "docker.txt")),
+    "",
+    scenario + " output",
+  )
+  let docker_log = e2e_read_text(docker_log_path)
+  e2e_expect_contains(docker_log, "run", scenario + " docker run")
+  e2e_expect_contains(docker_log, "-v", scenario + " volume flag")
+  e2e_expect_contains(docker_log, "cache:/cache", scenario + " shared volume")
+  e2e_expect_not_contains(
+    docker_log,
+    "CONTAINER_FLAG=from-container",
+    scenario + " no container env",
+  )
+}
+
+///|
+#cfg(target="native")
+async fn run_job_services_basic() -> Unit {
+  let scenario = "job-services-basic"
+  let workspace = e2e_prepare_copied_dir(
+    "_build/e2e/workspaces",
+    scenario,
+    e2e_fixture_dir(scenario),
+  )
+  let docker_log_path = e2e_join_path(workspace, "docker.log")
+  let fake_docker = e2e_prepare_fake_docker_bin(workspace, docker_log_path)
+  let result = e2e_run_cli(
+    [
+      e2e_join_path(workspace, "workflow.yml"),
+      "--event",
+      e2e_join_path(workspace, "event.json"),
+    ],
+    env={ "ACTION_RUNNER_DOCKER_BIN": fake_docker },
+  )
+  e2e_expect_ok(result, scenario)
+  e2e_expect_contains(result.stdout, "workflow=job-services-basic", scenario)
+  e2e_expect_contains(result.stdout, "state=completed", scenario)
+  e2e_expect_contains(result.stdout, "build/show: success", scenario)
+  e2e_expect_contains(result.stdout, "build/verify: success", scenario)
+  e2e_expect_eq(
+    e2e_read_text(e2e_join_path(workspace, "artifacts/result.txt")),
+    "5432|5432|yes",
+    scenario + " result artifact",
+  )
+  let docker_log = e2e_read_text(docker_log_path)
+  e2e_expect_contains(docker_log, "run", scenario + " docker run")
+  e2e_expect_contains(docker_log, "-d", scenario + " detached service")
+  e2e_expect_contains(
+    docker_log,
+    "action-runner-service-build__postgres",
+    scenario + " service name",
+  )
+  e2e_expect_contains(docker_log, "postgres:16", scenario + " service image")
+  e2e_expect_contains(docker_log, "inspect", scenario + " health inspect")
+  e2e_expect_contains(docker_log, "rm", scenario + " cleanup command")
+}
+
+///|
+#cfg(target="native")
+async fn run_job_services_container_network() -> Unit {
+  let scenario = "job-services-container-network"
+  let workspace = e2e_prepare_copied_dir(
+    "_build/e2e/workspaces",
+    scenario,
+    e2e_fixture_dir(scenario),
+  )
+  let docker_log_path = e2e_join_path(workspace, "docker.log")
+  let fake_docker = e2e_prepare_fake_docker_bin(workspace, docker_log_path)
+  let result = e2e_run_cli(
+    [
+      e2e_join_path(workspace, "workflow.yml"),
+      "--event",
+      e2e_join_path(workspace, "event.json"),
+    ],
+    env={ "ACTION_RUNNER_DOCKER_BIN": fake_docker },
+  )
+  e2e_expect_ok(result, scenario)
+  e2e_expect_contains(
+    result.stdout,
+    "workflow=job-services-container-network",
+    scenario,
+  )
+  e2e_expect_contains(result.stdout, "state=completed", scenario)
+  e2e_expect_contains(result.stdout, "build/show: success", scenario)
+  e2e_expect_eq(
+    e2e_read_text(e2e_join_path(workspace, "artifacts/result.txt")),
+    "hi",
+    scenario + " result artifact",
+  )
+  let docker_log = e2e_read_text(docker_log_path)
+  e2e_expect_contains(
+    docker_log,
+    "network\ncreate\naction-runner-job-build\n",
+    scenario + " network create",
+  )
+  e2e_expect_contains(
+    docker_log,
+    "--network-alias\npostgres\n",
+    scenario + " network alias",
+  )
+  e2e_expect_contains(
+    docker_log,
+    "network\nrm\naction-runner-job-build\n",
+    scenario + " network cleanup",
+  )
+}
+
+///|
+#cfg(target="native")
 async fn run_event_cli_overrides() -> Unit {
   let scenario = "event-cli-overrides"
   let workspace = e2e_prepare_copied_dir(
@@ -2123,6 +3162,81 @@ async fn run_docker_image_basic() -> Unit {
   let docker_log = e2e_read_text(docker_log_path)
   e2e_expect_contains(docker_log, "run", scenario + " docker run")
   e2e_expect_contains(docker_log, "alpine:3.21", scenario + " docker image")
+}
+
+///|
+#cfg(target="native")
+async fn run_wasm_action_basic() -> Unit {
+  let scenario = "wasm-action-basic"
+  let workspace = e2e_prepare_copied_dir(
+    "_build/e2e/workspaces",
+    scenario,
+    e2e_fixture_dir(scenario),
+  )
+  let wasm_log_path = e2e_join_path(workspace, "wasm.log")
+  let wasm_bin = e2e_prepare_fake_wasm_bin(workspace, wasm_log_path)
+  let result = e2e_run_cli(
+    [
+      e2e_join_path(workspace, "workflow.yml"),
+      "--wasm-action-root",
+      e2e_join_path(workspace, "wasm-actions"),
+    ],
+    env={ "ACTION_RUNNER_WASM_BIN": wasm_bin },
+  )
+  e2e_expect_ok(result, scenario)
+  e2e_expect_contains(result.stdout, "workflow=e2e-wasm-action", scenario)
+  e2e_expect_contains(result.stdout, "state=completed", scenario)
+  e2e_expect_contains(result.stdout, "build/module: success", scenario)
+  e2e_expect_contains(result.stdout, "build/verify: success", scenario)
+  e2e_expect_eq(
+    e2e_read_text(e2e_join_path(workspace, "verify.txt")),
+    "from-wasm",
+    scenario + " verify artifact",
+  )
+  e2e_expect_eq(
+    e2e_read_text(e2e_join_path(workspace, "wasm-artifact.txt")),
+    "hello|" + workspace + "\n",
+    scenario + " wasm artifact",
+  )
+  let wasm_log = e2e_read_text(wasm_log_path)
+  e2e_expect_contains(wasm_log, "main.wasm", scenario + " wasm log")
+}
+
+///|
+#cfg(target="native")
+async fn run_custom_registry_node_action() -> Unit {
+  let scenario = "custom-registry-node-action"
+  let workspace = e2e_prepare_copied_dir(
+    "_build/e2e/workspaces",
+    scenario,
+    e2e_fixture_dir(scenario),
+  )
+  let node_log_path = e2e_join_path(workspace, "node.log")
+  let fake_node = e2e_prepare_fake_node_bin(workspace, node_log_path)
+  let result = e2e_run_cli(
+    [
+      e2e_join_path(workspace, "workflow.yml"),
+      "--registry-root",
+      e2e_join_path(workspace, "registry-actions"),
+    ],
+    env={ "ACTION_RUNNER_NODE_BIN": fake_node },
+  )
+  e2e_expect_ok(result, scenario)
+  e2e_expect_contains(
+    result.stdout,
+    "workflow=e2e-custom-registry-node",
+    scenario,
+  )
+  e2e_expect_contains(result.stdout, "state=completed", scenario)
+  e2e_expect_contains(result.stdout, "build/setup: success", scenario)
+  e2e_expect_contains(result.stdout, "build/verify: success", scenario)
+  e2e_expect_eq(
+    e2e_read_text(e2e_join_path(workspace, "registry-node.txt")),
+    "from-registry",
+    scenario + " registry artifact",
+  )
+  let node_log = e2e_read_text(node_log_path)
+  e2e_expect_contains(node_log, "index.sh", scenario + " node log")
 }
 
 ///|
@@ -3974,9 +5088,45 @@ async fn main {
   run_local_push_basic()
   println("e2e: local-push-basic ok")
 
+  println("e2e: run-store-basic")
+  run_store_basic()
+  println("e2e: run-store-basic ok")
+
   println("e2e: local-composite-nested")
   run_local_composite_nested()
   println("e2e: local-composite-nested ok")
+
+  println("e2e: local-reusable-workflow")
+  run_local_reusable_workflow()
+  println("e2e: local-reusable-workflow ok")
+
+  println("e2e: local-reusable-workflow-inherit")
+  run_local_reusable_workflow_inherit()
+  println("e2e: local-reusable-workflow-inherit ok")
+
+  println("e2e: local-reusable-workflow-input-types")
+  run_local_reusable_workflow_input_types()
+  println("e2e: local-reusable-workflow-input-types ok")
+
+  println("e2e: local-reusable-workflow-matrix")
+  run_local_reusable_workflow_matrix()
+  println("e2e: local-reusable-workflow-matrix ok")
+
+  println("e2e: local-reusable-workflow-matrix-output")
+  run_local_reusable_workflow_matrix_output()
+  println("e2e: local-reusable-workflow-matrix-output ok")
+
+  println("e2e: remote-reusable-workflow")
+  run_remote_reusable_workflow()
+  println("e2e: remote-reusable-workflow ok")
+
+  println("e2e: remote-reusable-local-action")
+  run_remote_reusable_local_action()
+  println("e2e: remote-reusable-local-action ok")
+
+  println("e2e: remote-nested-reusable-workflow")
+  run_remote_nested_reusable_workflow()
+  println("e2e: remote-nested-reusable-workflow ok")
 
   println("e2e: trigger-skipped")
   run_trigger_skipped()
@@ -3989,6 +5139,10 @@ async fn main {
   println("e2e: artifact-actions-roundtrip")
   run_artifact_actions_roundtrip()
   println("e2e: artifact-actions-roundtrip ok")
+
+  println("e2e: artifact-actions-roundtrip-container")
+  run_artifact_actions_roundtrip_container()
+  println("e2e: artifact-actions-roundtrip-container ok")
 
   println("e2e: artifact-glob-directory")
   run_artifact_glob_directory()
@@ -4013,6 +5167,10 @@ async fn main {
   println("e2e: cache-auto-save-roundtrip")
   run_cache_auto_save_roundtrip()
   println("e2e: cache-auto-save-roundtrip ok")
+
+  println("e2e: cache-auto-save-container")
+  run_cache_auto_save_container()
+  println("e2e: cache-auto-save-container ok")
 
   println("e2e: cache-restore-keys")
   run_cache_restore_keys()
@@ -4046,6 +5204,10 @@ async fn main {
   run_checkout_submodules()
   println("e2e: checkout-submodules ok")
 
+  println("e2e: checkout-container")
+  run_checkout_container()
+  println("e2e: checkout-container ok")
+
   println("e2e: setup-node-basic")
   run_setup_node_basic()
   println("e2e: setup-node-basic ok")
@@ -4053,6 +5215,10 @@ async fn main {
   println("e2e: setup-node-cache-npm")
   run_setup_node_cache_npm()
   println("e2e: setup-node-cache-npm ok")
+
+  println("e2e: setup-node-container")
+  run_setup_node_container()
+  println("e2e: setup-node-container ok")
 
   println("e2e: expression-string-functions")
   run_expression_string_functions()
@@ -4138,6 +5304,26 @@ async fn main {
   run_unsupported_workflow_call()
   println("e2e: unsupported-workflow-call ok")
 
+  println("e2e: job-container-basic")
+  run_job_container_basic()
+  println("e2e: job-container-basic ok")
+
+  println("e2e: job-container-node-action")
+  run_job_container_node_action()
+  println("e2e: job-container-node-action ok")
+
+  println("e2e: job-container-docker-action")
+  run_job_container_docker_action()
+  println("e2e: job-container-docker-action ok")
+
+  println("e2e: job-services-basic")
+  run_job_services_basic()
+  println("e2e: job-services-basic ok")
+
+  println("e2e: job-services-container-network")
+  run_job_services_container_network()
+  println("e2e: job-services-container-network ok")
+
   println("e2e: event-cli-overrides")
   run_event_cli_overrides()
   println("e2e: event-cli-overrides ok")
@@ -4145,6 +5331,14 @@ async fn main {
   println("e2e: docker-image-basic")
   run_docker_image_basic()
   println("e2e: docker-image-basic ok")
+
+  println("e2e: wasm-action-basic")
+  run_wasm_action_basic()
+  println("e2e: wasm-action-basic ok")
+
+  println("e2e: custom-registry-node-action")
+  run_custom_registry_node_action()
+  println("e2e: custom-registry-node-action ok")
 
   println("e2e: event-head-commit-fallback")
   run_event_head_commit_fallback()

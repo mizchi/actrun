@@ -1,0 +1,11 @@
+name: emit
+inputs:
+  message:
+    required: true
+  token:
+    required: true
+runs:
+  using: composite
+  steps:
+    - id: write
+      run: printf '%s|%s' '${{ inputs.message }}' '${{ inputs.token }}' > inner.txt

@@ -1,0 +1,13 @@
+name: reusable
+on:
+  workflow_call:
+    inputs:
+      message:
+        required: true
+        type: string
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: write
+        run: printf '%s' '${{ inputs.message }}' > '${{ inputs.message }}.txt'

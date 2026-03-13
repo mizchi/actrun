@@ -1,0 +1,12 @@
+name: e2e-job-container-node-action
+'on': push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: alpine:3.21
+      env:
+        CONTAINER_FLAG: from-container
+    steps:
+      - id: remote
+        uses: demo/tools/action@v1

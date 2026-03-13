@@ -1,0 +1,29 @@
+name: reusable
+on:
+  workflow_call:
+    inputs:
+      message:
+        required: true
+        type: string
+    outputs:
+      result:
+        value: ${{ jobs.verify.outputs.result }}
+    secrets:
+      token:
+        required: true
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: write
+        run: printf '%s|%s' '${{ inputs.message }}' '${{ secrets.token }}' > reusable.txt
+  verify:
+    needs: [build]
+    runs-on: ubuntu-latest
+    outputs:
+      result: ${{ steps.capture.outputs.result }}
+    steps:
+      - id: capture
+        run: printf 'result=%s' "$(cat reusable.txt)" >> "$GITHUB_OUTPUT"
+      - id: verify
+        run: test -f reusable.txt

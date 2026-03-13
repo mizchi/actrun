@@ -123,18 +123,52 @@ fn after_sequence_dash(text : String) -> String {
 
 ///|
 fn split_key_value(text : String) -> (String, String?)? {
-  guard text.find(":") is Some(idx) else { return None }
-  let key = String::unsafe_substring(text, start=0, end=idx)
-    .trim(chars=" ")
-    .to_string()
-  let rest = String::unsafe_substring(text, start=idx + 1, end=text.length())
-    .trim_start(chars=" ")
-    .to_string()
-  if rest.length() == 0 {
-    Some((key, None))
-  } else {
-    Some((key, Some(rest)))
+  let mut in_single = false
+  let mut in_double = false
+  let mut bracket_depth = 0
+  let mut brace_depth = 0
+  let mut idx = 0
+  while idx < text.length() {
+    let ch = text.unsafe_get(idx)
+    if ch == '\'' && not(in_double) {
+      in_single = not(in_single)
+      idx += 1
+      continue
+    }
+    if ch == '"' && not(in_single) {
+      in_double = not(in_double)
+      idx += 1
+      continue
+    }
+    if not(in_single) && not(in_double) {
+      if ch == '[' {
+        bracket_depth += 1
+      } else if ch == ']' && bracket_depth > 0 {
+        bracket_depth -= 1
+      } else if ch == '{' {
+        brace_depth += 1
+      } else if ch == '}' && brace_depth > 0 {
+        brace_depth -= 1
+      } else if ch == ':' && bracket_depth == 0 && brace_depth == 0 {
+        let key = String::unsafe_substring(text, start=0, end=idx)
+          .trim(chars=" ")
+          .to_string()
+        let rest = String::unsafe_substring(
+            text,
+            start=idx + 1,
+            end=text.length(),
+          )
+          .trim_start(chars=" ")
+          .to_string()
+        if rest.length() == 0 {
+          return Some((key, None))
+        }
+        return Some((key, Some(rest)))
+      }
+    }
+    idx += 1
   }
+  None
 }
 
 ///|
@@ -889,21 +923,161 @@ fn parse_concurrency(
 priv struct ParsedTriggers {
   push : PushTrigger
   workflow_call : Bool
+  workflow_call_spec : WorkflowCallSpec?
 }
 
 ///|
 fn parse_workflow_call_trigger(
   value : YamlValue?,
   errors : Array[String],
-) -> Bool {
+) -> WorkflowCallSpec? {
+  fn parse_workflow_call_inputs(
+    value : YamlValue?,
+    errors : Array[String],
+    ctx : String,
+  ) -> Map[String, WorkflowCallInputSpec] {
+    let inputs : Map[String, WorkflowCallInputSpec] = {}
+    guard value is Some(actual) else { return inputs }
+    match actual {
+      Obj(fields) =>
+        for field in fields {
+          let input_fields = yaml_as_obj(
+            field.value,
+            errors,
+            ctx + "." + field.key,
+          )
+          let input_type = yaml_as_optional_string(
+            yaml_obj_get(input_fields, "type"),
+            errors,
+            ctx + "." + field.key + ".type",
+          ).unwrap_or("")
+          if input_type.length() == 0 {
+            errors.push(ctx + "." + field.key + ".type is required")
+          }
+          if input_type.length() > 0 &&
+            input_type != "boolean" &&
+            input_type != "number" &&
+            input_type != "string" {
+            errors.push(
+              ctx + "." + field.key + ".type must be boolean, number, or string",
+            )
+          }
+          inputs[field.key] = new_workflow_call_input_spec(
+            description=yaml_as_optional_string(
+              yaml_obj_get(input_fields, "description"),
+              errors,
+              ctx + "." + field.key + ".description",
+            ).unwrap_or(""),
+            required=yaml_as_optional_bool(
+              yaml_obj_get(input_fields, "required"),
+              errors,
+              ctx + "." + field.key + ".required",
+            ).unwrap_or(false),
+            default_value=yaml_as_optional_string(
+              yaml_obj_get(input_fields, "default"),
+              errors,
+              ctx + "." + field.key + ".default",
+            ),
+            input_type~,
+          )
+        }
+      _ => errors.push(ctx + " must be a mapping")
+    }
+    inputs
+  }
+
+  fn parse_workflow_call_outputs(
+    value : YamlValue?,
+    errors : Array[String],
+    ctx : String,
+  ) -> Map[String, WorkflowCallOutputSpec] {
+    let outputs : Map[String, WorkflowCallOutputSpec] = {}
+    guard value is Some(actual) else { return outputs }
+    match actual {
+      Obj(fields) =>
+        for field in fields {
+          let output_fields = yaml_as_obj(
+            field.value,
+            errors,
+            ctx + "." + field.key,
+          )
+          let value_expr = yaml_as_optional_string(
+            yaml_obj_get(output_fields, "value"),
+            errors,
+            ctx + "." + field.key + ".value",
+          ).unwrap_or("")
+          if value_expr.length() == 0 {
+            errors.push(ctx + "." + field.key + ".value is required")
+          }
+          outputs[field.key] = new_workflow_call_output_spec(
+            description=yaml_as_optional_string(
+              yaml_obj_get(output_fields, "description"),
+              errors,
+              ctx + "." + field.key + ".description",
+            ).unwrap_or(""),
+            value=value_expr,
+          )
+        }
+      _ => errors.push(ctx + " must be a mapping")
+    }
+    outputs
+  }
+
+  fn parse_workflow_call_secrets(
+    value : YamlValue?,
+    errors : Array[String],
+    ctx : String,
+  ) -> Map[String, WorkflowCallSecretSpec] {
+    let secrets : Map[String, WorkflowCallSecretSpec] = {}
+    guard value is Some(actual) else { return secrets }
+    match actual {
+      Obj(fields) =>
+        for field in fields {
+          let secret_fields = yaml_as_obj(
+            field.value,
+            errors,
+            ctx + "." + field.key,
+          )
+          secrets[field.key] = new_workflow_call_secret_spec(
+            required=yaml_as_optional_bool(
+              yaml_obj_get(secret_fields, "required"),
+              errors,
+              ctx + "." + field.key + ".required",
+            ).unwrap_or(false),
+          )
+        }
+      _ => errors.push(ctx + " must be a mapping")
+    }
+    secrets
+  }
+
   match value {
-    Some(Obj(_)) => true
-    Some(Null) => true
+    Some(Obj(fields)) =>
+      Some(
+        new_workflow_call_spec(
+          inputs=parse_workflow_call_inputs(
+            yaml_obj_get(fields, "inputs"),
+            errors,
+            "on.workflow_call.inputs",
+          ),
+          outputs=parse_workflow_call_outputs(
+            yaml_obj_get(fields, "outputs"),
+            errors,
+            "on.workflow_call.outputs",
+          ),
+          secrets=parse_workflow_call_secrets(
+            yaml_obj_get(fields, "secrets"),
+            errors,
+            "on.workflow_call.secrets",
+          ),
+        ),
+      )
+    Some(Null) => Some(new_workflow_call_spec())
     Some(_) => {
       errors.push("on.workflow_call must be a mapping")
-      false
+      None
     }
-    None => false
+    None => None
   }
 }
 
@@ -949,37 +1123,70 @@ fn parse_trigger(value : YamlValue?, errors : Array[String]) -> ParsedTriggers {
   match value {
     Some(Str(event_name)) =>
       if event_name == "push" {
-        { push: new_push_trigger(), workflow_call: false }
+        {
+          push: new_push_trigger(),
+          workflow_call: false,
+          workflow_call_spec: None,
+        }
       } else if event_name == "workflow_call" {
-        { push: new_push_trigger(), workflow_call: true }
+        {
+          push: new_push_trigger(),
+          workflow_call: true,
+          workflow_call_spec: Some(new_workflow_call_spec()),
+        }
       } else {
         errors.push("only push and workflow_call triggers are supported in MVP")
-        { push: new_push_trigger(), workflow_call: false }
+        {
+          push: new_push_trigger(),
+          workflow_call: false,
+          workflow_call_spec: None,
+        }
       }
     Some(Seq(items)) => {
+      let mut has_push = false
       let mut workflow_call = false
       for item in items {
         if item is Str("push") {
-          return { push: new_push_trigger(), workflow_call }
+          has_push = true
         }
         if item is Str("workflow_call") {
           workflow_call = true
         }
       }
-      if workflow_call {
-        { push: new_push_trigger(), workflow_call: true }
+      if has_push || workflow_call {
+        {
+          push: new_push_trigger(),
+          workflow_call,
+          workflow_call_spec: if workflow_call {
+            Some(new_workflow_call_spec())
+          } else {
+            None
+          },
+        }
       } else {
         errors.push("only push and workflow_call triggers are supported in MVP")
-        { push: new_push_trigger(), workflow_call: false }
+        {
+          push: new_push_trigger(),
+          workflow_call: false,
+          workflow_call_spec: None,
+        }
       }
     }
     Some(Null) => {
       errors.push("on must define push or workflow_call")
-      { push: new_push_trigger(), workflow_call: false }
+      {
+        push: new_push_trigger(),
+        workflow_call: false,
+        workflow_call_spec: None,
+      }
     }
     None => {
       errors.push("on is required")
-      { push: new_push_trigger(), workflow_call: false }
+      {
+        push: new_push_trigger(),
+        workflow_call: false,
+        workflow_call_spec: None,
+      }
     }
     Some(Obj(fields)) => {
       let push = match yaml_obj_get(fields, "push") {
@@ -990,10 +1197,14 @@ fn parse_trigger(value : YamlValue?, errors : Array[String]) -> ParsedTriggers {
         yaml_obj_get(fields, "workflow_call"),
         errors,
       )
-      if yaml_obj_get(fields, "push") is None && not(workflow_call) {
+      if yaml_obj_get(fields, "push") is None && workflow_call is None {
         errors.push("only push and workflow_call triggers are supported in MVP")
       }
-      { push, workflow_call }
+      {
+        push,
+        workflow_call: workflow_call is Some(_),
+        workflow_call_spec: workflow_call,
+      }
     }
   }
 }
@@ -1080,19 +1291,91 @@ fn parse_job_steps(
 }
 
 ///|
-fn parse_container_image(
+fn parse_job_steps_optional(
   value : YamlValue?,
   errors : Array[String],
   ctx : String,
-) -> String? {
+) -> Array[StepSpec] {
+  guard value is Some(actual) else { return [] }
+  parse_job_steps(Some(actual), errors, ctx)
+}
+
+///|
+fn parse_container_credentials(
+  value : YamlValue?,
+  errors : Array[String],
+  ctx : String,
+) -> JobContainerCredentialsSpec? {
+  guard value is Some(actual) else { return None }
+  let fields = yaml_as_obj(actual, errors, ctx)
+  let username = yaml_as_optional_string(
+    yaml_obj_get(fields, "username"),
+    errors,
+    ctx + ".username",
+  ).unwrap_or("")
+  let password = yaml_as_optional_string(
+    yaml_obj_get(fields, "password"),
+    errors,
+    ctx + ".password",
+  ).unwrap_or("")
+  if username.length() == 0 {
+    errors.push(ctx + ".username is required")
+  }
+  if password.length() == 0 {
+    errors.push(ctx + ".password is required")
+  }
+  Some(new_job_container_credentials_spec(username, password))
+}
+
+///|
+fn parse_job_container_spec(
+  value : YamlValue?,
+  errors : Array[String],
+  ctx : String,
+  image_required : Bool,
+) -> JobContainerSpec? {
   match value {
-    Some(Str(text)) => Some(text)
-    Some(Obj(fields)) =>
-      yaml_as_optional_string(
+    Some(Str(text)) => Some(new_job_container_spec(text))
+    Some(Obj(fields)) => {
+      let image = yaml_as_optional_string(
         yaml_obj_get(fields, "image"),
         errors,
         ctx + ".image",
+      ).unwrap_or("")
+      if image_required && image.length() == 0 {
+        errors.push(ctx + ".image is required")
+      }
+      Some(
+        new_job_container_spec(
+          image,
+          credentials=parse_container_credentials(
+            yaml_obj_get(fields, "credentials"),
+            errors,
+            ctx + ".credentials",
+          ),
+          env=yaml_to_string_map(
+            yaml_obj_get(fields, "env"),
+            errors,
+            ctx + ".env",
+          ),
+          ports=yaml_as_string_list(
+            yaml_obj_get(fields, "ports"),
+            errors,
+            ctx + ".ports",
+          ),
+          volumes=yaml_as_string_list(
+            yaml_obj_get(fields, "volumes"),
+            errors,
+            ctx + ".volumes",
+          ),
+          options=yaml_as_optional_string(
+            yaml_obj_get(fields, "options"),
+            errors,
+            ctx + ".options",
+          ),
+        ),
       )
+    }
     Some(Null) => None
     Some(_) => {
       errors.push(ctx + " must be a string or mapping")
@@ -1103,13 +1386,100 @@ fn parse_container_image(
 }
 
 ///|
+fn parse_container(
+  value : YamlValue?,
+  errors : Array[String],
+  ctx : String,
+) -> JobContainerSpec? {
+  parse_job_container_spec(value, errors, ctx, true)
+}
+
+///|
+fn parse_services(
+  value : YamlValue?,
+  errors : Array[String],
+  ctx : String,
+) -> Map[String, JobContainerSpec] {
+  let services : Map[String, JobContainerSpec] = {}
+  guard value is Some(actual) else { return services }
+  match actual {
+    Obj(fields) =>
+      for field in fields {
+        match
+          parse_job_container_spec(
+            Some(field.value),
+            errors,
+            ctx + "." + field.key,
+            false,
+          ) {
+          Some(service) => services[field.key] = service
+          None => ()
+        }
+      }
+    _ => errors.push(ctx + " must be a mapping")
+  }
+  services
+}
+
+///|
+fn parse_reusable_workflow_secrets(
+  value : YamlValue?,
+  errors : Array[String],
+  ctx : String,
+) -> (Map[String, String], Bool) {
+  guard value is Some(actual) else { return ({}, false) }
+  match actual {
+    Str(text) =>
+      if text.trim(chars=" \t\r\n").to_lower() == "inherit" {
+        ({}, true)
+      } else {
+        errors.push(ctx + " must be a mapping or 'inherit'")
+        ({}, false)
+      }
+    Obj(_) => (yaml_to_string_map(Some(actual), errors, ctx), false)
+    _ => {
+      errors.push(ctx + " must be a mapping or 'inherit'")
+      ({}, false)
+    }
+  }
+}
+
+///|
 fn parse_job(id : String, value : YamlValue, errors : Array[String]) -> JobSpec {
   let ctx = "jobs." + id
   let fields = yaml_as_obj(value, errors, ctx)
   let strategy_value = yaml_obj_get(fields, "strategy")
+  let reusable_workflow = yaml_as_optional_string(
+    yaml_obj_get(fields, "uses"),
+    errors,
+    ctx + ".uses",
+  )
+  let container = parse_container(
+    yaml_obj_get(fields, "container"),
+    errors,
+    ctx + ".container",
+  )
+  let reusable_workflow_with = yaml_to_string_map(
+    yaml_obj_get(fields, "with"),
+    errors,
+    ctx + ".with",
+  )
+  let (reusable_workflow_secrets, reusable_workflow_inherit_secrets) = parse_reusable_workflow_secrets(
+    yaml_obj_get(fields, "secrets"),
+    errors,
+    ctx + ".secrets",
+  )
   new_job(
     id,
-    parse_job_steps(yaml_obj_get(fields, "steps"), errors, ctx + ".steps"),
+    if reusable_workflow is Some(_) {
+      parse_job_steps_optional(
+        yaml_obj_get(fields, "steps"),
+        errors,
+        ctx + ".steps",
+      )
+    } else {
+      parse_job_steps(yaml_obj_get(fields, "steps"), errors, ctx + ".steps")
+    },
     name=yaml_as_optional_string(
       yaml_obj_get(fields, "name"),
       errors,
@@ -1152,15 +1522,15 @@ fn parse_job(id : String, value : YamlValue, errors : Array[String]) -> JobSpec 
       ctx + ".defaults",
     ),
     matrix=parse_job_matrix(strategy_value, errors, ctx + ".strategy"),
-    reusable_workflow=yaml_as_optional_string(
-      yaml_obj_get(fields, "uses"),
+    reusable_workflow~,
+    reusable_workflow_with~,
+    reusable_workflow_secrets~,
+    reusable_workflow_inherit_secrets~,
+    container~,
+    services=parse_services(
+      yaml_obj_get(fields, "services"),
       errors,
-      ctx + ".uses",
-    ),
-    container_image=parse_container_image(
-      yaml_obj_get(fields, "container"),
-      errors,
-      ctx + ".container",
+      ctx + ".services",
     ),
   )
 }
@@ -1406,6 +1776,7 @@ pub fn parse_workflow_yaml(text : String) -> WorkflowParseResult {
     jobs,
     trigger=parsed_trigger.push,
     workflow_call=parsed_trigger.workflow_call,
+    workflow_call_spec=parsed_trigger.workflow_call_spec,
     permissions=parse_permissions(
       yaml_obj_get(root_fields, "permissions"),
       errors,

@@ -1,0 +1,24 @@
+name: reusable
+on:
+  workflow_call:
+    inputs:
+      enabled:
+        type: boolean
+      retries:
+        type: number
+      message:
+        type: string
+        default: hello
+    outputs:
+      result:
+        value: ${{ jobs.build.outputs.result }}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      result: ${{ steps.capture.outputs.result }}
+    steps:
+      - id: capture
+        run: |
+          printf '%s|%s|%s' '${{ inputs.enabled }}' '${{ inputs.retries }}' '${{ inputs.message }}' > typed.txt
+          printf 'result=%s' "$(cat typed.txt)" >> "$GITHUB_OUTPUT"

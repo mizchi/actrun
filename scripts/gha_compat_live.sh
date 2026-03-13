@@ -50,6 +50,8 @@ case "$workflow_file" in
       -f "compat_node_version=$compat_node_version"
     )
     ;;
+  compat-workflow-call-secrets-inherit.yml)
+    ;;
 esac
 
 echo "dispatching $workflow_file on $repo@$ref"

@@ -1,0 +1,25 @@
+name: e2e-run-store
+'on':
+  push:
+    branches:
+      - main
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: record
+        run: |
+          printf '%s' hello-run-store
+          printf '%s' summary-run-store >> "$GITHUB_STEP_SUMMARY"
+          mkdir -p artifacts
+          printf '%s|%s' "${{ github.event_name }}" "${{ github.repository }}" > artifacts/result.txt
+      - id: upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: report
+          path: artifacts/result.txt
+      - id: cache
+        uses: actions/cache/save@v4
+        with:
+          key: run-store-basic-key
+          path: artifacts/result.txt

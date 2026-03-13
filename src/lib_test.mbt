@@ -53,6 +53,35 @@ fn test_absolute_path(path : String) -> String {
 }
 
 ///|
+fn test_parent_dir(path : String) -> String {
+  let mut idx = path.length()
+  while idx > 0 {
+    idx -= 1
+    if path.unsafe_get(idx) == '/' {
+      if idx == 0 {
+        return "/"
+      }
+      return String::unsafe_substring(path, start=0, end=idx)
+    }
+  }
+  "."
+}
+
+///|
+fn test_ensure_dir_all(path : String) -> Unit raise {
+  if path.length() == 0 || path == "." || path == "/" || @xfs.path_exists(path) {
+    return
+  }
+  let parent = test_parent_dir(path)
+  if parent != path {
+    test_ensure_dir_all(parent)
+  }
+  if not(@xfs.path_exists(path)) {
+    @xfs.create_dir(path)
+  }
+}
+
+///|
 fn prepare_local_action_workspace(name : String) -> String raise {
   test_ensure_dir("_build")
   test_ensure_dir("_build/test-workspaces")
@@ -85,17 +114,49 @@ fn prepare_cached_github_action_root(
   }
   let segments : Array[String] = []
   for segment in action_root.split("/") {
-    segments.push(segment.to_string())
+    let text = segment.to_string()
+    if text.length() > 0 {
+      segments.push(text)
+    }
   }
-  let mut current = ""
+  let mut current = if action_root.has_prefix("/") { "/" } else { "" }
   for segment in segments {
-    current = if current.length() == 0 {
+    current = if current == "/" {
+      "/" + segment
+    } else if current.length() == 0 {
       segment
     } else {
       current + "/" + segment
     }
     test_ensure_dir(current)
   }
+  test_absolute_path(action_root)
+}
+
+///|
+fn lib_test_set_env_var(key : String, value : String) -> String? {
+  let previous = @xsys.get_env_var(key)
+  @xsys.set_env_var(key, value)
+  previous
+}
+
+///|
+fn lib_test_restore_env_var(key : String, previous : String?) -> Unit {
+  match previous {
+    Some(value) => @xsys.set_env_var(key, value)
+    None => @xsys.unset_env_var(key)
+  }
+}
+
+///|
+fn prepare_custom_registry_action_root(
+  root : String,
+  scheme : String,
+  name : String,
+  version : String,
+) -> String raise {
+  let action_root = root + "/" + scheme + "/" + name + "/" + version
+  test_ensure_dir_all(action_root)
   test_absolute_path(action_root)
 }
 
@@ -531,6 +592,134 @@ test "lowering: unsupported uses step is rejected" {
 }
 
 ///|
+test "lowering: custom registry composite action expands from registry root" {
+  let workspace = prepare_local_action_workspace("custom-registry-composite")
+  let registry_root = prepare_local_action_workspace(
+    "custom-registry-composite-root",
+  )
+  let previous_root = lib_test_set_env_var(
+    "ACTION_RUNNER_ACTION_REGISTRY_ROOT", registry_root,
+  )
+  let action_root = prepare_custom_registry_action_root(
+    registry_root, "bit", "std/cache", "v1",
+  )
+  let manifest =
+    #|name: cache
+    #|runs:
+    #|  using: composite
+    #|  steps:
+    #|    - id: write
+    #|      run: printf '%s' '${{ inputs.message }}'
+    #|      shell: bash
+  @xfs.write_string_to_file(action_root + "/action.yml", manifest)
+  let workflow = new_workflow("ci", [
+    new_job("test", [
+      new_uses_step("setup", "bit://std/cache@v1", with_values={
+        "message": "from-registry",
+      }),
+    ]),
+  ])
+
+  let result = lower_push_workflow_in_workspace(workflow, workspace)
+  lib_test_restore_env_var("ACTION_RUNNER_ACTION_REGISTRY_ROOT", previous_root)
+
+  inspect(result.errors, content="[]")
+  let write_plan = expect_task_plan(result.plan, "test/setup__write")
+  inspect(write_plan.kind, content="run")
+  inspect(write_plan.script, content="printf '%s' 'from-registry'")
+}
+
+///|
+test "lowering: custom registry node action resolves backend from manifest" {
+  let workspace = prepare_local_action_workspace("custom-registry-node")
+  let registry_root = prepare_local_action_workspace(
+    "custom-registry-node-root",
+  )
+  let previous_root = lib_test_set_env_var(
+    "ACTION_RUNNER_ACTION_REGISTRY_ROOT", registry_root,
+  )
+  let action_root = prepare_custom_registry_action_root(
+    registry_root, "bit", "std/cache", "v1",
+  )
+  let manifest =
+    #|name: cache
+    #|inputs:
+    #|  message:
+    #|    default: hello
+    #|runs:
+    #|  using: node20
+    #|  main: index.sh
+  @xfs.write_string_to_file(action_root + "/action.yml", manifest)
+  let workflow = new_workflow("ci", [
+    new_job("test", [
+      new_uses_step("setup", "bit://std/cache@v1", with_values={
+        "message": "from-node",
+      }),
+    ]),
+  ])
+
+  let result = lower_push_workflow_in_workspace(workflow, workspace)
+  lib_test_restore_env_var("ACTION_RUNNER_ACTION_REGISTRY_ROOT", previous_root)
+
+  inspect(result.errors, content="[]")
+  let setup_plan = expect_task_plan(result.plan, "test/setup")
+  inspect(setup_plan.kind, content="action")
+  inspect(setup_plan.action.unwrap().backend, content="node")
+  inspect(
+    setup_plan.action.unwrap().entrypoint.unwrap_or(""),
+    content=action_root + "/index.sh",
+  )
+  inspect(
+    setup_plan.env.get("INPUT_MESSAGE").unwrap_or(""),
+    content="from-node",
+  )
+}
+
+///|
+test "lowering: custom registry docker action resolves backend from manifest" {
+  let workspace = prepare_local_action_workspace("custom-registry-docker")
+  let registry_root = prepare_local_action_workspace(
+    "custom-registry-docker-root",
+  )
+  let previous_root = lib_test_set_env_var(
+    "ACTION_RUNNER_ACTION_REGISTRY_ROOT", registry_root,
+  )
+  let action_root = prepare_custom_registry_action_root(
+    registry_root, "bit", "std/docker-cache", "v1",
+  )
+  let manifest =
+    #|name: cache
+    #|inputs:
+    #|  message:
+    #|    default: hello
+    #|runs:
+    #|  using: docker
+    #|  image: docker://alpine:3.21
+    #|  entrypoint: echo
+    #|  args:
+    #|    - ${{ inputs.message }}
+  @xfs.write_string_to_file(action_root + "/action.yml", manifest)
+  let workflow = new_workflow("ci", [
+    new_job("test", [
+      new_uses_step("setup", "bit://std/docker-cache@v1", with_values={
+        "message": "from-docker",
+      }),
+    ]),
+  ])
+
+  let result = lower_push_workflow_in_workspace(workflow, workspace)
+  lib_test_restore_env_var("ACTION_RUNNER_ACTION_REGISTRY_ROOT", previous_root)
+
+  inspect(result.errors, content="[]")
+  let setup_plan = expect_task_plan(result.plan, "test/setup")
+  inspect(setup_plan.kind, content="action")
+  inspect(setup_plan.action.unwrap().backend, content="docker")
+  inspect(setup_plan.action.unwrap().image.unwrap_or(""), content="alpine:3.21")
+  inspect(setup_plan.action.unwrap().entrypoint.unwrap_or(""), content="echo")
+  inspect(setup_plan.action.unwrap().args, content="[\"from-docker\"]")
+}
+
+///|
 test "lowering: docker uses step becomes docker action task" {
   let workflow = new_workflow("ci", [
     new_job("test", [
@@ -550,6 +739,32 @@ test "lowering: docker uses step becomes docker action task" {
 
   let verify_task = flow_task_by_id(result.ir, "test/verify")
   inspect(verify_task.needs, content="[\"test/image\"]")
+}
+
+///|
+test "lowering: wasm uses step becomes wasm action task" {
+  let workflow = new_workflow("ci", [
+    new_job("test", [
+      new_uses_step("module", "wasm://std/echo@v1"),
+      new_run_step("verify", "echo ok"),
+    ]),
+  ])
+
+  let result = lower_push_workflow(workflow)
+
+  inspect(result.errors, content="[]")
+  let module_plan = expect_task_plan(result.plan, "test/module")
+  inspect(module_plan.kind, content="action")
+  inspect(module_plan.action.unwrap().backend, content="wasm")
+  inspect(module_plan.action.unwrap().kind, content="wasm-module")
+  inspect(module_plan.action.unwrap().capabilities.wasm, content="true")
+  inspect(
+    module_plan.action.unwrap().entrypoint.unwrap_or(""),
+    content="std/echo@v1",
+  )
+
+  let verify_task = flow_task_by_id(result.ir, "test/verify")
+  inspect(verify_task.needs, content="[\"test/module\"]")
 }
 
 ///|
@@ -882,6 +1097,8 @@ test "lowering: cached github repo node action becomes node task" {
   let remote_plan = expect_task_plan(result.plan, "test/remote")
   inspect(remote_plan.kind, content="action")
   inspect(remote_plan.action.unwrap().backend, content="node")
+  inspect(remote_plan.action.unwrap().capabilities.host, content="true")
+  inspect(remote_plan.action.unwrap().capabilities.docker, content="false")
   inspect(remote_plan.action.unwrap().kind, content="node-script")
   inspect(
     remote_plan.action.unwrap().uses,
@@ -993,6 +1210,8 @@ test "lowering: cached github repo docker action becomes docker task" {
   let remote_plan = expect_task_plan(result.plan, "test/remote")
   inspect(remote_plan.kind, content="action")
   inspect(remote_plan.action.unwrap().backend, content="docker")
+  inspect(remote_plan.action.unwrap().capabilities.host, content="false")
+  inspect(remote_plan.action.unwrap().capabilities.docker, content="true")
   inspect(remote_plan.action.unwrap().kind, content="docker-action")
   inspect(
     remote_plan.action.unwrap().image.unwrap_or(""),
@@ -1424,7 +1643,20 @@ test "parser/lowering: workflow and job concurrency are parsed and rejected in M
 test "parser/lowering: workflow_call is parsed and rejected in MVP" {
   let src =
     #|name: reusable
-    #|'on': workflow_call
+    #|on:
+    #|  workflow_call:
+    #|    inputs:
+    #|      target:
+    #|        description: target environment
+    #|        required: true
+    #|        type: string
+    #|    outputs:
+    #|      build_id:
+    #|        description: build identifier
+    #|        value: ${{ jobs.build.outputs.build_id }}
+    #|    secrets:
+    #|      token:
+    #|        required: true
     #|jobs:
     #|  build:
     #|    runs-on: ubuntu-latest
@@ -1436,7 +1668,864 @@ test "parser/lowering: workflow_call is parsed and rejected in MVP" {
   inspect(parsed.errors, content="[]")
   let workflow = parsed.workflow.unwrap()
   inspect(workflow.workflow_call, content="true")
+  let workflow_call = workflow.workflow_call_spec.unwrap()
+  inspect(
+    workflow_call.inputs.get("target").unwrap().description,
+    content="target environment",
+  )
+  inspect(workflow_call.inputs.get("target").unwrap().required, content="true")
+  inspect(
+    workflow_call.inputs.get("target").unwrap().input_type,
+    content="string",
+  )
+  inspect(
+    workflow_call.outputs.get("build_id").unwrap().value,
+    content="${{ jobs.build.outputs.build_id }}",
+  )
+  inspect(workflow_call.secrets.get("token").unwrap().required, content="true")
 
   let result = lower_push_workflow(workflow)
   inspect(result.errors, content="[\"workflow_call is not supported in MVP\"]")
+}
+
+///|
+test "lowering: local reusable workflow jobs are expanded in workspace-aware mode" {
+  let workspace = prepare_local_action_workspace("reusable-workflow-local")
+  test_ensure_dir(workspace + "/.github")
+  test_ensure_dir(workspace + "/.github/workflows")
+  let reusable_src =
+    #|name: reusable
+    #|on:
+    #|  workflow_call:
+    #|jobs:
+    #|  build:
+    #|    runs-on: ubuntu-latest
+    #|    steps:
+    #|      - id: write
+    #|        run: printf '%s' inner > inner.txt
+    #|  test:
+    #|    needs: [build]
+    #|    runs-on: ubuntu-latest
+    #|    steps:
+    #|      - id: verify
+    #|        run: test -f inner.txt
+  @xfs.write_string_to_file(
+    workspace + "/.github/workflows/reusable.yml",
+    reusable_src,
+  )
+  let caller_src =
+    #|name: caller
+    #|on: push
+    #|jobs:
+    #|  call:
+    #|    uses: ./.github/workflows/reusable.yml
+    #|  after:
+    #|    needs: [call]
+    #|    runs-on: ubuntu-latest
+    #|    steps:
+    #|      - id: show
+    #|        run: printf '%s' done > result.txt
+  let parsed = parse_workflow_yaml(caller_src)
+
+  inspect(parsed.errors, content="[]")
+  let workflow = parsed.workflow.unwrap()
+  let result = lower_push_workflow_in_workspace(workflow, workspace)
+
+  inspect(result.errors, content="[]")
+  let build_write = flow_task_by_id(result.ir, "call__build/write")
+  inspect(build_write.needs, content="[]")
+  let verify = flow_task_by_id(result.ir, "call__test/verify")
+  inspect(verify.needs, content="[\"call__build/__finish\"]")
+  let show = flow_task_by_id(result.ir, "after/show")
+  inspect(show.needs, content="[\"call__test/__finish\"]")
+  inspect(
+    result.plan.job_need_targets.get("after").unwrap().get("call").unwrap(),
+    content="[\"call__test\"]",
+  )
+}
+
+///|
+test "lowering: reusable workflow with and outputs are rewired to caller context" {
+  let workspace = prepare_local_action_workspace("reusable-workflow-io")
+  test_ensure_dir(workspace + "/.github")
+  test_ensure_dir(workspace + "/.github/workflows")
+  let reusable_src =
+    #|name: reusable
+    #|on:
+    #|  workflow_call:
+    #|    inputs:
+    #|      message:
+    #|        required: true
+    #|        type: string
+    #|    outputs:
+    #|      result:
+    #|        value: ${{ jobs.test.outputs.result }}
+    #|    secrets:
+    #|      token:
+    #|        required: true
+    #|jobs:
+    #|  build:
+    #|    runs-on: ubuntu-latest
+    #|    steps:
+    #|      - id: write
+    #|        run: printf '%s|%s' '${{ inputs.message }}' '${{ secrets.token }}' > inner.txt
+    #|  test:
+    #|    needs: [build]
+    #|    runs-on: ubuntu-latest
+    #|    outputs:
+    #|      result: ${{ steps.capture.outputs.result }}
+    #|    steps:
+    #|      - id: capture
+    #|        run: printf 'result=%s' \"$(cat inner.txt)\" >> \"$GITHUB_OUTPUT\"
+  @xfs.write_string_to_file(
+    workspace + "/.github/workflows/reusable.yml",
+    reusable_src,
+  )
+  let caller_src =
+    #|name: caller
+    #|on: push
+    #|jobs:
+    #|  call:
+    #|    uses: ./.github/workflows/reusable.yml
+    #|    with:
+    #|      message: hello
+    #|    secrets:
+    #|      token: ${{ secrets.CALL_TOKEN }}
+    #|  after:
+    #|    needs: [call]
+    #|    runs-on: ubuntu-latest
+    #|    steps:
+    #|      - id: show
+    #|        run: printf '%s' "${{ needs.call.outputs.result }}" > result.txt
+  let parsed = parse_workflow_yaml(caller_src)
+
+  inspect(parsed.errors, content="[]")
+  let workflow = parsed.workflow.unwrap()
+  inspect(
+    workflow.jobs[0].reusable_workflow_with.get("message").unwrap_or(""),
+    content="hello",
+  )
+  inspect(
+    workflow.jobs[0].reusable_workflow_secrets.get("token").unwrap_or(""),
+    content="${{ secrets.CALL_TOKEN }}",
+  )
+  let result = lower_push_workflow_in_workspace(workflow, workspace)
+
+  inspect(result.errors, content="[]")
+  inspect(
+    result.plan.job_virtual_targets.get("call").unwrap(),
+    content="[\"call__test\"]",
+  )
+  inspect(
+    result.plan.job_outputs.get("call").unwrap().get("result").unwrap_or(""),
+    content="${{ needs.call__test.outputs.result }}",
+  )
+  let build_write = expect_task_plan(result.plan, "call__build/write")
+  inspect(
+    build_write.script,
+    content="printf '%s|%s' 'hello' '${{ secrets.CALL_TOKEN }}' > inner.txt",
+  )
+}
+
+///|
+test "lowering: reusable workflow secrets inherit is rewired to caller secrets context" {
+  let workspace = prepare_local_action_workspace(
+    "reusable-workflow-secrets-inherit",
+  )
+  test_ensure_dir(workspace + "/.github")
+  test_ensure_dir(workspace + "/.github/workflows")
+  let reusable_src =
+    #|name: reusable
+    #|on:
+    #|  workflow_call:
+    #|    outputs:
+    #|      result:
+    #|        value: ${{ jobs.test.outputs.result }}
+    #|    secrets:
+    #|      token:
+    #|        required: true
+    #|jobs:
+    #|  build:
+    #|    runs-on: ubuntu-latest
+    #|    steps:
+    #|      - id: write
+    #|        run: printf '%s' '${{ secrets.token }}' > inner.txt
+    #|  test:
+    #|    needs: [build]
+    #|    runs-on: ubuntu-latest
+    #|    outputs:
+    #|      result: ${{ steps.capture.outputs.result }}
+    #|    steps:
+    #|      - id: capture
+    #|        run: printf 'result=%s' "$(cat inner.txt)" >> "$GITHUB_OUTPUT"
+  @xfs.write_string_to_file(
+    workspace + "/.github/workflows/reusable.yml",
+    reusable_src,
+  )
+  let caller_src =
+    #|name: caller
+    #|on: push
+    #|jobs:
+    #|  call:
+    #|    uses: ./.github/workflows/reusable.yml
+    #|    secrets: inherit
+    #|  after:
+    #|    needs: [call]
+    #|    runs-on: ubuntu-latest
+    #|    steps:
+    #|      - id: show
+    #|        run: printf '%s' "${{ needs.call.outputs.result }}" > result.txt
+  let parsed = parse_workflow_yaml(caller_src)
+
+  inspect(parsed.errors, content="[]")
+  let workflow = parsed.workflow.unwrap()
+  inspect(workflow.jobs[0].reusable_workflow_inherit_secrets, content="true")
+  let result = lower_push_workflow_in_workspace(workflow, workspace)
+
+  inspect(result.errors, content="[]")
+  let build_write = expect_task_plan(result.plan, "call__build/write")
+  inspect(
+    build_write.script,
+    content="printf '%s' '${{ secrets.token }}' > inner.txt",
+  )
+}
+
+///|
+test "lowering: reusable workflow fills implicit defaults for typed inputs" {
+  let workspace = prepare_local_action_workspace(
+    "reusable-workflow-input-types",
+  )
+  test_ensure_dir(workspace + "/.github")
+  test_ensure_dir(workspace + "/.github/workflows")
+  let reusable_src =
+    #|name: reusable
+    #|on:
+    #|  workflow_call:
+    #|    inputs:
+    #|      enabled:
+    #|        type: boolean
+    #|      retries:
+    #|        type: number
+    #|      message:
+    #|        type: string
+    #|        default: hello
+    #|    outputs:
+    #|      result:
+    #|        value: ${{ jobs.build.outputs.result }}
+    #|jobs:
+    #|  build:
+    #|    runs-on: ubuntu-latest
+    #|    outputs:
+    #|      result: ${{ steps.capture.outputs.result }}
+    #|    steps:
+    #|      - id: capture
+    #|        run: |
+    #|          printf '%s|%s|%s' '${{ inputs.enabled }}' '${{ inputs.retries }}' '${{ inputs.message }}' > inner.txt
+    #|          printf 'result=%s' "$(cat inner.txt)" >> "$GITHUB_OUTPUT"
+  @xfs.write_string_to_file(
+    workspace + "/.github/workflows/reusable.yml",
+    reusable_src,
+  )
+  let caller_src =
+    #|name: caller
+    #|on: push
+    #|jobs:
+    #|  call:
+    #|    uses: ./.github/workflows/reusable.yml
+  let parsed = parse_workflow_yaml(caller_src)
+
+  inspect(parsed.errors, content="[]")
+  let workflow = parsed.workflow.unwrap()
+  let result = lower_push_workflow_in_workspace(workflow, workspace)
+
+  inspect(result.errors, content="[]")
+  let capture = expect_task_plan(result.plan, "call__build/capture")
+  inspect(
+    capture.script,
+    content="printf '%s|%s|%s' 'false' '0' 'hello' > inner.txt\nprintf 'result=%s' \"$(cat inner.txt)\" >> \"$GITHUB_OUTPUT\"",
+  )
+}
+
+///|
+test "lowering: reusable workflow rejects invalid typed inputs" {
+  let workspace = prepare_local_action_workspace(
+    "reusable-workflow-invalid-inputs",
+  )
+  test_ensure_dir(workspace + "/.github")
+  test_ensure_dir(workspace + "/.github/workflows")
+  let reusable_src =
+    #|name: reusable
+    #|on:
+    #|  workflow_call:
+    #|    inputs:
+    #|      enabled:
+    #|        type: boolean
+    #|      retries:
+    #|        type: number
+    #|jobs:
+    #|  build:
+    #|    runs-on: ubuntu-latest
+    #|    steps:
+    #|      - id: show
+    #|        run: printf '%s|%s' '${{ inputs.enabled }}' '${{ inputs.retries }}'
+  @xfs.write_string_to_file(
+    workspace + "/.github/workflows/reusable.yml",
+    reusable_src,
+  )
+  let caller_src =
+    #|name: caller
+    #|on: push
+    #|jobs:
+    #|  call:
+    #|    uses: ./.github/workflows/reusable.yml
+    #|    with:
+    #|      enabled: maybe
+    #|      retries: nope
+  let parsed = parse_workflow_yaml(caller_src)
+
+  inspect(parsed.errors, content="[]")
+  let workflow = parsed.workflow.unwrap()
+  let result = lower_push_workflow_in_workspace(workflow, workspace)
+
+  inspect(
+    result.errors,
+    content="[\"job 'call' reusable workflow input 'enabled' expects boolean but got 'maybe': ./.github/workflows/reusable.yml\", \"job 'call' reusable workflow input 'retries' expects number but got 'nope': ./.github/workflows/reusable.yml\"]",
+  )
+}
+
+///|
+test "lowering: reusable workflow caller matrix fans out to row aliases" {
+  let workspace = prepare_local_action_workspace("reusable-workflow-matrix")
+  test_ensure_dir(workspace + "/.github")
+  test_ensure_dir(workspace + "/.github/workflows")
+  let reusable_src =
+    #|name: reusable
+    #|on:
+    #|  workflow_call:
+    #|    inputs:
+    #|      message:
+    #|        required: true
+    #|        type: string
+    #|jobs:
+    #|  build:
+    #|    runs-on: ubuntu-latest
+    #|    steps:
+    #|      - id: write
+    #|        run: printf '%s' '${{ inputs.message }}' > '${{ inputs.message }}.txt'
+  @xfs.write_string_to_file(
+    workspace + "/.github/workflows/reusable.yml",
+    reusable_src,
+  )
+  let caller_src =
+    #|name: caller
+    #|on: push
+    #|jobs:
+    #|  call:
+    #|    strategy:
+    #|      matrix:
+    #|        message: [one, two]
+    #|    uses: ./.github/workflows/reusable.yml
+    #|    with:
+    #|      message: ${{ matrix.message }}
+    #|  after:
+    #|    needs: [call]
+    #|    runs-on: ubuntu-latest
+    #|    steps:
+    #|      - id: verify
+    #|        run: test -f one.txt && test -f two.txt
+  let parsed = parse_workflow_yaml(caller_src)
+
+  inspect(parsed.errors, content="[]")
+  let workflow = parsed.workflow.unwrap()
+  let result = lower_push_workflow_in_workspace(workflow, workspace)
+
+  inspect(result.errors, content="[]")
+  inspect(
+    result.plan.job_virtual_targets.get("call").unwrap(),
+    content="[\"call__matrix_1\", \"call__matrix_2\"]",
+  )
+  inspect(
+    result.plan.job_need_targets.get("after").unwrap().get("call").unwrap(),
+    content="[\"call__matrix_1__build\", \"call__matrix_2__build\"]",
+  )
+}
+
+///|
+test "lowering: reusable workflow caller matrix aggregates workflow outputs" {
+  let workspace = prepare_local_action_workspace(
+    "reusable-workflow-matrix-output",
+  )
+  test_ensure_dir(workspace + "/.github")
+  test_ensure_dir(workspace + "/.github/workflows")
+  let reusable_src =
+    #|name: reusable
+    #|on:
+    #|  workflow_call:
+    #|    inputs:
+    #|      message:
+    #|        required: true
+    #|        type: string
+    #|    outputs:
+    #|      result:
+    #|        value: ${{ jobs.build.outputs.result }}
+    #|jobs:
+    #|  build:
+    #|    runs-on: ubuntu-latest
+    #|    outputs:
+    #|      result: ${{ steps.capture.outputs.result }}
+    #|    steps:
+    #|      - id: capture
+    #|        run: |
+    #|          if [ '${{ inputs.message }}' = 'two' ]; then
+    #|            printf 'result=%s' '' >> \"$GITHUB_OUTPUT\"
+    #|          else
+    #|            printf 'result=%s' '${{ inputs.message }}' >> \"$GITHUB_OUTPUT\"
+    #|          fi
+  @xfs.write_string_to_file(
+    workspace + "/.github/workflows/reusable.yml",
+    reusable_src,
+  )
+  let caller_src =
+    #|name: caller
+    #|on: push
+    #|jobs:
+    #|  call:
+    #|    strategy:
+    #|      matrix:
+    #|        message: [one, two]
+    #|    uses: ./.github/workflows/reusable.yml
+    #|    with:
+    #|      message: ${{ matrix.message }}
+    #|  after:
+    #|    needs: [call]
+    #|    runs-on: ubuntu-latest
+    #|    steps:
+    #|      - id: show
+    #|        run: printf '%s' "${{ needs.call.outputs.result }}" > result.txt
+  let parsed = parse_workflow_yaml(caller_src)
+
+  inspect(parsed.errors, content="[]")
+  let workflow = parsed.workflow.unwrap()
+  let result = lower_push_workflow_in_workspace(workflow, workspace)
+
+  inspect(result.errors, content="[]")
+  inspect(
+    result.plan.job_virtual_output_targets
+    .get("call")
+    .unwrap()
+    .get("result")
+    .unwrap(),
+    content="[\"call__matrix_1\", \"call__matrix_2\"]",
+  )
+  inspect(
+    result.plan.job_need_targets.get("after").unwrap().get("call").unwrap(),
+    content="[\"call__matrix_1__build\", \"call__matrix_2__build\"]",
+  )
+}
+
+///|
+#cfg(target="native")
+async test "lowering: remote reusable workflow cache miss fetches and expands workflow" {
+  let workspace = prepare_local_action_workspace("reusable-workflow-remote")
+  let remote_repo = workspace + "/remote_repo"
+  test_ensure_dir(remote_repo)
+  test_ensure_dir(remote_repo + "/.github")
+  test_ensure_dir(remote_repo + "/.github/workflows")
+  let reusable_src =
+    #|name: reusable
+    #|on:
+    #|  workflow_call:
+    #|    inputs:
+    #|      message:
+    #|        required: true
+    #|        type: string
+    #|    outputs:
+    #|      result:
+    #|        value: ${{ jobs.verify.outputs.result }}
+    #|    secrets:
+    #|      token:
+    #|        required: true
+    #|jobs:
+    #|  build:
+    #|    runs-on: ubuntu-latest
+    #|    steps:
+    #|      - id: write
+    #|        run: printf '%s|%s' '${{ inputs.message }}' '${{ secrets.token }}' > inner.txt
+    #|  verify:
+    #|    needs: [build]
+    #|    runs-on: ubuntu-latest
+    #|    outputs:
+    #|      result: ${{ steps.capture.outputs.result }}
+    #|    steps:
+    #|      - id: capture
+    #|        run: printf 'result=%s' \"$(cat inner.txt)\" >> \"$GITHUB_OUTPUT\"
+  @xfs.write_string_to_file(
+    remote_repo + "/.github/workflows/reusable.yml",
+    reusable_src,
+  )
+  let caller_src =
+    #|name: caller
+    #|on: push
+    #|jobs:
+    #|  call:
+    #|    uses: demo/tools/.github/workflows/reusable.yml@v1
+    #|    with:
+    #|      message: hello
+    #|    secrets:
+    #|      token: ${{ secrets.CALL_TOKEN }}
+    #|  after:
+    #|    needs: [call]
+    #|    runs-on: ubuntu-latest
+    #|    steps:
+    #|      - id: show
+    #|        run: printf '%s' "${{ needs.call.outputs.result }}" > result.txt
+  let parsed = parse_workflow_yaml(caller_src)
+
+  inspect(parsed.errors, content="[]")
+  let workflow = parsed.workflow.unwrap()
+  let log_path = workspace + "/git.log"
+  let cache_root = "_build/action_runner/github_actions/demo/tools/v1"
+  test_support_remove_tree(cache_root)
+  let git_path = test_support_prepare_fake_git_bin_from_source(
+    workspace, remote_repo, log_path,
+  )
+  let prefetch = prefetch_workflow_github_actions_native(
+    workflow,
+    workspace,
+    git_bin=Some(git_path),
+  )
+  let result = lower_push_workflow_in_workspace(workflow, workspace)
+
+  inspect(prefetch.errors, content="[]")
+  inspect(
+    prefetch.fetched,
+    content="[\"demo/tools/.github/workflows/reusable.yml@v1\"]",
+  )
+  inspect(result.errors, content="[]")
+  inspect(
+    result.plan.job_virtual_targets.get("call").unwrap(),
+    content="[\"call__verify\"]",
+  )
+  inspect(
+    result.plan.job_outputs.get("call").unwrap().get("result").unwrap_or(""),
+    content="${{ needs.call__verify.outputs.result }}",
+  )
+  let write = expect_task_plan(result.plan, "call__build/write")
+  inspect(
+    write.script,
+    content="printf '%s|%s' 'hello' '${{ secrets.CALL_TOKEN }}' > inner.txt",
+  )
+  let log = @xfs.read_file_to_string(log_path)
+  assert_eq(log.contains("https://github.com/demo/tools.git"), true)
+}
+
+///|
+#cfg(target="native")
+async test "lowering: remote reusable workflow local action is resolved from cached repo" {
+  let workspace = prepare_local_action_workspace(
+    "reusable-workflow-remote-local-action",
+  )
+  let remote_repo = workspace + "/remote_repo"
+  test_ensure_dir(remote_repo)
+  test_ensure_dir(remote_repo + "/.github")
+  test_ensure_dir(remote_repo + "/.github/workflows")
+  test_ensure_dir(remote_repo + "/.github/actions")
+  test_ensure_dir(remote_repo + "/.github/actions/emit")
+  let reusable_src =
+    #|name: reusable
+    #|on:
+    #|  workflow_call:
+    #|    inputs:
+    #|      message:
+    #|        required: true
+    #|        type: string
+    #|    outputs:
+    #|      result:
+    #|        value: ${{ jobs.verify.outputs.result }}
+    #|    secrets:
+    #|      token:
+    #|        required: true
+    #|jobs:
+    #|  build:
+    #|    runs-on: ubuntu-latest
+    #|    steps:
+    #|      - id: local
+    #|        uses: ./.github/actions/emit
+    #|        with:
+    #|          message: ${{ inputs.message }}
+    #|          token: ${{ secrets.token }}
+    #|  verify:
+    #|    needs: [build]
+    #|    runs-on: ubuntu-latest
+    #|    outputs:
+    #|      result: ${{ steps.capture.outputs.result }}
+    #|    steps:
+    #|      - id: capture
+    #|        run: printf 'result=%s' \"$(cat inner.txt)\" >> \"$GITHUB_OUTPUT\"
+  let action_src =
+    #|name: emit
+    #|inputs:
+    #|  message:
+    #|    required: true
+    #|  token:
+    #|    required: true
+    #|runs:
+    #|  using: composite
+    #|  steps:
+    #|    - id: write
+    #|      run: printf '%s|%s' '${{ inputs.message }}' '${{ inputs.token }}' > inner.txt
+  @xfs.write_string_to_file(
+    remote_repo + "/.github/workflows/reusable.yml",
+    reusable_src,
+  )
+  @xfs.write_string_to_file(
+    remote_repo + "/.github/actions/emit/action.yml",
+    action_src,
+  )
+  let caller_src =
+    #|name: caller
+    #|on: push
+    #|jobs:
+    #|  call:
+    #|    uses: demo/local-tools/.github/workflows/reusable.yml@v1
+    #|    with:
+    #|      message: hello
+    #|    secrets:
+    #|      token: ${{ secrets.CALL_TOKEN }}
+    #|  after:
+    #|    needs: [call]
+    #|    runs-on: ubuntu-latest
+    #|    steps:
+    #|      - id: show
+    #|        run: printf '%s' "${{ needs.call.outputs.result }}" > result.txt
+  let parsed = parse_workflow_yaml(caller_src)
+
+  inspect(parsed.errors, content="[]")
+  let workflow = parsed.workflow.unwrap()
+  let log_path = workspace + "/git.log"
+  let cache_root = "_build/action_runner/github_actions/demo/local-tools/v1"
+  test_support_remove_tree(cache_root)
+  let git_path = test_support_prepare_fake_git_bin_from_source(
+    workspace, remote_repo, log_path,
+  )
+  let prefetch = prefetch_workflow_github_actions_native(
+    workflow,
+    workspace,
+    git_bin=Some(git_path),
+  )
+  let result = lower_push_workflow_in_workspace(workflow, workspace)
+
+  inspect(prefetch.errors, content="[]")
+  inspect(result.errors, content="[]")
+  let write = expect_task_plan(result.plan, "call__build/local__write")
+  inspect(
+    write.script,
+    content="printf '%s|%s' 'hello' '${{ secrets.CALL_TOKEN }}' > inner.txt",
+  )
+}
+
+///|
+test "lowering: nested local reusable workflow is expanded recursively" {
+  let workspace = prepare_local_action_workspace(
+    "reusable-workflow-nested-local",
+  )
+  test_ensure_dir(workspace + "/.github")
+  test_ensure_dir(workspace + "/.github/workflows")
+  let outer_src =
+    #|name: outer
+    #|on:
+    #|  workflow_call:
+    #|    inputs:
+    #|      message:
+    #|        required: true
+    #|        type: string
+    #|    outputs:
+    #|      result:
+    #|        value: ${{ jobs.wrap.outputs.result }}
+    #|    secrets:
+    #|      token:
+    #|        required: true
+    #|jobs:
+    #|  inner:
+    #|    uses: ./.github/workflows/inner.yml
+    #|    with:
+    #|      message: ${{ inputs.message }}
+    #|    secrets:
+    #|      token: ${{ secrets.token }}
+    #|  wrap:
+    #|    needs: [inner]
+    #|    runs-on: ubuntu-latest
+    #|    outputs:
+    #|      result: ${{ steps.capture.outputs.result }}
+    #|    steps:
+    #|      - id: capture
+    #|        run: printf 'result=%s' "${{ needs.inner.outputs.result }}" >> "$GITHUB_OUTPUT"
+  let inner_src =
+    #|name: inner
+    #|on:
+    #|  workflow_call:
+    #|    inputs:
+    #|      message:
+    #|        required: true
+    #|        type: string
+    #|    outputs:
+    #|      result:
+    #|        value: ${{ jobs.build.outputs.result }}
+    #|    secrets:
+    #|      token:
+    #|        required: true
+    #|jobs:
+    #|  build:
+    #|    runs-on: ubuntu-latest
+    #|    outputs:
+    #|      result: ${{ steps.capture.outputs.result }}
+    #|    steps:
+    #|      - id: write
+    #|        run: printf '%s|%s' '${{ inputs.message }}' '${{ secrets.token }}' > inner.txt
+    #|      - id: capture
+    #|        run: printf 'result=%s' "$(cat inner.txt)" >> "$GITHUB_OUTPUT"
+  @xfs.write_string_to_file(
+    workspace + "/.github/workflows/outer.yml",
+    outer_src,
+  )
+  @xfs.write_string_to_file(
+    workspace + "/.github/workflows/inner.yml",
+    inner_src,
+  )
+  let caller_src =
+    #|name: caller
+    #|on: push
+    #|jobs:
+    #|  call:
+    #|    uses: ./.github/workflows/outer.yml
+    #|    with:
+    #|      message: nested
+    #|    secrets:
+    #|      token: ${{ secrets.CALL_TOKEN }}
+    #|  after:
+    #|    needs: [call]
+    #|    runs-on: ubuntu-latest
+    #|    steps:
+    #|      - id: show
+    #|        run: printf '%s' "${{ needs.call.outputs.result }}" > result.txt
+  let parsed = parse_workflow_yaml(caller_src)
+
+  inspect(parsed.errors, content="[]")
+  let workflow = parsed.workflow.unwrap()
+  let result = lower_push_workflow_in_workspace(workflow, workspace)
+
+  inspect(result.errors, content="[]")
+  inspect(
+    result.plan.job_virtual_targets.get("call__inner").unwrap(),
+    content="[\"call__inner__build\"]",
+  )
+  inspect(
+    result.plan.job_virtual_targets.get("call").unwrap(),
+    content="[\"call__wrap\"]",
+  )
+  inspect(
+    result.plan.job_outputs.get("call").unwrap().get("result").unwrap_or(""),
+    content="${{ needs.call__wrap.outputs.result }}",
+  )
+  let build_write = expect_task_plan(result.plan, "call__inner__build/write")
+  inspect(
+    build_write.script,
+    content="printf '%s|%s' 'nested' '${{ secrets.CALL_TOKEN }}' > inner.txt",
+  )
+}
+
+///|
+test "parser/lowering: job container mapping is parsed and lowered" {
+  let src =
+    #|name: ci
+    #|on: push
+    #|jobs:
+    #|  build:
+    #|    runs-on: ubuntu-latest
+    #|    container:
+    #|      image: node:20-bookworm
+    #|      credentials:
+    #|        username: octocat
+    #|        password: ${{ secrets.REGISTRY_TOKEN }}
+    #|      env:
+    #|        NODE_ENV: test
+    #|      ports:
+    #|        - "80"
+    #|        - "5432"
+    #|      volumes:
+    #|        - "cache:/cache"
+    #|      options: --cpus 1
+    #|    steps:
+    #|      - id: show
+    #|        run: printf '%s' hi
+  let parsed = parse_workflow_yaml(src)
+
+  inspect(parsed.errors, content="[]")
+  let workflow = parsed.workflow.unwrap()
+  let container = workflow.jobs[0].container.unwrap()
+  inspect(container.image, content="node:20-bookworm")
+  inspect(container.credentials.unwrap().username, content="octocat")
+  inspect(
+    container.credentials.unwrap().password,
+    content="${{ secrets.REGISTRY_TOKEN }}",
+  )
+  inspect(container.env.get("NODE_ENV").unwrap_or(""), content="test")
+  inspect(container.ports, content="[\"80\", \"5432\"]")
+  inspect(container.volumes, content="[\"cache:/cache\"]")
+  inspect(container.options.unwrap_or(""), content="--cpus 1")
+
+  let result = lower_push_workflow(workflow)
+  inspect(result.errors, content="[]")
+  inspect(
+    result.plan.job_containers.get("build").unwrap().image,
+    content="node:20-bookworm",
+  )
+}
+
+///|
+test "parser/lowering: job services mapping is parsed and lowered into execution plan" {
+  let src =
+    #|name: ci
+    #|on: push
+    #|jobs:
+    #|  build:
+    #|    runs-on: ubuntu-latest
+    #|    services:
+    #|      postgres:
+    #|        image: postgres:16
+    #|        credentials:
+    #|          username: octocat
+    #|          password: ${{ secrets.REGISTRY_TOKEN }}
+    #|        env:
+    #|          POSTGRES_DB: app
+    #|        ports:
+    #|          - "5432"
+    #|        volumes:
+    #|          - "db:/var/lib/postgresql/data"
+    #|        options: --health-cmd pg_isready
+    #|    steps:
+    #|      - id: show
+    #|        run: printf '%s' hi
+  let parsed = parse_workflow_yaml(src)
+
+  inspect(parsed.errors, content="[]")
+  let workflow = parsed.workflow.unwrap()
+  let service = workflow.jobs[0].services.get("postgres").unwrap()
+  inspect(service.image, content="postgres:16")
+  inspect(service.credentials.unwrap().username, content="octocat")
+  inspect(
+    service.credentials.unwrap().password,
+    content="${{ secrets.REGISTRY_TOKEN }}",
+  )
+  inspect(service.env.get("POSTGRES_DB").unwrap_or(""), content="app")
+  inspect(service.ports, content="[\"5432\"]")
+  inspect(service.volumes, content="[\"db:/var/lib/postgresql/data\"]")
+  inspect(service.options.unwrap_or(""), content="--health-cmd pg_isready")
+
+  let result = lower_push_workflow(workflow)
+  inspect(result.errors, content="[]")
+  inspect(
+    result.plan.job_services.get("build").unwrap().get("postgres").unwrap().image,
+    content="postgres:16",
+  )
 }

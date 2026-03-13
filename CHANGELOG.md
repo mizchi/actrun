@@ -5,6 +5,45 @@
 ### Added
 
 - `actions/setup-node@*` の最小 builtin emulator (`node-version`, `cache: npm`, `registry-url`)
+- job `container` 配下で `actions/checkout@*` が host 側に materialize した workspace を後続 container `run` step から見える形で扱う最小対応
+- job `container` 配下で `actions/setup-node@*` の PATH shim / output が後続 `run` step に伝播する最小対応
+- job `container` 配下で `actions/upload-artifact@*` / `actions/download-artifact@*` の roundtrip を後続 `run` step から扱う最小対応
+- job `container` 配下で `actions/cache@*` の miss -> deferred save -> next job restore を後続 `run` step から扱う最小対応
+- job `services` の detached service container start / cleanup を native docker adapter で実行する最小対応
+- `${{ job.services.<id>.ports[...] }}` context の最小対応
+- job `services` health check wait の最小対応
+- job `services` 用の docker network を job ごとに作成し、job `container` が同じ network / service alias を共有する最小対応
+- unit/docs/E2E coverage for job `services` + job `container` networking
+- `ResolvedAction` に backend capability model (`host` / `docker` / `wasm`) を追加
+- resolver / lowering coverage for backend capability assignment on builtin / node / docker actions
+- manifest-backed custom registry action (`bit://...`) を `ACTION_RUNNER_ACTION_REGISTRY_ROOT/<scheme>/<name>/<version>` から解決し、composite / `node*` / `runs.using: docker` backend を lower/execute する最小対応
+- unit/E2E coverage for custom registry node action resolution and execution
+- reusable workflow `workflow_call.inputs` の `required` / implicit default / type validation の最小対応
+- docs/unit/E2E coverage for typed reusable workflow inputs
+- reusable workflow caller job の `strategy.matrix` 最小対応
+- reusable workflow caller matrix + `workflow_call.outputs` 集約の最小対応
+- docs/unit/E2E coverage for matrix caller reusable workflow execution and `workflow_call.outputs` aggregation
+- all vendored upstream fixtures are now validated for `supported` / `unsupported` / `known_diff` classification metadata in compat tests
+- CLI に `--run-root` と `--workspace-mode` の最小 contract を追加し、`_build/action_runner/runs/run-<n>/run.json` と `tasks/*.stdout.log|stderr.log|summary.md` へ local run record を保存する foundation を追加
+- `run.json` に job 状態と artifact/cache index を追加
+- run store に `started_at_ms` / `finished_at_ms` と `jobs.json` / `artifacts.json` / `caches.json` sidecar を追加し、`_build/action_runner/runs/<run-id>/` layout を固定
+- whitebox/E2E coverage for run store persistence, task log persistence, artifact/cache indexing, and workspace-mode parsing
+- `action_runner run view <run-id>` と `action_runner run logs <run-id>` の最小 read-only subcommand を追加
+- whitebox/E2E coverage for run store readback via `run view` / `run logs`
+- `action_runner run list` の最小 read-only subcommand を追加
+- whitebox/E2E coverage for run store listing via `run list`
+- `action_runner run watch <run-id>` の最小 read-only subcommand を追加
+- whitebox/E2E coverage for run store polling via `run watch`
+- `action_runner run download <run-id>` の最小 read-only subcommand を追加
+- whitebox/E2E coverage for downloading all artifacts from a persisted run store
+- `action_runner artifact list <run-id>` と `action_runner artifact download <run-id>` の最小 read-only subcommand を追加
+- whitebox/E2E coverage for artifact index listing and artifact download from persisted run store
+- `action_runner cache list` の最小 read-only subcommand を追加
+- whitebox/E2E coverage for cache store listing across workspace roots
+- CLI に `--artifact-root`, `--cache-root`, `--github-action-cache-root`, `--registry-root`, `--wasm-action-root` を追加し、local injection point を env override ではなく flag で制御できるようにした
+- black-box coverage for CLI root override flags via run store / remote reusable workflow / custom registry / wasm scenarios
+- `wasm://...` action を Wasm backend contract として resolve / lower し、`ACTION_RUNNER_WASM_BIN` + `ACTION_RUNNER_WASM_ACTION_ROOT` で file-based Wasm module を実行する最小 adapter
+- unit/E2E coverage for Wasm runner adapter and missing-module failure
 - `actions/cache@*` / `actions/cache/restore@*` の `restore-keys` prefix hit 対応
 - `compat-cache-restore-keys.yml` と local/GitHub-hosted cache restore-keys compat coverage
 - `actions/cache@*` / `actions/cache/restore@*` の `lookup-only` 対応
@@ -31,8 +70,25 @@
 - docs/E2E coverage for unsupported `permissions`
 - workflow/job `concurrency` parse + contract support with explicit lowering reject in MVP
 - docs/E2E coverage for unsupported `concurrency`
-- `workflow_call` trigger parse + contract support with explicit lowering reject in MVP
+- `workflow_call` trigger and `inputs` / `outputs` / `secrets` parse + contract support with explicit lowering reject in MVP
 - docs/E2E coverage for unsupported `workflow_call`
+- local reusable workflow (`jobs.<job_id>.uses: ./.github/workflows/*.yml`) minimum execution support
+- docs/E2E coverage for local reusable workflow execution
+- local reusable workflow caller/callee `with`, `workflow_call.outputs`, and secret mapping support
+- remote reusable workflow (`owner/repo/.github/workflows/*.yml@ref`) minimum execution support
+- unit/E2E coverage for remote reusable workflow prefetch + caller/callee `with`, `workflow_call.outputs`, and secret mapping
+- nested reusable workflow execution support across local / remote reusable workflow chains
+- unit/docs/E2E coverage for nested reusable workflow execution
+- job `container` string / mapping parse + contract support with explicit lowering reject in MVP
+- docs/E2E coverage for unsupported `job.container`
+- minimal job `container` execution for `run` steps via the docker adapter
+- unit/docs/E2E coverage for job `container` `run` execution
+- job `container` 内で cache 済み / prefetched GitHub repo `node*` action を docker adapter 経由で実行する最小対応
+- unit/E2E coverage for job `container` GitHub repo `node*` action execution
+- job `container` 配下の GitHub repo / direct `runs.using: docker` action を sibling container として実行し、job container の volume mount を共有する最小対応
+- unit/E2E coverage for job `container` GitHub repo `runs.using: docker` action sibling execution
+- job `services` mapping parse + contract support with explicit lowering reject in MVP
+- docs/E2E coverage for unsupported `job.services`
 
 - `push` trigger matcher for MVP CI workflows
 - workflow YAML subset parser for `on.push`, `jobs`, `steps`, `env`, and `defaults.run`
@@ -133,6 +189,8 @@
 - Added minimal builtin `actions/checkout` `ref` support, with branch-selection coverage in docs and E2E scenarios
 - Added minimal builtin `actions/checkout` `clean` support, preserving untracked files on `clean: false` while keeping default cleanup semantics, plus docs/E2E coverage
 - Added minimal builtin `actions/checkout` `submodules` support for `true` and `recursive`, plus docs/E2E coverage for direct vs nested submodule initialization
+- Added remote reusable workflow support for `uses: ./.github/actions/*` local actions by rewriting them against the fetched repo root, plus unit and E2E coverage
+- Added reusable workflow `secrets: inherit` docs/E2E coverage and a GitHub-hosted compat workflow that compares inherited `GITHUB_TOKEN` presence against the local runner
 - Added `gha-compat-compare` to replay dispatchable compat workflows locally and compare downloaded GitHub-hosted artifacts against local emulator output
 - Added `gha-compat-live` to dispatch a GitHub-hosted compat workflow, wait for completion, download artifacts, and compare against local emulator output in one step
 - Fixed builtin `actions/checkout` sparse-checkout to match default cone-mode semantics on GitHub-hosted runners, and added `sparse-checkout-cone-mode: false` regression coverage

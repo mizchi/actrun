@@ -1,0 +1,23 @@
+name: reusable
+on:
+  workflow_call:
+    inputs:
+      message:
+        required: true
+        type: string
+    outputs:
+      result:
+        value: ${{ jobs.build.outputs.result }}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      result: ${{ steps.capture.outputs.result }}
+    steps:
+      - id: capture
+        run: |
+          if [ '${{ inputs.message }}' = 'two' ]; then
+            printf 'result=%s' '' >> "$GITHUB_OUTPUT"
+          else
+            printf 'result=%s' '${{ inputs.message }}' >> "$GITHUB_OUTPUT"
+          fi

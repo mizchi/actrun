@@ -3,6 +3,7 @@ import {
   "mizchi/bit/diff" @bitdiff,
   "mizchi/bit/lib" @bitlib,
   "mizchi/bit/osfs" @bitosfs,
+  "moonbitlang/core/env" @env,
   "moonbitlang/core/encoding/utf8" @utf8,
   "moonbitlang/core/json" @json,
   "moonbitlang/core/strconv" @strconv,

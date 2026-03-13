@@ -158,10 +158,94 @@ fn absolute_lowering_path(path : String) -> String {
 }
 
 ///|
+fn lowering_path_segments(path : String) -> Array[String] {
+  let segments : Array[String] = []
+  let absolute = normalize_local_action_path(absolute_lowering_path(path))
+  for part_view in absolute.split("/") {
+    let part = part_view.to_string()
+    if part.length() > 0 && part != "." {
+      segments.push(part)
+    }
+  }
+  segments
+}
+
+///|
+fn relative_local_action_ref(
+  base_root : String,
+  target_path : String,
+) -> String {
+  let base_segments = lowering_path_segments(base_root)
+  let target_segments = lowering_path_segments(target_path)
+  let mut common = 0
+  while common < base_segments.length() &&
+        common < target_segments.length() &&
+        base_segments[common] == target_segments[common] {
+    common += 1
+  }
+  let relative_segments : Array[String] = []
+  for _ in common..<base_segments.length() {
+    relative_segments.push("..")
+  }
+  for idx in common..<target_segments.length() {
+    relative_segments.push(target_segments[idx])
+  }
+  let relative = relative_segments.join("/")
+  if relative.length() == 0 {
+    "./"
+  } else if relative.has_prefix("..") {
+    relative
+  } else {
+    "./" + relative
+  }
+}
+
+///|
+fn rewrite_reusable_step_local_uses(
+  step : StepSpec,
+  source_root : String,
+  execution_root : String,
+) -> StepSpec {
+  match step.uses {
+    Some(uses) =>
+      match parse_action_ref(uses).action {
+        Some(LocalPath(local_path)) => {
+          let resolved_path = normalize_local_action_path(
+            join_path(source_root, local_path),
+          )
+          {
+            id: step.id,
+            name: step.name,
+            run: step.run,
+            uses: Some(relative_local_action_ref(execution_root, resolved_path)),
+            shell: step.shell,
+            working_directory: step.working_directory,
+            env: step.env,
+            with_values: step.with_values,
+            if_condition: step.if_condition,
+            continue_on_error: step.continue_on_error,
+          }
+        }
+        _ => step
+      }
+    None => step
+  }
+}
+
+///|
 fn github_action_cache_root() -> String {
   absolute_lowering_path(
     @xsys.get_env_var("ACTION_RUNNER_GITHUB_ACTION_CACHE_ROOT").unwrap_or(
       "_build/action_runner/github_actions",
+    ),
+  )
+}
+
+///|
+fn action_registry_root() -> String {
+  absolute_lowering_path(
+    @xsys.get_env_var("ACTION_RUNNER_ACTION_REGISTRY_ROOT").unwrap_or(
+      "_build/action_runner/registry_actions",
     ),
   )
 }
@@ -222,6 +306,61 @@ fn cached_github_action_root(action_ref : ActionRef) -> String? {
         None
       }
     None => None
+  }
+}
+
+///|
+fn cached_github_repo_path(action_ref : ActionRef) -> String? {
+  match github_action_cache_layout(action_ref) {
+    Some(layout) =>
+      if @xfs.path_exists(layout.action_root) {
+        Some(layout.action_root)
+      } else {
+        None
+      }
+    None => None
+  }
+}
+
+///|
+fn cached_github_repo_root(action_ref : ActionRef) -> String? {
+  match github_action_cache_layout(action_ref) {
+    Some(layout) =>
+      if @xfs.path_exists(layout.repo_root) {
+        Some(layout.repo_root)
+      } else {
+        None
+      }
+    None => None
+  }
+}
+
+///|
+fn custom_registry_action_root(action_ref : ActionRef) -> String? {
+  match action_ref {
+    Registry(scheme, name, version) =>
+      if scheme == "builtin" || scheme == "wasm" || version.length() == 0 {
+        None
+      } else {
+        let action_root = join_path(
+          join_path(join_path(action_registry_root(), scheme), name),
+          version,
+        )
+        if has_action_manifest(action_root) {
+          Some(action_root)
+        } else {
+          None
+        }
+      }
+    _ => None
+  }
+}
+
+///|
+fn manifest_backed_action_root(action_ref : ActionRef) -> String? {
+  match cached_github_action_root(action_ref) {
+    Some(root) => Some(root)
+    None => custom_registry_action_root(action_ref)
   }
 }
 
@@ -410,6 +549,421 @@ fn substitute_matrix_list(
 }
 
 ///|
+fn merge_run_defaults(base : RunDefaults, overlay : RunDefaults) -> RunDefaults {
+  new_run_defaults(
+    shell=match overlay.shell {
+      Some(_) => overlay.shell
+      None => base.shell
+    },
+    working_directory=match overlay.working_directory {
+      Some(_) => overlay.working_directory
+      None => base.working_directory
+    },
+  )
+}
+
+///|
+fn reusable_job_id(caller_job_id : String, callee_job_id : String) -> String {
+  caller_job_id + "__" + callee_job_id
+}
+
+///|
+fn terminal_job_ids(jobs : Array[JobSpec]) -> Array[String] {
+  let depended : Map[String, Bool] = {}
+  for job in jobs {
+    for need in job.needs {
+      depended[need] = true
+    }
+  }
+  let terminals : Array[String] = []
+  for job in jobs {
+    if depended.get(job.id) is None {
+      terminals.push(job.id)
+    }
+  }
+  terminals
+}
+
+///|
+fn combine_if_conditions(outer : String, inner : String) -> String {
+  if outer == "success()" {
+    inner
+  } else if inner == "success()" {
+    outer
+  } else {
+    "(" + outer + ") && (" + inner + ")"
+  }
+}
+
+///|
+fn is_reusable_needs_ident_char(ch : UInt16) -> Bool {
+  (ch >= 'a'.to_int().to_uint16() && ch <= 'z'.to_int().to_uint16()) ||
+  (ch >= 'A'.to_int().to_uint16() && ch <= 'Z'.to_int().to_uint16()) ||
+  (ch >= '0'.to_int().to_uint16() && ch <= '9'.to_int().to_uint16()) ||
+  ch == '_'.to_int().to_uint16() ||
+  ch == '-'.to_int().to_uint16()
+}
+
+///|
+fn substitute_reusable_needs_text(
+  text : String,
+  replacements : Map[String, String],
+) -> String {
+  let chunks : Array[String] = []
+  let mut idx = 0
+  while idx < text.length() {
+    match find_substring(text, "needs.", idx) {
+      Some(need_idx) => {
+        let start = need_idx + "needs.".length()
+        let mut end = start
+        while end < text.length() &&
+              is_reusable_needs_ident_char(text.unsafe_get(end)) {
+          end += 1
+        }
+        if end == start {
+          chunks.push(text_slice(text, idx, need_idx + 1))
+          idx = need_idx + 1
+          continue
+        }
+        let name = text_slice(text, start, end)
+        match replacements.get(name) {
+          Some(replacement) => {
+            chunks.push(text_slice(text, idx, need_idx))
+            chunks.push("needs." + replacement)
+            idx = end
+          }
+          None => {
+            chunks.push(text_slice(text, idx, end))
+            idx = end
+          }
+        }
+      }
+      None => {
+        chunks.push(text_slice(text, idx, text.length()))
+        idx = text.length()
+      }
+    }
+  }
+  chunks.join("")
+}
+
+///|
+fn substitute_reusable_needs_optional(
+  value : String?,
+  replacements : Map[String, String],
+) -> String? {
+  match value {
+    Some(text) => Some(substitute_reusable_needs_text(text, replacements))
+    None => None
+  }
+}
+
+///|
+fn substitute_reusable_needs_map(
+  values : Map[String, String],
+  replacements : Map[String, String],
+) -> Map[String, String] {
+  let result : Map[String, String] = {}
+  for key, value in values {
+    result[key] = substitute_reusable_needs_text(value, replacements)
+  }
+  result
+}
+
+///|
+fn substitute_reusable_needs_list(
+  values : Array[String],
+  replacements : Map[String, String],
+) -> Array[String] {
+  let result : Array[String] = []
+  for value in values {
+    result.push(substitute_reusable_needs_text(value, replacements))
+  }
+  result
+}
+
+///|
+fn secret_expr_name(expression : String) -> String? {
+  let trimmed = expression.trim(chars=" \t\n\r").to_string()
+  if trimmed.has_prefix("secrets.") && trimmed.length() > 8 {
+    Some(text_slice(trimmed, 8, trimmed.length()))
+  } else {
+    None
+  }
+}
+
+///|
+fn substitute_secrets_text(
+  text : String,
+  secrets : Map[String, String],
+) -> String {
+  let chunks : Array[String] = []
+  let mut idx = 0
+  while idx < text.length() {
+    match find_substring(text, "${{", idx) {
+      Some(open_idx) => {
+        chunks.push(text_slice(text, idx, open_idx))
+        match find_substring(text, "}}", open_idx + 3) {
+          Some(close_idx) => {
+            let expression = text_slice(text, open_idx + 3, close_idx)
+            match secret_expr_name(expression) {
+              Some(name) => chunks.push(secrets.get(name).unwrap_or(""))
+              None => chunks.push(text_slice(text, open_idx, close_idx + 2))
+            }
+            idx = close_idx + 2
+          }
+          None => {
+            chunks.push(text_slice(text, open_idx, text.length()))
+            idx = text.length()
+          }
+        }
+      }
+      None => {
+        chunks.push(text_slice(text, idx, text.length()))
+        idx = text.length()
+      }
+    }
+  }
+  chunks.join("")
+}
+
+///|
+fn substitute_reusable_bindings_text(
+  text : String,
+  inputs : Map[String, String],
+  secrets : Map[String, String],
+) -> String {
+  substitute_secrets_text(substitute_inputs_text(text, inputs), secrets)
+}
+
+///|
+fn substitute_reusable_bindings_optional(
+  value : String?,
+  inputs : Map[String, String],
+  secrets : Map[String, String],
+) -> String? {
+  match value {
+    Some(text) => Some(substitute_reusable_bindings_text(text, inputs, secrets))
+    None => None
+  }
+}
+
+///|
+fn substitute_reusable_bindings_map(
+  values : Map[String, String],
+  inputs : Map[String, String],
+  secrets : Map[String, String],
+) -> Map[String, String] {
+  let result : Map[String, String] = {}
+  for key, value in values {
+    result[key] = substitute_reusable_bindings_text(value, inputs, secrets)
+  }
+  result
+}
+
+///|
+fn substitute_reusable_bindings_list(
+  values : Array[String],
+  inputs : Map[String, String],
+  secrets : Map[String, String],
+) -> Array[String] {
+  let result : Array[String] = []
+  for value in values {
+    result.push(substitute_reusable_bindings_text(value, inputs, secrets))
+  }
+  result
+}
+
+///|
+fn substitute_reusable_bindings_step(
+  step : StepSpec,
+  inputs : Map[String, String],
+  secrets : Map[String, String],
+) -> StepSpec {
+  {
+    id: step.id,
+    name: substitute_reusable_bindings_text(step.name, inputs, secrets),
+    run: substitute_reusable_bindings_optional(step.run, inputs, secrets),
+    uses: substitute_reusable_bindings_optional(step.uses, inputs, secrets),
+    shell: substitute_reusable_bindings_optional(step.shell, inputs, secrets),
+    working_directory: substitute_reusable_bindings_optional(
+      step.working_directory,
+      inputs,
+      secrets,
+    ),
+    env: substitute_reusable_bindings_map(step.env, inputs, secrets),
+    with_values: substitute_reusable_bindings_map(
+      step.with_values,
+      inputs,
+      secrets,
+    ),
+    if_condition: substitute_reusable_bindings_text(
+      step.if_condition,
+      inputs,
+      secrets,
+    ),
+    continue_on_error: substitute_reusable_bindings_text(
+      step.continue_on_error,
+      inputs,
+      secrets,
+    ),
+  }
+}
+
+///|
+fn workflow_call_input_implicit_default(input_type : String) -> String {
+  match input_type {
+    "boolean" => "false"
+    "number" => "0"
+    _ => ""
+  }
+}
+
+///|
+fn workflow_call_input_is_dynamic(value : String) -> Bool {
+  value.contains("${{")
+}
+
+///|
+fn workflow_call_number_literal_is_valid(value : String) -> Bool {
+  if value.length() == 0 {
+    return false
+  }
+  let mut idx = 0
+  let mut has_digit = false
+  let mut has_dot = false
+  if value.unsafe_get(0) == '-'.to_int().to_uint16() ||
+    value.unsafe_get(0) == '+'.to_int().to_uint16() {
+    idx = 1
+  }
+  if idx >= value.length() {
+    return false
+  }
+  while idx < value.length() {
+    let ch = value.unsafe_get(idx)
+    if ch >= '0'.to_int().to_uint16() && ch <= '9'.to_int().to_uint16() {
+      has_digit = true
+      idx += 1
+      continue
+    }
+    if ch == '.'.to_int().to_uint16() && not(has_dot) {
+      has_dot = true
+      idx += 1
+      continue
+    }
+    return false
+  }
+  has_digit
+}
+
+///|
+fn workflow_call_input_value_matches_type(
+  value : String,
+  input_type : String,
+) -> Bool {
+  if workflow_call_input_is_dynamic(value) {
+    return true
+  }
+  let trimmed = value.trim(chars=" \t\r\n").to_string()
+  match input_type {
+    "boolean" => {
+      let normalized = trimmed.to_lower()
+      normalized == "true" || normalized == "false"
+    }
+    "number" => workflow_call_number_literal_is_valid(trimmed)
+    _ => true
+  }
+}
+
+///|
+fn workflow_job_output_reference(
+  text : String,
+  replacements : Map[String, String],
+) -> String {
+  let chunks : Array[String] = []
+  let mut idx = 0
+  while idx < text.length() {
+    match find_substring(text, "jobs.", idx) {
+      Some(jobs_idx) => {
+        let prefix = "jobs."
+        let start = jobs_idx + prefix.length()
+        let mut job_end = start
+        while job_end < text.length() &&
+              is_reusable_needs_ident_char(text.unsafe_get(job_end)) {
+          job_end += 1
+        }
+        if job_end == start {
+          chunks.push(text_slice(text, idx, jobs_idx + 1))
+          idx = jobs_idx + 1
+          continue
+        }
+        let job_id = text_slice(text, start, job_end)
+        let suffix = ".outputs."
+        if job_end + suffix.length() > text.length() ||
+          text_slice(text, job_end, job_end + suffix.length()) != suffix {
+          chunks.push(text_slice(text, idx, job_end))
+          idx = job_end
+          continue
+        }
+        let output_start = job_end + suffix.length()
+        let mut output_end = output_start
+        while output_end < text.length() &&
+              is_reusable_needs_ident_char(text.unsafe_get(output_end)) {
+          output_end += 1
+        }
+        if output_end == output_start {
+          chunks.push(text_slice(text, idx, output_start))
+          idx = output_start
+          continue
+        }
+        chunks.push(text_slice(text, idx, jobs_idx))
+        let actual_job = replacements.get(job_id).unwrap_or(job_id)
+        chunks.push(
+          "needs." +
+          actual_job +
+          ".outputs." +
+          text_slice(text, output_start, output_end),
+        )
+        idx = output_end
+      }
+      None => {
+        chunks.push(text_slice(text, idx, text.length()))
+        idx = text.length()
+      }
+    }
+  }
+  chunks.join("")
+}
+
+///|
+fn substitute_reusable_needs_step(
+  step : StepSpec,
+  replacements : Map[String, String],
+) -> StepSpec {
+  {
+    id: step.id,
+    name: substitute_reusable_needs_text(step.name, replacements),
+    run: substitute_reusable_needs_optional(step.run, replacements),
+    uses: substitute_reusable_needs_optional(step.uses, replacements),
+    shell: substitute_reusable_needs_optional(step.shell, replacements),
+    working_directory: substitute_reusable_needs_optional(
+      step.working_directory,
+      replacements,
+    ),
+    env: substitute_reusable_needs_map(step.env, replacements),
+    with_values: substitute_reusable_needs_map(step.with_values, replacements),
+    if_condition: substitute_reusable_needs_text(
+      step.if_condition,
+      replacements,
+    ),
+    continue_on_error: substitute_reusable_needs_text(
+      step.continue_on_error,
+      replacements,
+    ),
+  }
+}
+
+///|
 fn substitute_matrix_step(
   step : StepSpec,
   matrix_values : Map[String, String],
@@ -468,10 +1022,17 @@ fn substitute_matrix_job(
       job.reusable_workflow,
       matrix_values,
     ),
-    container_image=substitute_optional_matrix(
-      job.container_image,
+    reusable_workflow_with=substitute_matrix_map(
+      job.reusable_workflow_with,
       matrix_values,
     ),
+    reusable_workflow_secrets=substitute_matrix_map(
+      job.reusable_workflow_secrets,
+      matrix_values,
+    ),
+    reusable_workflow_inherit_secrets=job.reusable_workflow_inherit_secrets,
+    services=job.services,
+    container=job.container,
   )
 }
 
@@ -501,9 +1062,41 @@ fn expanded_job_ids(jobs : Array[JobSpec]) -> Map[String, Array[String]] {
 }
 
 ///|
-fn expand_matrix_jobs(jobs : Array[JobSpec]) -> Array[ExpandedJob] {
+fn resolve_job_targets(
+  job_ids : Map[String, Array[String]],
+  id : String,
+) -> Array[String] {
+  match job_ids.get(id) {
+    Some(targets) =>
+      if targets.length() == 1 && targets[0] == id {
+        [id]
+      } else {
+        let resolved : Array[String] = []
+        let seen : Map[String, Bool] = {}
+        for target in targets {
+          for actual in resolve_job_targets(job_ids, target) {
+            if seen.get(actual) is None {
+              seen[actual] = true
+              resolved.push(actual)
+            }
+          }
+        }
+        resolved
+      }
+    None => [id]
+  }
+}
+
+///|
+fn expand_matrix_jobs(
+  jobs : Array[JobSpec],
+  aliases? : Map[String, Array[String]] = {},
+) -> Array[ExpandedJob] {
   let expanded : Array[ExpandedJob] = []
   let job_ids = expanded_job_ids(jobs)
+  for logical_id, targets in aliases {
+    job_ids[logical_id] = targets
+  }
   for job in jobs {
     match job.matrix {
       Some(matrix) => {
@@ -513,7 +1106,7 @@ fn expand_matrix_jobs(jobs : Array[JobSpec]) -> Array[ExpandedJob] {
           let actual_needs : Array[String] = []
           let need_targets : Map[String, Array[String]] = {}
           for need in job.needs {
-            let targets = job_ids.get(need).unwrap_or([need])
+            let targets = resolve_job_targets(job_ids, need)
             let target_ids : Array[String] = []
             for target in targets {
               actual_needs.push(target)
@@ -543,7 +1136,7 @@ fn expand_matrix_jobs(jobs : Array[JobSpec]) -> Array[ExpandedJob] {
         let actual_needs : Array[String] = []
         let need_targets : Map[String, Array[String]] = {}
         for need in job.needs {
-          let targets = job_ids.get(need).unwrap_or([need])
+          let targets = resolve_job_targets(job_ids, need)
           let target_ids : Array[String] = []
           for target in targets {
             actual_needs.push(target)
@@ -566,7 +1159,11 @@ fn expand_matrix_jobs(jobs : Array[JobSpec]) -> Array[ExpandedJob] {
             defaults=job.defaults,
             matrix=None,
             reusable_workflow=job.reusable_workflow,
-            container_image=job.container_image,
+            reusable_workflow_with=job.reusable_workflow_with,
+            reusable_workflow_secrets=job.reusable_workflow_secrets,
+            reusable_workflow_inherit_secrets=job.reusable_workflow_inherit_secrets,
+            services=job.services,
+            container=job.container,
           ),
           visible_needs: job.needs,
           need_targets,
@@ -586,6 +1183,478 @@ fn read_text(path : String) -> String? {
   } noraise {
     content => Some(content)
   }
+}
+
+///|
+priv struct ReusableWorkflowExpansion {
+  jobs : Array[JobSpec]
+  aliases : Map[String, Array[String]]
+  alias_outputs : Map[String, Map[String, String]]
+  alias_output_targets : Map[String, Map[String, Array[String]]]
+}
+
+///|
+priv struct ReusableWorkflowSource {
+  workflow_path : String
+  source_root : String
+}
+
+///|
+fn remote_reusable_workflow_ref(path : String) -> ActionRef? {
+  let parsed = parse_action_ref(path)
+  guard parsed.action is Some(action_ref) else { return None }
+  match action_ref {
+    GitHubRepo(_, _, version, Some(subpath)) =>
+      if version.length() > 0 && subpath.length() > 0 {
+        Some(action_ref)
+      } else {
+        None
+      }
+    _ => None
+  }
+}
+
+///|
+fn reusable_workflow_source(
+  path : String,
+  workspace_root : String,
+) -> ReusableWorkflowSource? {
+  if path.has_prefix("./") {
+    return Some({
+      workflow_path: join_path(
+        workspace_root,
+        normalize_local_action_path(path),
+      ),
+      source_root: workspace_root,
+    })
+  }
+  guard remote_reusable_workflow_ref(path) is Some(action_ref) else {
+    return None
+  }
+  guard cached_github_repo_path(action_ref) is Some(workflow_path) else {
+    return None
+  }
+  Some({
+    workflow_path,
+    source_root: cached_github_repo_root(action_ref).unwrap_or(workspace_root),
+  })
+}
+
+///|
+fn expanded_row_jobs_for_reusable_caller(job : JobSpec) -> Array[JobSpec] {
+  let rows : Array[JobSpec] = []
+  for expanded in expand_matrix_jobs([job]) {
+    rows.push(expanded.job)
+  }
+  rows
+}
+
+///|
+fn expand_reusable_workflows_in_workspace(
+  jobs : Array[JobSpec],
+  workspace_root : String,
+  execution_root : String,
+  errors : Array[String],
+) -> ReusableWorkflowExpansion {
+  let expanded : Array[JobSpec] = []
+  let aliases : Map[String, Array[String]] = {}
+  let alias_outputs : Map[String, Map[String, String]] = {}
+  let alias_output_targets : Map[String, Map[String, Array[String]]] = {}
+  for job in jobs {
+    match job.reusable_workflow {
+      Some(path) => {
+        let before_errors = errors.length()
+        if workspace_root.length() == 0 {
+          errors.push(
+            "job '\{job.id}' reusable workflow '\{path}' requires workspace-aware lowering",
+          )
+          continue
+        }
+        if job.steps.length() > 0 {
+          errors.push(
+            "job '\{job.id}' reusable workflow caller steps are not supported in MVP",
+          )
+        }
+        if job.outputs.length() > 0 {
+          errors.push(
+            "job '\{job.id}' reusable workflow caller outputs are not supported in MVP",
+          )
+        }
+        match job.permissions {
+          Some(spec) if spec.values.length() > 0 =>
+            errors.push(
+              "job '\{job.id}' reusable workflow permissions are not supported in MVP",
+            )
+          _ => ()
+        }
+        match job.concurrency {
+          Some(_) =>
+            errors.push(
+              "job '\{job.id}' reusable workflow concurrency is not supported in MVP",
+            )
+          None => ()
+        }
+        if job.container_image is Some(image) {
+          errors.push(
+            "job '\{job.id}' reusable workflow container is not supported in MVP: \{image}",
+          )
+        }
+        if errors.length() > before_errors {
+          continue
+        }
+        match reusable_workflow_source(path, workspace_root) {
+          Some(source) =>
+            match read_text(source.workflow_path) {
+              Some(text) => {
+                let parsed = parse_workflow_yaml(text)
+                for err in parsed.errors {
+                  errors.push(
+                    "job '\{job.id}' reusable workflow '\{path}' parse error: " +
+                    err,
+                  )
+                }
+                guard parsed.workflow is Some(callee) else { continue }
+                if not(callee.workflow_call) {
+                  errors.push(
+                    "job '\{job.id}' reusable workflow '\{path}' must use on: workflow_call",
+                  )
+                  continue
+                }
+                let workflow_call = callee.workflow_call_spec.unwrap_or(
+                  new_workflow_call_spec(),
+                )
+                let bound_inputs : Map[String, String] = {}
+                for input_name, input_spec in workflow_call.inputs {
+                  let bound_value = match
+                    job.reusable_workflow_with.get(input_name) {
+                    Some(value) => Some(value)
+                    None =>
+                      match input_spec.default_value {
+                        Some(value) => Some(value)
+                        None =>
+                          if input_spec.required {
+                            errors.push(
+                              "job '\{job.id}' reusable workflow missing required input '\{input_name}': \{path}",
+                            )
+                            None
+                          } else {
+                            Some(
+                              workflow_call_input_implicit_default(
+                                input_spec.input_type,
+                              ),
+                            )
+                          }
+                      }
+                  }
+                  match bound_value {
+                    Some(value) =>
+                      if workflow_call_input_value_matches_type(
+                          value,
+                          input_spec.input_type,
+                        ) {
+                        bound_inputs[input_name] = value
+                      } else {
+                        errors.push(
+                          "job '\{job.id}' reusable workflow input '\{input_name}' expects \{input_spec.input_type} but got '\{value}': \{path}",
+                        )
+                      }
+                    None => ()
+                  }
+                }
+                for input_name, _ in job.reusable_workflow_with {
+                  if workflow_call.inputs.get(input_name) is None {
+                    errors.push(
+                      "job '\{job.id}' reusable workflow unknown input '\{input_name}': \{path}",
+                    )
+                  }
+                }
+                let bound_secrets : Map[String, String] = {}
+                for secret_name, secret_spec in workflow_call.secrets {
+                  if job.reusable_workflow_inherit_secrets {
+                    bound_secrets[secret_name] = "${{ secrets." +
+                      secret_name +
+                      " }}"
+                  }
+                  match job.reusable_workflow_secrets.get(secret_name) {
+                    Some(value) => bound_secrets[secret_name] = value
+                    None =>
+                      if secret_spec.required &&
+                        bound_secrets.get(secret_name) is None {
+                        errors.push(
+                          "job '\{job.id}' reusable workflow missing required secret '\{secret_name}': \{path}",
+                        )
+                      }
+                  }
+                }
+                for secret_name, _ in job.reusable_workflow_secrets {
+                  if workflow_call.secrets.get(secret_name) is None {
+                    errors.push(
+                      "job '\{job.id}' reusable workflow unknown secret '\{secret_name}': \{path}",
+                    )
+                  }
+                }
+                match callee.permissions {
+                  Some(spec) if spec.values.length() > 0 =>
+                    errors.push(
+                      "job '\{job.id}' reusable workflow permissions are not supported in MVP: \{path}",
+                    )
+                  _ => ()
+                }
+                match callee.concurrency {
+                  Some(_) =>
+                    errors.push(
+                      "job '\{job.id}' reusable workflow concurrency is not supported in MVP: \{path}",
+                    )
+                  None => ()
+                }
+                let callee_ids : Map[String, String] = {}
+                for callee_job in callee.jobs {
+                  callee_ids[callee_job.id] = reusable_job_id(
+                    job.id,
+                    callee_job.id,
+                  )
+                }
+                if errors.length() > before_errors {
+                  continue
+                }
+                match job.matrix {
+                  Some(_) => {
+                    let row_ids : Array[String] = []
+                    for row_job in expanded_row_jobs_for_reusable_caller(job) {
+                      row_ids.push(row_job.id)
+                      let nested = expand_reusable_workflows_in_workspace(
+                        [row_job],
+                        workspace_root,
+                        execution_root,
+                        errors,
+                      )
+                      if errors.length() > before_errors {
+                        break
+                      }
+                      for nested_job in nested.jobs {
+                        expanded.push(nested_job)
+                      }
+                      for alias_id, targets in nested.aliases {
+                        aliases[alias_id] = targets
+                      }
+                      for alias_id, outputs in nested.alias_outputs {
+                        alias_outputs[alias_id] = outputs
+                      }
+                      for alias_id, targets in nested.alias_output_targets {
+                        alias_output_targets[alias_id] = targets
+                      }
+                    }
+                    if errors.length() > before_errors {
+                      continue
+                    }
+                    aliases[job.id] = row_ids
+                    if workflow_call.outputs.length() > 0 {
+                      let workflow_output_targets : Map[String, Array[String]] = {}
+                      for output_name, _ in workflow_call.outputs {
+                        workflow_output_targets[output_name] = row_ids
+                      }
+                      alias_output_targets[job.id] = workflow_output_targets
+                    }
+                    continue
+                  }
+                  None => ()
+                }
+                let transformed_jobs : Array[JobSpec] = []
+                for callee_job in callee.jobs {
+                  let steps : Array[StepSpec] = []
+                  for step in callee_job.steps {
+                    let substituted_step = rewrite_reusable_step_local_uses(
+                      substitute_reusable_needs_step(
+                        substitute_reusable_bindings_step(
+                          step, bound_inputs, bound_secrets,
+                        ),
+                        callee_ids,
+                      ),
+                      source.source_root,
+                      execution_root,
+                    )
+                    steps.push(substituted_step)
+                  }
+                  let actual_needs : Array[String] = []
+                  if callee_job.needs.length() == 0 {
+                    for need in job.needs {
+                      actual_needs.push(need)
+                    }
+                  } else {
+                    for need in callee_job.needs {
+                      actual_needs.push(callee_ids.get(need).unwrap_or(need))
+                    }
+                  }
+                  transformed_jobs.push(
+                    new_job(
+                      callee_ids.get(callee_job.id).unwrap_or(callee_job.id),
+                      steps,
+                      name=substitute_reusable_bindings_text(
+                        callee_job.name,
+                        bound_inputs,
+                        bound_secrets,
+                      ),
+                      if_condition=combine_if_conditions(
+                        job.if_condition,
+                        substitute_reusable_needs_text(
+                          substitute_reusable_bindings_text(
+                            callee_job.if_condition,
+                            bound_inputs,
+                            bound_secrets,
+                          ),
+                          callee_ids,
+                        ),
+                      ),
+                      needs=actual_needs,
+                      outputs=substitute_reusable_needs_map(
+                        substitute_reusable_bindings_map(
+                          callee_job.outputs,
+                          bound_inputs,
+                          bound_secrets,
+                        ),
+                        callee_ids,
+                      ),
+                      permissions=callee_job.permissions,
+                      concurrency=callee_job.concurrency,
+                      runs_on=substitute_reusable_needs_list(
+                        substitute_reusable_bindings_list(
+                          callee_job.runs_on,
+                          bound_inputs,
+                          bound_secrets,
+                        ),
+                        callee_ids,
+                      ),
+                      env=substitute_reusable_needs_map(
+                        substitute_reusable_bindings_map(
+                          merge_env(callee.env, callee_job.env),
+                          bound_inputs,
+                          bound_secrets,
+                        ),
+                        callee_ids,
+                      ),
+                      defaults=merge_run_defaults(
+                        new_run_defaults(
+                          shell=substitute_reusable_bindings_optional(
+                            callee.defaults.shell,
+                            bound_inputs,
+                            bound_secrets,
+                          ),
+                          working_directory=substitute_reusable_bindings_optional(
+                            callee.defaults.working_directory,
+                            bound_inputs,
+                            bound_secrets,
+                          ),
+                        ),
+                        new_run_defaults(
+                          shell=substitute_reusable_needs_optional(
+                            substitute_reusable_bindings_optional(
+                              callee_job.defaults.shell,
+                              bound_inputs,
+                              bound_secrets,
+                            ),
+                            callee_ids,
+                          ),
+                          working_directory=substitute_reusable_needs_optional(
+                            substitute_reusable_bindings_optional(
+                              callee_job.defaults.working_directory,
+                              bound_inputs,
+                              bound_secrets,
+                            ),
+                            callee_ids,
+                          ),
+                        ),
+                      ),
+                      matrix=callee_job.matrix,
+                      reusable_workflow=substitute_reusable_bindings_optional(
+                        callee_job.reusable_workflow,
+                        bound_inputs,
+                        bound_secrets,
+                      ),
+                      reusable_workflow_with=substitute_reusable_bindings_map(
+                        callee_job.reusable_workflow_with,
+                        bound_inputs,
+                        bound_secrets,
+                      ),
+                      reusable_workflow_secrets=substitute_reusable_bindings_map(
+                        callee_job.reusable_workflow_secrets,
+                        bound_inputs,
+                        bound_secrets,
+                      ),
+                      reusable_workflow_inherit_secrets=callee_job.reusable_workflow_inherit_secrets,
+                      services=callee_job.services,
+                      container=callee_job.container,
+                    ),
+                  )
+                }
+                if errors.length() > before_errors {
+                  continue
+                }
+                let nested = expand_reusable_workflows_in_workspace(
+                  transformed_jobs,
+                  source.source_root,
+                  execution_root,
+                  errors,
+                )
+                if errors.length() > before_errors {
+                  continue
+                }
+                for nested_job in nested.jobs {
+                  expanded.push(nested_job)
+                }
+                for alias_id, targets in nested.aliases {
+                  aliases[alias_id] = targets
+                }
+                for alias_id, outputs in nested.alias_outputs {
+                  alias_outputs[alias_id] = outputs
+                }
+                for alias_id, targets in nested.alias_output_targets {
+                  alias_output_targets[alias_id] = targets
+                }
+                let terminals : Array[String] = []
+                let seen_terminals : Map[String, Bool] = {}
+                for terminal_id in terminal_job_ids(callee.jobs) {
+                  let namespaced = callee_ids
+                    .get(terminal_id)
+                    .unwrap_or(terminal_id)
+                  let targets = nested.aliases
+                    .get(namespaced)
+                    .unwrap_or([namespaced])
+                  for target in targets {
+                    if seen_terminals.get(target) is None {
+                      seen_terminals[target] = true
+                      terminals.push(target)
+                    }
+                  }
+                }
+                aliases[job.id] = terminals
+                let workflow_outputs : Map[String, String] = {}
+                for output_name, output_spec in workflow_call.outputs {
+                  workflow_outputs[output_name] = workflow_job_output_reference(
+                    substitute_reusable_bindings_text(
+                      output_spec.value,
+                      bound_inputs,
+                      bound_secrets,
+                    ),
+                    callee_ids,
+                  )
+                }
+                alias_outputs[job.id] = workflow_outputs
+              }
+              None =>
+                errors.push(
+                  "job '\{job.id}' reusable workflow '\{path}' is missing or not cached",
+                )
+            }
+          None =>
+            errors.push(
+              "job '\{job.id}' reusable workflow is not supported in MVP: \{path}",
+            )
+        }
+      }
+      None => expanded.push(job)
+    }
+  }
+  { jobs: expanded, aliases, alias_outputs, alias_output_targets }
 }
 
 ///|
@@ -878,6 +1947,7 @@ fn lower_builtin_action(
           "cache-save-post"
         },
         backend: "builtin",
+        capabilities: backend_capabilities_for("builtin"),
         action_path: None,
         entrypoint: None,
         image: None,
@@ -907,7 +1977,7 @@ fn lower_builtin_action(
 }
 
 ///|
-fn lower_cached_github_action(
+fn lower_manifest_backed_action(
   workflow : WorkflowSpec,
   job : JobSpec,
   base_env : Map[String, String],
@@ -1009,6 +2079,7 @@ fn lower_cached_github_action(
             action_ref,
             kind: "node-script",
             backend: "node",
+            capabilities: backend_capabilities_for("node"),
             action_path: Some(cached_root),
             entrypoint: Some(join_path(cached_root, pre)),
             image: None,
@@ -1038,6 +2109,7 @@ fn lower_cached_github_action(
         action_ref,
         kind: "node-script",
         backend: "node",
+        capabilities: backend_capabilities_for("node"),
         action_path: Some(cached_root),
         entrypoint: Some(join_path(cached_root, action_manifest.main)),
         image: None,
@@ -1064,6 +2136,7 @@ fn lower_cached_github_action(
             action_ref,
             kind: "node-script",
             backend: "node",
+            capabilities: backend_capabilities_for("node"),
             action_path: Some(cached_root),
             entrypoint: Some(join_path(cached_root, post)),
             image: None,
@@ -1143,6 +2216,7 @@ fn lower_cached_github_action(
             action_ref,
             kind: "docker-action",
             backend: "docker",
+            capabilities: backend_capabilities_for("docker"),
             action_path: Some(cached_root),
             entrypoint: Some(pre_entrypoint),
             image: Some(image),
@@ -1172,6 +2246,7 @@ fn lower_cached_github_action(
         action_ref,
         kind: "docker-action",
         backend: "docker",
+        capabilities: backend_capabilities_for("docker"),
         action_path: Some(cached_root),
         entrypoint: substitute_optional_inputs(
           action_manifest.entrypoint,
@@ -1205,6 +2280,7 @@ fn lower_cached_github_action(
             action_ref,
             kind: "docker-action",
             backend: "docker",
+            capabilities: backend_capabilities_for("docker"),
             action_path: Some(cached_root),
             entrypoint: Some(post_entrypoint),
             image: Some(image),
@@ -1395,8 +2471,8 @@ fn lower_local_action(
         inner_index += 1
         continue
       }
-      if cached_github_action_root(action_ref) is Some(cached_root) {
-        local_previous_task_id = lower_cached_github_action(
+      if manifest_backed_action_root(action_ref) is Some(cached_root) {
+        local_previous_task_id = lower_manifest_backed_action(
           workflow, job, outer_env, nested_outer_step, resolved_step_id, local_previous_task_id,
           action_ref, cached_root, workspace_root, tasks, task_plans, deferred_post_tasks,
           errors,
@@ -1482,13 +2558,35 @@ pub fn lower_push_workflow_in_workspace(
   let job_if_conditions : Map[String, String] = {}
   let job_needs : Map[String, Array[String]] = {}
   let job_need_targets : Map[String, Map[String, Array[String]]] = {}
+  let job_virtual_targets : Map[String, Array[String]] = {}
+  let job_virtual_output_targets : Map[String, Map[String, Array[String]]] = {}
   let job_matrix_groups : Map[String, String] = {}
   let job_matrix_fail_fast : Map[String, Bool] = {}
+  let job_containers : Map[String, JobContainerSpec] = {}
+  let job_services : Map[String, Map[String, JobContainerSpec]] = {}
   let entry_targets : Array[String] = []
   let seen_jobs : Map[String, Bool] = {}
-  let expanded_jobs = expand_matrix_jobs(workflow.jobs)
   if workflow.workflow_call {
     errors.push("workflow_call is not supported in MVP")
+  }
+  let reusable_expansion = expand_reusable_workflows_in_workspace(
+    workflow.jobs,
+    workspace_root,
+    workspace_root,
+    errors,
+  )
+  let expanded_jobs = expand_matrix_jobs(
+    reusable_expansion.jobs,
+    aliases=reusable_expansion.aliases,
+  )
+  for job_id, targets in reusable_expansion.aliases {
+    job_virtual_targets[job_id] = targets
+  }
+  for job_id, outputs in reusable_expansion.alias_outputs {
+    job_outputs[job_id] = outputs
+  }
+  for job_id, output_targets in reusable_expansion.alias_output_targets {
+    job_virtual_output_targets[job_id] = output_targets
   }
   match workflow.permissions {
     Some(spec) if spec.values.length() > 0 =>
@@ -1532,6 +2630,13 @@ pub fn lower_push_workflow_in_workspace(
       }
       None => ()
     }
+    match job.container {
+      Some(container) => job_containers[job.id] = container
+      None => ()
+    }
+    if job.services.length() > 0 {
+      job_services[job.id] = job.services
+    }
     if job.reusable_workflow is Some(path) {
       errors.push(
         "job '\{job.id}' reusable workflow is not supported in MVP: \{path}",
@@ -1546,9 +2651,6 @@ pub fn lower_push_workflow_in_workspace(
       Some(_) =>
         errors.push("job '\{job.id}' concurrency is not supported in MVP")
       None => ()
-    }
-    if job.container_image is Some(image) {
-      errors.push("job '\{job.id}' container is not supported in MVP: \{image}")
     }
     validate_job_if(job.id, job.if_condition, errors)
     for need in job.needs {
@@ -1631,8 +2733,8 @@ pub fn lower_push_workflow_in_workspace(
           continue
         }
         if workspace_root.length() > 0 &&
-          cached_github_action_root(action_ref) is Some(cached_root) {
-          previous_task_id = lower_cached_github_action(
+          manifest_backed_action_root(action_ref) is Some(cached_root) {
+          previous_task_id = lower_manifest_backed_action(
             workflow, job, job_env, step, resolved_step_id, previous_task_id, action_ref,
             cached_root, workspace_root, tasks, task_plans, deferred_post_tasks,
             errors,
@@ -1724,8 +2826,12 @@ pub fn lower_push_workflow_in_workspace(
       job_if_conditions,
       job_needs,
       job_need_targets,
+      job_virtual_targets,
+      job_virtual_output_targets,
       job_matrix_groups,
       job_matrix_fail_fast,
+      job_containers,
+      job_services,
     },
     errors,
   }

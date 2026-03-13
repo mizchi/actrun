@@ -1,0 +1,17 @@
+{
+  "ref": "refs/heads/main",
+  "before": "1111111111111111111111111111111111111111",
+  "after": "2222222222222222222222222222222222222222",
+  "repository": {
+    "full_name": "mizchi/action_runner"
+  },
+  "sender": {
+    "login": "compat-bot"
+  },
+  "head_commit": {
+    "id": "2222222222222222222222222222222222222222",
+    "modified": [
+      "workflow.yml"
+    ]
+  }
+}

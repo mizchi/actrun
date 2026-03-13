@@ -1,0 +1,14 @@
+name: e2e-job-container-docker-action
+'on': push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: node:20-bookworm
+      env:
+        CONTAINER_FLAG: from-container
+      volumes:
+        - "cache:/cache"
+    steps:
+      - id: remote
+        uses: demo/docker-action/action@v1

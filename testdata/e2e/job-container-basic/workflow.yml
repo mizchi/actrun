@@ -1,0 +1,15 @@
+name: job-container-basic
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: alpine:3.21
+      env:
+        CONTAINER_FLAG: from-container
+    defaults:
+      run:
+        working-directory: nested
+    steps:
+      - id: show
+        run: printf '%s|%s' "$CONTAINER_FLAG" "$PWD" > ../out.txt

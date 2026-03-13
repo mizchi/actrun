@@ -1,0 +1,12 @@
+name: unsupported-job-container
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: node:20-bookworm
+      env:
+        NODE_ENV: test
+    steps:
+      - id: show
+        run: printf '%s' hi

@@ -1,0 +1,28 @@
+name: outer
+on:
+  workflow_call:
+    inputs:
+      message:
+        required: true
+        type: string
+    outputs:
+      result:
+        value: ${{ jobs.wrap.outputs.result }}
+    secrets:
+      token:
+        required: true
+jobs:
+  inner:
+    uses: demo/inner/.github/workflows/reusable.yml@v2
+    with:
+      message: ${{ inputs.message }}
+    secrets:
+      token: ${{ secrets.token }}
+  wrap:
+    needs: [inner]
+    runs-on: ubuntu-latest
+    outputs:
+      result: ${{ steps.capture.outputs.result }}
+    steps:
+      - id: capture
+        run: printf 'result=%s' "${{ needs.inner.outputs.result }}" >> "$GITHUB_OUTPUT"

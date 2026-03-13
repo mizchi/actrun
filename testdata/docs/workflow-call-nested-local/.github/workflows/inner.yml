@@ -1,0 +1,23 @@
+name: inner
+on:
+  workflow_call:
+    inputs:
+      message:
+        required: true
+        type: string
+    outputs:
+      result:
+        value: ${{ jobs.build.outputs.result }}
+    secrets:
+      token:
+        required: true
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      result: ${{ steps.capture.outputs.result }}
+    steps:
+      - id: write
+        run: printf '%s|%s' '${{ inputs.message }}' '${{ secrets.token }}' > inner.txt
+      - id: capture
+        run: printf 'result=%s' "$(cat inner.txt)" >> "$GITHUB_OUTPUT"

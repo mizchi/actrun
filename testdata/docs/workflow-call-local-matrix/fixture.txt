@@ -1,0 +1,8 @@
+id=docs-workflow-call-local-matrix
+source=docs
+mode=supported
+kind=run
+url=https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_iduses
+docs_urls=https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_iduses,https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idstrategy
+added_at=2026-03-13
+notes=matrix caller expands reusable workflow rows and downstream needs waits on every terminal callee job

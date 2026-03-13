@@ -1,5 +1,18 @@
 name: workflow-call-parse
-'on': workflow_call
+on:
+  workflow_call:
+    inputs:
+      target:
+        description: target environment
+        required: true
+        type: string
+    outputs:
+      build_id:
+        description: build identifier
+        value: ${{ jobs.build.outputs.build_id }}
+    secrets:
+      token:
+        required: true
 jobs:
   build:
     runs-on: ubuntu-latest

@@ -1,0 +1,8 @@
+id=docs-workflow-call-secrets-inherit
+source=docs
+mode=supported
+kind=run
+url=https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idsecretsinherit
+docs_urls=https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idsecretsinherit,https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#onworkflow_callsecrets
+added_at=2026-03-13
+notes=local reusable workflow inherits caller secrets into declared workflow_call secrets

@@ -81,6 +81,20 @@ priv struct TaskExecutionResult {
 }
 
 ///|
+priv struct StartedJobService {
+  name : String
+  docker_bin : String
+  workspace_abs : String
+  network_name : String?
+}
+
+///|
+priv struct JobServicesStartResult {
+  started : Array[StartedJobService]
+  error : String?
+}
+
+///|
 fn empty_job_runtime_state() -> JobRuntimeState {
   {
     env_updates: {},
@@ -277,7 +291,9 @@ fn absolute_exec_path(path : String) -> String {
   if path.has_prefix("/") {
     return path
   }
-  let cwd = @xsys.get_env_var("PWD").unwrap_or(".")
+  let cwd = @env.current_dir().unwrap_or(
+    @xsys.get_env_var("PWD").unwrap_or("."),
+  )
   if cwd.has_suffix("/") {
     cwd + path
   } else {
@@ -623,6 +639,16 @@ fn needs_result_expr_name(expression : String) -> String? {
 fn env_expr_name(expression : String) -> String? {
   let trimmed = expression.trim(chars=" \t\n\r").to_string()
   if trimmed.has_prefix("env.") && trimmed.length() > 4 {
+    Some(exec_text_slice(trimmed, 4, trimmed.length()))
+  } else {
+    None
+  }
+}
+
+///|
+fn job_expr_name(expression : String) -> String? {
+  let trimmed = expression.trim(chars=" \t\n\r").to_string()
+  if trimmed.has_prefix("job.") && trimmed.length() > 4 {
     Some(exec_text_slice(trimmed, 4, trimmed.length()))
   } else {
     None
@@ -988,11 +1014,90 @@ fn runner_secrets_context() -> Map[String, String] {
 }
 
 ///|
+fn service_port_segment_value(value : String) -> String {
+  let trimmed = value.trim(chars=" \t\r\n").to_string()
+  match trimmed.find("/") {
+    Some(idx) => exec_text_slice(trimmed, 0, idx)
+    None => trimmed
+  }
+}
+
+///|
+fn service_port_segments(port_spec : String) -> Array[String] {
+  let segments : Array[String] = []
+  for segment in port_spec.split(":") {
+    segments.push(segment.trim(chars=" \t\r\n").to_string())
+  }
+  segments
+}
+
+///|
+fn service_container_port_value(port_spec : String) -> String {
+  let segments = service_port_segments(port_spec)
+  if segments.length() == 0 {
+    return ""
+  }
+  service_port_segment_value(segments[segments.length() - 1])
+}
+
+///|
+fn service_host_port_value(port_spec : String) -> String {
+  let segments = service_port_segments(port_spec)
+  if segments.length() == 0 {
+    return ""
+  }
+  if segments.length() == 1 {
+    return service_port_segment_value(segments[0])
+  }
+  service_port_segment_value(segments[segments.length() - 2])
+}
+
+///|
+fn job_services_context(
+  services : Map[String, JobContainerSpec],
+) -> Map[String, String] {
+  let values : Map[String, String] = {}
+  for service_id, service in services {
+    for port in service.ports {
+      let container_port = service_container_port_value(port)
+      if container_port.length() == 0 {
+        continue
+      }
+      values["services." + service_id + ".ports[" + container_port + "]"] = service_host_port_value(
+        port,
+      )
+    }
+  }
+  values
+}
+
+///|
+fn plan_job_context(
+  job_services : Map[String, Map[String, JobContainerSpec]],
+  job_id : String,
+) -> Map[String, String] {
+  job_services_context(job_services.get(job_id).unwrap_or({}))
+}
+
+///|
+fn plan_job_service_network_name(
+  job_services : Map[String, Map[String, JobContainerSpec]],
+  job_id : String,
+) -> String? {
+  match job_services.get(job_id) {
+    Some(services) if services.length() > 0 =>
+      Some(job_service_network_name(job_id))
+    _ => None
+  }
+}
+
+///|
 fn substitute_runtime_text(
   text : String,
   state : JobRuntimeState,
   workspace_root : String,
   env_context : Map[String, String],
+  job_context : Map[String, String],
   github_context : Map[String, String],
   runner_context : Map[String, String],
   needs_outputs : Map[String, Map[String, String]],
@@ -1043,66 +1148,80 @@ fn substitute_runtime_text(
                                       ).unwrap_or(""),
                                     )
                                   None =>
-                                    match vars_expr_name(expression) {
+                                    match job_expr_name(expression) {
                                       Some(name) =>
                                         chunks.push(
                                           map_get_case_insensitive(
-                                            vars_context, name,
+                                            job_context, name,
                                           ).unwrap_or(""),
                                         )
                                       None =>
-                                        match secrets_expr_name(expression) {
+                                        match vars_expr_name(expression) {
                                           Some(name) =>
                                             chunks.push(
                                               map_get_case_insensitive(
-                                                secrets_context, name,
+                                                vars_context, name,
                                               ).unwrap_or(""),
                                             )
                                           None =>
-                                            match github_expr_name(expression) {
+                                            match
+                                              secrets_expr_name(expression) {
                                               Some(name) =>
                                                 chunks.push(
                                                   map_get_case_insensitive(
-                                                    github_context, name,
+                                                    secrets_context, name,
                                                   ).unwrap_or(""),
                                                 )
                                               None =>
                                                 match
-                                                  runner_expr_name(expression) {
+                                                  github_expr_name(expression) {
                                                   Some(name) =>
                                                     chunks.push(
                                                       map_get_case_insensitive(
-                                                        runner_context, name,
+                                                        github_context, name,
                                                       ).unwrap_or(""),
                                                     )
                                                   None =>
                                                     match
-                                                      evaluate_string_function_expression(
+                                                      runner_expr_name(
                                                         expression,
-                                                        new_if_condition_context(
-                                                          step_outputs=state.step_outputs,
-                                                          step_outcomes=state.step_outcomes,
-                                                          step_conclusions=state.step_conclusions,
-                                                          workspace_root~,
-                                                          env_context~,
-                                                          vars_context~,
-                                                          secrets_context~,
-                                                          github_context~,
-                                                          runner_context~,
-                                                          needs_outputs~,
-                                                          needs_results~,
-                                                        ),
                                                       ) {
-                                                      Some(value) =>
-                                                        chunks.push(value)
-                                                      None =>
+                                                      Some(name) =>
                                                         chunks.push(
-                                                          exec_text_slice(
-                                                            text,
-                                                            open_idx,
-                                                            close_idx + 2,
-                                                          ),
+                                                          map_get_case_insensitive(
+                                                            runner_context, name,
+                                                          ).unwrap_or(""),
                                                         )
+                                                      None =>
+                                                        match
+                                                          evaluate_string_function_expression(
+                                                            expression,
+                                                            new_if_condition_context(
+                                                              step_outputs=state.step_outputs,
+                                                              step_outcomes=state.step_outcomes,
+                                                              step_conclusions=state.step_conclusions,
+                                                              workspace_root~,
+                                                              env_context~,
+                                                              job_context~,
+                                                              vars_context~,
+                                                              secrets_context~,
+                                                              github_context~,
+                                                              runner_context~,
+                                                              needs_outputs~,
+                                                              needs_results~,
+                                                            ),
+                                                          ) {
+                                                          Some(value) =>
+                                                            chunks.push(value)
+                                                          None =>
+                                                            chunks.push(
+                                                              exec_text_slice(
+                                                                text,
+                                                                open_idx,
+                                                                close_idx + 2,
+                                                              ),
+                                                            )
+                                                        }
                                                     }
                                                 }
                                             }
@@ -1137,6 +1256,7 @@ fn substitute_runtime_optional(
   state : JobRuntimeState,
   workspace_root : String,
   env_context : Map[String, String],
+  job_context : Map[String, String],
   github_context : Map[String, String],
   runner_context : Map[String, String],
   needs_outputs : Map[String, Map[String, String]],
@@ -1146,8 +1266,8 @@ fn substitute_runtime_optional(
     Some(text) =>
       Some(
         substitute_runtime_text(
-          text, state, workspace_root, env_context, github_context, runner_context,
-          needs_outputs, needs_results,
+          text, state, workspace_root, env_context, job_context, github_context,
+          runner_context, needs_outputs, needs_results,
         ),
       )
     None => None
@@ -1159,6 +1279,7 @@ fn resolve_plan_env(
   plan : TaskPlan,
   state : JobRuntimeState,
   workspace_root : String,
+  job_context : Map[String, String],
   github_context : Map[String, String],
   runner_context : Map[String, String],
   needs_outputs : Map[String, Map[String, String]],
@@ -1172,8 +1293,8 @@ fn resolve_plan_env(
     let next : Map[String, String] = {}
     for key, value in plan.env {
       next[key] = substitute_runtime_text(
-        value, state, workspace_root, context, github_context, runner_context, needs_outputs,
-        needs_results,
+        value, state, workspace_root, context, job_context, github_context, runner_context,
+        needs_outputs, needs_results,
       )
     }
     for key, value in state.env_updates {
@@ -1236,6 +1357,430 @@ fn env_command_args(
 }
 
 ///|
+fn split_exec_words(text : String) -> Array[String] {
+  let parts : Array[String] = []
+  for part_view in text.split(" ") {
+    let part = part_view.trim(chars=" \t\r\n").to_string()
+    if part.length() > 0 {
+      parts.push(part)
+    }
+  }
+  parts
+}
+
+///|
+fn container_registry_host(image : String) -> String? {
+  guard image.find("/") is Some(split_idx) else { return None }
+  let first = exec_text_slice(image, 0, split_idx)
+  if first.contains(".") || first.contains(":") || first == "localhost" {
+    Some(first)
+  } else {
+    None
+  }
+}
+
+///|
+fn service_container_name(job_id : String, service_id : String) -> String {
+  "action-runner-service-" +
+  sanitize_task_id(job_id + "__" + service_id).to_lower()
+}
+
+///|
+fn job_service_network_name(job_id : String) -> String {
+  "action-runner-job-" + sanitize_task_id(job_id).to_lower()
+}
+
+///|
+async fn ensure_container_registry_login(
+  docker_bin : String,
+  workspace_abs : String,
+  container : JobContainerSpec,
+) -> String? {
+  match container.credentials {
+    Some(credentials) => {
+      let login_args : Array[String] = [
+        "login",
+        "-u",
+        credentials.username,
+        "-p",
+        credentials.password,
+      ]
+      match container_registry_host(container.image) {
+        Some(registry) => login_args.push(registry)
+        None => ()
+      }
+      let (login_code, _, login_stderr) = @process.collect_output(
+        docker_bin,
+        login_args,
+        cwd=workspace_abs,
+      )
+      if login_code != 0 {
+        Some(trim_exec_output(login_stderr.text()))
+      } else {
+        None
+      }
+    }
+    None => None
+  }
+}
+
+///|
+fn resolve_job_container_spec(
+  container : JobContainerSpec,
+  state : JobRuntimeState,
+  workspace_root : String,
+  resolved_plan_env : Map[String, String],
+  github_ctx : Map[String, String],
+  runner_ctx : Map[String, String],
+  needs_outputs : Map[String, Map[String, String]],
+  needs_results : Map[String, String],
+) -> JobContainerSpec {
+  let empty_job_context : Map[String, String] = {}
+  let resolved_env : Map[String, String] = {}
+  for key, value in container.env {
+    resolved_env[key] = substitute_runtime_text(
+      value, state, workspace_root, resolved_plan_env, empty_job_context, github_ctx,
+      runner_ctx, needs_outputs, needs_results,
+    )
+  }
+  let resolved_ports : Array[String] = []
+  for port in container.ports {
+    resolved_ports.push(
+      substitute_runtime_text(
+        port, state, workspace_root, resolved_plan_env, empty_job_context, github_ctx,
+        runner_ctx, needs_outputs, needs_results,
+      ),
+    )
+  }
+  let resolved_volumes : Array[String] = []
+  for volume in container.volumes {
+    resolved_volumes.push(
+      substitute_runtime_text(
+        volume, state, workspace_root, resolved_plan_env, empty_job_context, github_ctx,
+        runner_ctx, needs_outputs, needs_results,
+      ),
+    )
+  }
+  let resolved_credentials = match container.credentials {
+    Some(credentials) =>
+      Some(
+        new_job_container_credentials_spec(
+          substitute_runtime_text(
+            credentials.username,
+            state,
+            workspace_root,
+            resolved_plan_env,
+            empty_job_context,
+            github_ctx,
+            runner_ctx,
+            needs_outputs,
+            needs_results,
+          ),
+          substitute_runtime_text(
+            credentials.password,
+            state,
+            workspace_root,
+            resolved_plan_env,
+            empty_job_context,
+            github_ctx,
+            runner_ctx,
+            needs_outputs,
+            needs_results,
+          ),
+        ),
+      )
+    None => None
+  }
+  new_job_container_spec(
+    substitute_runtime_text(
+      container.image,
+      state,
+      workspace_root,
+      resolved_plan_env,
+      empty_job_context,
+      github_ctx,
+      runner_ctx,
+      needs_outputs,
+      needs_results,
+    ),
+    credentials=resolved_credentials,
+    env=resolved_env,
+    ports=resolved_ports,
+    volumes=resolved_volumes,
+    options=substitute_runtime_optional(
+      container.options,
+      state,
+      workspace_root,
+      resolved_plan_env,
+      empty_job_context,
+      github_ctx,
+      runner_ctx,
+      needs_outputs,
+      needs_results,
+    ),
+  )
+}
+
+///|
+async fn cleanup_job_services_native(
+  started : Array[StartedJobService],
+) -> Unit {
+  let service_networks : Map[String, (String, String)] = {}
+  for service in started {
+    match service.network_name {
+      Some(name) if name.length() > 0 =>
+        service_networks[name] = (service.docker_bin, service.workspace_abs)
+      _ => ()
+    }
+    ignore(
+      @process.collect_output(
+        service.docker_bin,
+        ["rm", "-f", service.name],
+        cwd=service.workspace_abs,
+      ),
+    )
+  }
+  for network_name, service_network in service_networks {
+    let (docker_bin, workspace_abs) = service_network
+    ignore(
+      @process.collect_output(
+        docker_bin,
+        ["network", "rm", network_name],
+        cwd=workspace_abs,
+      ),
+    )
+  }
+}
+
+///|
+async fn cleanup_job_service_network_native(
+  docker_bin : String,
+  workspace_abs : String,
+  network_name : String?,
+) -> Unit {
+  match network_name {
+    Some(name) if name.length() > 0 =>
+      ignore(
+        @process.collect_output(
+          docker_bin,
+          ["network", "rm", name],
+          cwd=workspace_abs,
+        ),
+      )
+    _ => ()
+  }
+}
+
+///|
+async fn create_job_service_network_native(
+  docker_bin : String,
+  workspace_abs : String,
+  network_name : String?,
+) -> String? {
+  match network_name {
+    Some(name) if name.length() > 0 => {
+      let (code, _, stderr) = @process.collect_output(
+        docker_bin,
+        ["network", "create", name],
+        cwd=workspace_abs,
+      )
+      if code == 0 {
+        None
+      } else {
+        Some(trim_exec_output(stderr.text()))
+      }
+    }
+    _ => None
+  }
+}
+
+///|
+fn service_has_health_check(service : JobContainerSpec) -> Bool {
+  match service.options {
+    Some(options) => options.contains("--health-cmd")
+    None => false
+  }
+}
+
+///|
+async fn sleep_for_service_poll_native() -> Unit {
+  ignore(@process.collect_output("sleep", ["0.1"], cwd="."))
+}
+
+///|
+async fn wait_for_job_service_health_native(
+  service_id : String,
+  container_name : String,
+  docker_bin : String,
+  workspace_abs : String,
+) -> String? {
+  let inspect_args = [
+    "inspect", "--format", "{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}",
+    container_name,
+  ]
+  let mut attempt = 0
+  let max_attempts = 20
+  while attempt < max_attempts {
+    let (code, stdout, stderr) = @process.collect_output(
+      docker_bin,
+      inspect_args,
+      cwd=workspace_abs,
+    )
+    if code != 0 {
+      return Some(
+        "service '\{service_id}' health inspect failed: " +
+        trim_exec_output(stderr.text()),
+      )
+    }
+    let status = trim_exec_output(stdout.text())
+    if status == "healthy" {
+      return None
+    }
+    if status == "unhealthy" || status == "exited" || status == "dead" {
+      return Some("service '\{service_id}' became " + status)
+    }
+    attempt += 1
+    if attempt < max_attempts {
+      sleep_for_service_poll_native()
+    }
+  }
+  Some("service '\{service_id}' did not become healthy")
+}
+
+///|
+async fn start_job_services_native(
+  job_id : String,
+  services : Map[String, JobContainerSpec],
+  workspace_root : String,
+  state : JobRuntimeState,
+  resolved_plan_env : Map[String, String],
+  github_ctx : Map[String, String],
+  runner_ctx : Map[String, String],
+  needs_outputs : Map[String, Map[String, String]],
+  needs_results : Map[String, String],
+) -> JobServicesStartResult {
+  let started : Array[StartedJobService] = []
+  let workspace_abs = absolute_exec_path(resolve_task_cwd(workspace_root, ""))
+  let network_name = if services.length() > 0 {
+    Some(job_service_network_name(job_id))
+  } else {
+    None
+  }
+  match
+    create_job_service_network_native(
+      configured_exec_bin(
+        "ACTION_RUNNER_DOCKER_BIN", resolved_plan_env, "docker",
+      ),
+      workspace_abs,
+      network_name,
+    ) {
+    Some(message) =>
+      return {
+        started: [],
+        error: Some("docker network create failed: " + message),
+      }
+    None => ()
+  }
+  for service_id, service in services {
+    let resolved = resolve_job_container_spec(
+      service, state, workspace_root, resolved_plan_env, github_ctx, runner_ctx,
+      needs_outputs, needs_results,
+    )
+    if resolved.image.trim(chars=" \t\r\n").length() == 0 {
+      continue
+    }
+    let docker_bin = configured_exec_bin(
+      "ACTION_RUNNER_DOCKER_BIN",
+      merge_runner_env(resolved_plan_env, resolved.env),
+      "docker",
+    )
+    match ensure_container_registry_login(docker_bin, workspace_abs, resolved) {
+      Some(message) => {
+        cleanup_job_services_native(started)
+        cleanup_job_service_network_native(
+          docker_bin, workspace_abs, network_name,
+        )
+        return { started: [], error: Some("docker login failed: " + message) }
+      }
+      None => ()
+    }
+    let container_name = service_container_name(job_id, service_id)
+    let run_args : Array[String] = [
+      "run", "-d", "--rm", "--name", container_name,
+    ]
+    match network_name {
+      Some(name) => {
+        run_args.push("--network")
+        run_args.push(name)
+        run_args.push("--network-alias")
+        run_args.push(service_id)
+      }
+      None => ()
+    }
+    for port in resolved.ports {
+      run_args.push("-p")
+      run_args.push(port)
+    }
+    for volume in resolved.volumes {
+      run_args.push("-v")
+      run_args.push(volume)
+    }
+    match resolved.options {
+      Some(options) =>
+        for option in split_exec_words(options) {
+          run_args.push(option)
+        }
+      None => ()
+    }
+    for key, value in resolved.env {
+      run_args.push("-e")
+      run_args.push(key + "=" + value)
+    }
+    run_args.push(resolved.image)
+    let (code, _, stderr) = @process.collect_output(
+      docker_bin,
+      run_args,
+      cwd=workspace_abs,
+    )
+    if code != 0 {
+      cleanup_job_services_native(started)
+      cleanup_job_service_network_native(
+        docker_bin, workspace_abs, network_name,
+      )
+      return {
+        started: [],
+        error: Some(
+          "service '\{service_id}' failed to start: " +
+          trim_exec_output(stderr.text()),
+        ),
+      }
+    }
+    started.push({
+      name: container_name,
+      docker_bin,
+      workspace_abs,
+      network_name,
+    })
+    if service_has_health_check(resolved) {
+      match
+        wait_for_job_service_health_native(
+          service_id, container_name, docker_bin, workspace_abs,
+        ) {
+        Some(message) => {
+          cleanup_job_services_native(started)
+          cleanup_job_service_network_native(
+            docker_bin, workspace_abs, network_name,
+          )
+          return { started: [], error: Some(message) }
+        }
+        None => ()
+      }
+    }
+  }
+  { started, error: None }
+}
+
+///|
 fn unsupported_workflow_command(plan : TaskPlan, script : String) -> String? {
   if script.contains("GITHUB_STATE") && plan.action_scope is None {
     Some("GITHUB_STATE")
@@ -1251,17 +1796,22 @@ fn job_needs_outputs(
   outputs : Map[String, Map[String, String]],
 ) -> Map[String, Map[String, String]] {
   let values : Map[String, Map[String, String]] = {}
-  let targets = plan.job_need_targets.get(job_id).unwrap_or({})
   for need in plan.job_needs.get(job_id).unwrap_or([]) {
-    let merged : Map[String, String] = {}
-    for target in targets.get(need).unwrap_or([need]) {
-      for key, value in outputs.get(target).unwrap_or({}) {
-        if value.length() > 0 {
-          merged[key] = value
+    match outputs.get(need) {
+      Some(direct) => values[need] = direct
+      None => {
+        let merged : Map[String, String] = {}
+        let targets = plan.job_need_targets.get(job_id).unwrap_or({})
+        for target in targets.get(need).unwrap_or([need]) {
+          for key, value in outputs.get(target).unwrap_or({}) {
+            if value.length() > 0 {
+              merged[key] = value
+            }
+          }
         }
+        values[need] = merged
       }
     }
-    values[need] = merged
   }
   values
 }
@@ -1273,8 +1823,15 @@ fn job_needs_results(
   results : Map[String, String],
 ) -> Map[String, String] {
   let values : Map[String, String] = {}
-  let targets = plan.job_need_targets.get(job_id).unwrap_or({})
   for need in plan.job_needs.get(job_id).unwrap_or([]) {
+    match results.get(need) {
+      Some(value) => {
+        values[need] = value
+        continue
+      }
+      None => ()
+    }
+    let targets = plan.job_need_targets.get(job_id).unwrap_or({})
     let mut has_failure = false
     let mut has_cancelled = false
     let mut has_skipped = false
@@ -1405,25 +1962,125 @@ fn evaluate_job_outputs(
   output_defs : Map[String, String],
   state : JobRuntimeState,
   workspace_root : String,
+  needs_outputs? : Map[String, Map[String, String]] = {},
+  needs_results? : Map[String, String] = {},
 ) -> Map[String, String] {
   let values : Map[String, String] = {}
   let empty_github : Map[String, String] = {}
+  let empty_job : Map[String, String] = {}
   let empty_runner : Map[String, String] = {}
-  let empty_needs_outputs : Map[String, Map[String, String]] = {}
-  let empty_needs_results : Map[String, String] = {}
   for key, value in output_defs {
     values[key] = substitute_runtime_text(
       value,
       state,
       workspace_root,
       state.env_updates,
+      empty_job,
       empty_github,
       empty_runner,
-      empty_needs_outputs,
-      empty_needs_results,
+      needs_outputs,
+      needs_results,
     )
   }
   values
+}
+
+///|
+fn array_contains_string(values : Array[String], needle : String) -> Bool {
+  for value in values {
+    if value == needle {
+      return true
+    }
+  }
+  false
+}
+
+///|
+fn evaluate_virtual_job_outputs(
+  output_targets : Map[String, Array[String]],
+  completed_job_outputs : Map[String, Map[String, String]],
+  completed_job_results : Map[String, String],
+  completed_job_order : Array[String],
+) -> Map[String, String] {
+  let values : Map[String, String] = {}
+  for output_name, targets in output_targets {
+    let mut selected = ""
+    let mut idx = completed_job_order.length()
+    while idx > 0 {
+      idx -= 1
+      let job_id = completed_job_order[idx]
+      if not(array_contains_string(targets, job_id)) {
+        continue
+      }
+      if completed_job_results.get(job_id).unwrap_or("") != "success" {
+        continue
+      }
+      let value = completed_job_outputs
+        .get(job_id)
+        .unwrap_or({})
+        .get(output_name)
+        .unwrap_or("")
+      if value.length() > 0 {
+        selected = value
+        break
+      }
+    }
+    values[output_name] = selected
+  }
+  values
+}
+
+///|
+fn materialize_virtual_jobs(
+  plan : ExecutionPlan,
+  completed_job_outputs : Map[String, Map[String, String]],
+  completed_job_results : Map[String, String],
+  completed_job_order : Array[String],
+  workspace_root : String,
+) -> Unit {
+  let empty_state = empty_job_runtime_state()
+  let mut progressed = true
+  while progressed {
+    progressed = false
+    for job_id, _ in plan.job_virtual_targets {
+      if completed_job_results.get(job_id) is Some(_) {
+        continue
+      }
+      let needs_results = job_needs_results(plan, job_id, completed_job_results)
+      let ready = needs_results.length() ==
+        plan.job_virtual_targets.get(job_id).unwrap_or([]).length()
+      if not(ready) {
+        continue
+      }
+      let needs_outputs = job_needs_outputs(plan, job_id, completed_job_outputs)
+      completed_job_results[job_id] = if job_if_failure_value(needs_results) {
+        "failure"
+      } else if job_if_cancelled_value(needs_results) {
+        "cancelled"
+      } else if job_if_success_value(needs_results) {
+        "success"
+      } else {
+        "skipped"
+      }
+      completed_job_outputs[job_id] = match
+        plan.job_virtual_output_targets.get(job_id) {
+        Some(output_targets) =>
+          evaluate_virtual_job_outputs(
+            output_targets, completed_job_outputs, completed_job_results, completed_job_order,
+          )
+        None =>
+          evaluate_job_outputs(
+            plan.job_outputs.get(job_id).unwrap_or({}),
+            empty_state,
+            workspace_root,
+            needs_outputs~,
+            needs_results~,
+          )
+      }
+      completed_job_order.push(job_id)
+      progressed = true
+    }
+  }
 }
 
 ///|
@@ -2346,24 +3003,28 @@ async fn exec_git_clone_checkout(
 
 ///|
 fn artifact_store_root(workspace_root : String) -> String {
-  ignore(ensure_exec_dir_recursive("_build/action_runner/artifacts"))
+  let configured = @xsys.get_env_var("ACTION_RUNNER_ARTIFACT_ROOT").unwrap_or(
+    "_build/action_runner/artifacts",
+  )
+  ignore(ensure_exec_dir_recursive(configured))
   let workspace_key = sanitize_task_id(
     absolute_exec_path(resolve_task_cwd(workspace_root, "")),
   )
-  let root = absolute_exec_path(
-    "_build/action_runner/artifacts/" + workspace_key,
-  )
+  let root = absolute_exec_path(configured + "/" + workspace_key)
   ignore(ensure_exec_dir_recursive(root))
   root
 }
 
 ///|
 fn cache_store_root(workspace_root : String) -> String {
-  ignore(ensure_exec_dir_recursive("_build/action_runner/cache"))
+  let configured = @xsys.get_env_var("ACTION_RUNNER_CACHE_ROOT").unwrap_or(
+    "_build/action_runner/cache",
+  )
+  ignore(ensure_exec_dir_recursive(configured))
   let workspace_key = sanitize_task_id(
     absolute_exec_path(resolve_task_cwd(workspace_root, "")),
   )
-  let root = absolute_exec_path("_build/action_runner/cache/" + workspace_key)
+  let root = absolute_exec_path(configured + "/" + workspace_key)
   ignore(ensure_exec_dir_recursive(root))
   root
 }
@@ -3951,15 +4612,165 @@ fn resolve_exec_bin_for_workspace(
 
 ///|
 #cfg(target="native")
+fn configured_path_root(
+  env_name : String,
+  resolved_plan_env : Map[String, String],
+  fallback : String,
+  workspace_root : String,
+) -> String {
+  match resolved_plan_env.get(env_name) {
+    Some(configured) =>
+      if configured.has_prefix("/") {
+        configured
+      } else {
+        resolve_task_cwd(workspace_root, configured)
+      }
+    None => {
+      let configured = @xsys.get_env_var(env_name).unwrap_or(fallback)
+      if configured.has_prefix("/") {
+        configured
+      } else {
+        absolute_exec_path(configured)
+      }
+    }
+  }
+}
+
+///|
+#cfg(target="native")
+fn wasm_module_candidate_paths(
+  root : String,
+  entrypoint : String,
+) -> Array[String] {
+  let candidates : Array[String] = [
+    root + "/" + entrypoint + "/main.wasm",
+    root + "/" + entrypoint + ".wasm",
+  ]
+  match entrypoint.find("@") {
+    Some(idx) => {
+      let name = exec_text_slice(entrypoint, 0, idx)
+      let version = exec_text_slice(entrypoint, idx + 1, entrypoint.length())
+      if name.length() > 0 && version.length() > 0 {
+        candidates.push(root + "/" + name + "/" + version + "/main.wasm")
+        candidates.push(root + "/" + name + "/" + version + ".wasm")
+      }
+    }
+    None => ()
+  }
+  candidates
+}
+
+///|
+#cfg(target="native")
+fn resolve_wasm_module_path(
+  resolved_plan_env : Map[String, String],
+  workspace_root : String,
+  entrypoint : String,
+) -> String? {
+  let root = configured_path_root(
+    "ACTION_RUNNER_WASM_ACTION_ROOT", resolved_plan_env, "_build/action_runner/wasm_actions",
+    workspace_root,
+  )
+  for candidate in wasm_module_candidate_paths(root, entrypoint) {
+    if @xfs.path_exists(candidate) {
+      return Some(candidate)
+    }
+  }
+  None
+}
+
+///|
+#cfg(target="native")
+async fn execute_wasm_action_native(
+  workflow_name : String,
+  plan : TaskPlan,
+  action : ResolvedAction,
+  workspace_root : String,
+  resolved_plan_env : Map[String, String],
+  github_ctx : Map[String, String],
+  runner_ctx : Map[String, String],
+) -> TaskExecutionResult {
+  guard action.entrypoint is Some(entrypoint) else {
+    return {
+      report: task_report_failure(
+        plan, workspace_root, "wasm action is missing an entrypoint",
+      ),
+      env_updates: {},
+      path_entries: [],
+      output_values: {},
+      state_updates: {},
+    }
+  }
+  guard prepare_step_file_commands(plan.id, workspace_root)
+    is Some(file_commands) else {
+    return {
+      report: task_report_failure(
+        plan, workspace_root, "failed to prepare step file commands",
+      ),
+      env_updates: {},
+      path_entries: [],
+      output_values: {},
+      state_updates: {},
+    }
+  }
+  guard resolve_wasm_module_path(resolved_plan_env, workspace_root, entrypoint)
+    is Some(module_path) else {
+    return {
+      report: task_report_failure(
+        plan,
+        workspace_root,
+        "wasm module for '\{entrypoint}' was not found",
+      ),
+      env_updates: {},
+      path_entries: [],
+      output_values: {},
+      state_updates: {},
+    }
+  }
+  let env = default_runner_env(
+    workflow_name, plan, workspace_root, github_ctx, resolved_plan_env, file_commands,
+    runner_ctx,
+  )
+  let cmd = configured_exec_bin(
+    "ACTION_RUNNER_WASM_BIN", resolved_plan_env, "wasmtime",
+  )
+  let cwd = action.action_path.unwrap_or(resolve_task_cwd(workspace_root, ""))
+  let env_args = env_command_args(cmd, [module_path], env)
+  let (code, stdout, stderr) = @process.collect_output("env", env_args, cwd~)
+  {
+    report: {
+      id: plan.id,
+      kind: plan.kind,
+      status: if code == 0 {
+        "success"
+      } else {
+        "failed"
+      },
+      code,
+      shell: plan.shell,
+      script: plan.script,
+      cwd,
+      stdout: stdout.text(),
+      stderr: stderr.text(),
+      summary: parse_summary_text(file_commands.summary_path),
+    },
+    env_updates: parse_env_updates(file_commands.env_path),
+    path_entries: parse_path_updates(file_commands.path_path),
+    output_values: parse_output_values(file_commands.output_path),
+    state_updates: parse_state_values(file_commands.state_path),
+  }
+}
+
+///|
+#cfg(target="native")
 async fn execute_node_action_native(
   workflow_name : String,
   plan : TaskPlan,
   action : ResolvedAction,
   workspace_root : String,
-  state : JobRuntimeState,
-  needs_outputs : Map[String, Map[String, String]],
-  needs_results : Map[String, String],
-  push_event : PushEvent?,
+  resolved_plan_env : Map[String, String],
+  github_ctx : Map[String, String],
+  runner_ctx : Map[String, String],
 ) -> TaskExecutionResult {
   guard action.entrypoint is Some(entrypoint) else {
     return {
@@ -3984,13 +4795,6 @@ async fn execute_node_action_native(
       state_updates: {},
     }
   }
-  let github_ctx = github_context(
-    workflow_name, plan, workspace_root, push_event,
-  )
-  let runner_ctx = runner_context(plan, workspace_root)
-  let resolved_plan_env = resolve_plan_env(
-    plan, state, workspace_root, github_ctx, runner_ctx, needs_outputs, needs_results,
-  )
   let env = default_runner_env(
     workflow_name, plan, workspace_root, github_ctx, resolved_plan_env, file_commands,
     runner_ctx,
@@ -4032,10 +4836,11 @@ async fn execute_docker_action_native(
   plan : TaskPlan,
   action : ResolvedAction,
   workspace_root : String,
-  state : JobRuntimeState,
-  needs_outputs : Map[String, Map[String, String]],
-  needs_results : Map[String, String],
-  push_event : PushEvent?,
+  resolved_plan_env : Map[String, String],
+  github_ctx : Map[String, String],
+  runner_ctx : Map[String, String],
+  shared_volumes : Array[String],
+  network_name : String?,
 ) -> TaskExecutionResult {
   guard action.image is Some(image_source) else {
     return {
@@ -4060,13 +4865,6 @@ async fn execute_docker_action_native(
       state_updates: {},
     }
   }
-  let github_ctx = github_context(
-    workflow_name, plan, workspace_root, push_event,
-  )
-  let runner_ctx = runner_context(plan, workspace_root)
-  let resolved_plan_env = resolve_plan_env(
-    plan, state, workspace_root, github_ctx, runner_ctx, needs_outputs, needs_results,
-  )
   let env = default_runner_env(
     workflow_name, plan, workspace_root, github_ctx, resolved_plan_env, file_commands,
     runner_ctx,
@@ -4123,6 +4921,17 @@ async fn execute_docker_action_native(
     "-w",
     container_cwd,
   ]
+  match network_name {
+    Some(name) => {
+      run_args.push("--network")
+      run_args.push(name)
+    }
+    None => ()
+  }
+  for volume in shared_volumes {
+    run_args.push("-v")
+    run_args.push(volume)
+  }
   for key, value in env {
     run_args.push("-e")
     run_args.push(key + "=" + value)
@@ -4169,6 +4978,262 @@ async fn execute_docker_action_native(
 
 ///|
 #cfg(target="native")
+async fn execute_job_container_node_action_native(
+  workflow_name : String,
+  plan : TaskPlan,
+  action : ResolvedAction,
+  workspace_root : String,
+  resolved_plan_env : Map[String, String],
+  github_ctx : Map[String, String],
+  runner_ctx : Map[String, String],
+  container : JobContainerSpec,
+  network_name : String?,
+) -> TaskExecutionResult {
+  guard action.entrypoint is Some(entrypoint) else {
+    return {
+      report: task_report_failure(
+        plan, workspace_root, "node action is missing an entrypoint",
+      ),
+      env_updates: {},
+      path_entries: [],
+      output_values: {},
+      state_updates: {},
+    }
+  }
+  guard prepare_step_file_commands(plan.id, workspace_root)
+    is Some(file_commands) else {
+    return {
+      report: task_report_failure(
+        plan, workspace_root, "failed to prepare step file commands",
+      ),
+      env_updates: {},
+      path_entries: [],
+      output_values: {},
+      state_updates: {},
+    }
+  }
+  let merged_plan_env = merge_runner_env(container.env, resolved_plan_env)
+  let env = default_runner_env(
+    workflow_name, plan, workspace_root, github_ctx, merged_plan_env, file_commands,
+    runner_ctx,
+  )
+  let docker_bin = configured_exec_bin(
+    "ACTION_RUNNER_DOCKER_BIN", merged_plan_env, "docker",
+  )
+  let node_bin = resolve_exec_bin_for_workspace(
+    configured_exec_bin("ACTION_RUNNER_NODE_BIN", merged_plan_env, "node"),
+    workspace_root,
+  )
+  let workspace_abs = absolute_exec_path(resolve_task_cwd(workspace_root, ""))
+  let build_root = absolute_exec_path("_build/action_runner")
+  let container_cwd = absolute_exec_path(
+    action.action_path.unwrap_or(resolve_task_cwd(workspace_root, "")),
+  )
+  match ensure_container_registry_login(docker_bin, workspace_abs, container) {
+    Some(message) =>
+      return {
+        report: task_report_failure(
+          plan,
+          container_cwd,
+          "docker login failed: " + message,
+        ),
+        env_updates: {},
+        path_entries: [],
+        output_values: {},
+        state_updates: {},
+      }
+    None => ()
+  }
+  let run_args : Array[String] = [
+    "run",
+    "--rm",
+    "-v",
+    workspace_abs + ":" + workspace_abs,
+    "-v",
+    build_root + ":" + build_root,
+    "-w",
+    container_cwd,
+  ]
+  match network_name {
+    Some(name) => {
+      run_args.push("--network")
+      run_args.push(name)
+    }
+    None => ()
+  }
+  for volume in container.volumes {
+    run_args.push("-v")
+    run_args.push(volume)
+  }
+  for port in container.ports {
+    run_args.push("-p")
+    run_args.push(port)
+  }
+  match container.options {
+    Some(options) =>
+      for option in split_exec_words(options) {
+        run_args.push(option)
+      }
+    None => ()
+  }
+  for key, value in env {
+    run_args.push("-e")
+    run_args.push(key + "=" + value)
+  }
+  run_args.push(container.image)
+  run_args.push(node_bin)
+  run_args.push(entrypoint)
+  let (code, stdout, stderr) = @process.collect_output(
+    docker_bin,
+    run_args,
+    cwd=workspace_abs,
+  )
+  {
+    report: {
+      id: plan.id,
+      kind: plan.kind,
+      status: if code == 0 {
+        "success"
+      } else {
+        "failed"
+      },
+      code,
+      shell: plan.shell,
+      script: plan.script,
+      cwd: container_cwd,
+      stdout: stdout.text(),
+      stderr: stderr.text(),
+      summary: parse_summary_text(file_commands.summary_path),
+    },
+    env_updates: parse_env_updates(file_commands.env_path),
+    path_entries: parse_path_updates(file_commands.path_path),
+    output_values: parse_output_values(file_commands.output_path),
+    state_updates: parse_state_values(file_commands.state_path),
+  }
+}
+
+///|
+#cfg(target="native")
+async fn execute_job_container_run_native(
+  workflow_name : String,
+  plan : TaskPlan,
+  workspace_root : String,
+  file_commands : StepFileCommands,
+  resolved_script : String,
+  resolved_shell : String,
+  resolved_working_directory : String,
+  resolved_plan_env : Map[String, String],
+  github_ctx : Map[String, String],
+  runner_ctx : Map[String, String],
+  container : JobContainerSpec,
+  network_name : String?,
+) -> TaskExecutionResult {
+  let merged_plan_env = merge_runner_env(container.env, resolved_plan_env)
+  let env = default_runner_env(
+    workflow_name, plan, workspace_root, github_ctx, merged_plan_env, file_commands,
+    runner_ctx,
+  )
+  let docker_bin = configured_exec_bin(
+    "ACTION_RUNNER_DOCKER_BIN", merged_plan_env, "docker",
+  )
+  let workspace_abs = absolute_exec_path(resolve_task_cwd(workspace_root, ""))
+  let build_root = absolute_exec_path("_build/action_runner")
+  let container_cwd = absolute_exec_path(
+    resolve_task_cwd(workspace_root, resolved_working_directory),
+  )
+  match ensure_container_registry_login(docker_bin, workspace_abs, container) {
+    Some(message) =>
+      return {
+        report: task_report_failure(
+          plan,
+          container_cwd,
+          "docker login failed: " + message,
+        ),
+        env_updates: {},
+        path_entries: [],
+        output_values: {},
+        state_updates: {},
+      }
+    None => ()
+  }
+  let container_shell = if resolved_shell.trim(chars=" ").length() == 0 {
+    "sh"
+  } else {
+    resolved_shell
+  }
+  let (cmd, args) = shell_command(container_shell, file_commands.script_path)
+  let run_args : Array[String] = [
+    "run",
+    "--rm",
+    "-v",
+    workspace_abs + ":" + workspace_abs,
+    "-v",
+    build_root + ":" + build_root,
+    "-w",
+    container_cwd,
+  ]
+  match network_name {
+    Some(name) => {
+      run_args.push("--network")
+      run_args.push(name)
+    }
+    None => ()
+  }
+  for volume in container.volumes {
+    run_args.push("-v")
+    run_args.push(volume)
+  }
+  for port in container.ports {
+    run_args.push("-p")
+    run_args.push(port)
+  }
+  match container.options {
+    Some(options) =>
+      for option in split_exec_words(options) {
+        run_args.push(option)
+      }
+    None => ()
+  }
+  for key, value in env {
+    run_args.push("-e")
+    run_args.push(key + "=" + value)
+  }
+  run_args.push(container.image)
+  run_args.push(cmd)
+  for arg in args {
+    run_args.push(arg)
+  }
+  let (code, stdout, stderr) = @process.collect_output(
+    docker_bin,
+    run_args,
+    cwd=workspace_abs,
+  )
+  {
+    report: {
+      id: plan.id,
+      kind: plan.kind,
+      status: if code == 0 {
+        "success"
+      } else {
+        "failed"
+      },
+      code,
+      shell: cmd,
+      script: resolved_script,
+      cwd: container_cwd,
+      stdout: stdout.text(),
+      stderr: stderr.text(),
+      summary: parse_summary_text(file_commands.summary_path),
+    },
+    env_updates: parse_env_updates(file_commands.env_path),
+    path_entries: parse_path_updates(file_commands.path_path),
+    output_values: parse_output_values(file_commands.output_path),
+    state_updates: parse_state_values(file_commands.state_path),
+  }
+}
+
+///|
+#cfg(target="native")
 async fn execute_action_plan_native(
   workflow_name : String,
   plan : TaskPlan,
@@ -4177,6 +5242,8 @@ async fn execute_action_plan_native(
   needs_outputs : Map[String, Map[String, String]],
   needs_results : Map[String, String],
   push_event : PushEvent?,
+  job_containers : Map[String, JobContainerSpec],
+  job_services : Map[String, Map[String, JobContainerSpec]],
 ) -> TaskExecutionResult {
   guard plan.action is Some(action) else {
     return {
@@ -4189,41 +5256,59 @@ async fn execute_action_plan_native(
       state_updates: {},
     }
   }
+  let github_ctx = github_context(
+    workflow_name, plan, workspace_root, push_event,
+  )
+  let runner_ctx = runner_context(plan, workspace_root)
+  let job_ctx = plan_job_context(job_services, plan.job_id)
+  let job_network_name = plan_job_service_network_name(
+    job_services,
+    plan.job_id,
+  )
+  let resolved_plan_env = resolve_plan_env(
+    plan, state, workspace_root, job_ctx, github_ctx, runner_ctx, needs_outputs,
+    needs_results,
+  )
+  let resolved_job_container = match job_containers.get(plan.job_id) {
+    Some(container) =>
+      Some(
+        resolve_job_container_spec(
+          container, state, workspace_root, resolved_plan_env, github_ctx, runner_ctx,
+          needs_outputs, needs_results,
+        ),
+      )
+    None => None
+  }
+  let merged_plan_env = match resolved_job_container {
+    Some(container) => merge_runner_env(container.env, resolved_plan_env)
+    None => resolved_plan_env
+  }
   if action.backend == "builtin" {
-    let github_ctx = github_context(
-      workflow_name, plan, workspace_root, push_event,
-    )
-    let runner_ctx = runner_context(plan, workspace_root)
-    let resolved_plan_env = resolve_plan_env(
-      plan, state, workspace_root, github_ctx, runner_ctx, needs_outputs, needs_results,
-    )
     if action.kind == "checkout" {
       return builtin_task_result(
         execute_builtin_checkout_native(
-          action, plan, workspace_root, resolved_plan_env,
+          action, plan, workspace_root, merged_plan_env,
         ),
       )
     }
     if action.kind == "setup-node" {
-      return execute_setup_node_native(plan, workspace_root, resolved_plan_env)
+      return execute_setup_node_native(plan, workspace_root, merged_plan_env)
     }
     if action.kind == "setup-node-cache-post" {
       return builtin_task_result(
         execute_setup_node_cache_post_native(
-          plan, workspace_root, resolved_plan_env, state,
+          plan, workspace_root, merged_plan_env, state,
         ),
       )
     }
     if action.kind == "upload-artifact" {
       return builtin_task_result(
-        execute_upload_artifact_native(plan, workspace_root, resolved_plan_env),
+        execute_upload_artifact_native(plan, workspace_root, merged_plan_env),
       )
     }
     if action.kind == "download-artifact" {
       return builtin_task_result(
-        execute_download_artifact_native(
-          plan, workspace_root, resolved_plan_env,
-        ),
+        execute_download_artifact_native(plan, workspace_root, merged_plan_env),
       )
     }
     if action.kind == "cache" ||
@@ -4233,7 +5318,7 @@ async fn execute_action_plan_native(
       return execute_cache_builtin_native(
         plan,
         workspace_root,
-        resolved_plan_env,
+        merged_plan_env,
         state,
         action.kind,
       )
@@ -4247,15 +5332,38 @@ async fn execute_action_plan_native(
     )
   }
   if action.backend == "node" {
-    return execute_node_action_native(
-      workflow_name, plan, action, workspace_root, state, needs_outputs, needs_results,
-      push_event,
-    )
+    match resolved_job_container {
+      Some(container) =>
+        return execute_job_container_node_action_native(
+          workflow_name, plan, action, workspace_root, resolved_plan_env, github_ctx,
+          runner_ctx, container, job_network_name,
+        )
+      None =>
+        return execute_node_action_native(
+          workflow_name, plan, action, workspace_root, merged_plan_env, github_ctx,
+          runner_ctx,
+        )
+    }
   }
   if action.backend == "docker" {
     return execute_docker_action_native(
-      workflow_name, plan, action, workspace_root, state, needs_outputs, needs_results,
-      push_event,
+      workflow_name,
+      plan,
+      action,
+      workspace_root,
+      resolved_plan_env,
+      github_ctx,
+      runner_ctx,
+      match resolved_job_container {
+        Some(container) => container.volumes
+        None => []
+      },
+      job_network_name,
+    )
+  }
+  if action.backend == "wasm" {
+    return execute_wasm_action_native(
+      workflow_name, plan, action, workspace_root, merged_plan_env, github_ctx, runner_ctx,
     )
   }
   {
@@ -4338,6 +5446,8 @@ async fn execute_task_plan_native(
   needs_outputs : Map[String, Map[String, String]],
   needs_results : Map[String, String],
   push_event : PushEvent?,
+  job_containers : Map[String, JobContainerSpec],
+  job_services : Map[String, Map[String, JobContainerSpec]],
 ) -> TaskExecutionResult {
   if plan.kind == "barrier" {
     return {
@@ -4351,6 +5461,7 @@ async fn execute_task_plan_native(
   if plan.kind == "action" {
     return execute_action_plan_native(
       workflow_name, plan, workspace_root, state, needs_outputs, needs_results, push_event,
+      job_containers, job_services,
     )
   }
   guard prepare_step_file_commands(plan.id, workspace_root)
@@ -4369,14 +5480,21 @@ async fn execute_task_plan_native(
     workflow_name, plan, workspace_root, push_event,
   )
   let runner_ctx = runner_context(plan, workspace_root)
+  let job_ctx = plan_job_context(job_services, plan.job_id)
+  let job_network_name = plan_job_service_network_name(
+    job_services,
+    plan.job_id,
+  )
   let resolved_plan_env = resolve_plan_env(
-    plan, state, workspace_root, github_ctx, runner_ctx, needs_outputs, needs_results,
+    plan, state, workspace_root, job_ctx, github_ctx, runner_ctx, needs_outputs,
+    needs_results,
   )
   let resolved_script = substitute_runtime_text(
     plan.script,
     state,
     workspace_root,
     resolved_plan_env,
+    job_ctx,
     github_ctx,
     runner_ctx,
     needs_outputs,
@@ -4387,6 +5505,7 @@ async fn execute_task_plan_native(
     state,
     workspace_root,
     resolved_plan_env,
+    job_ctx,
     github_ctx,
     runner_ctx,
     needs_outputs,
@@ -4397,6 +5516,7 @@ async fn execute_task_plan_native(
     state,
     workspace_root,
     resolved_plan_env,
+    job_ctx,
     github_ctx,
     runner_ctx,
     needs_outputs,
@@ -4428,6 +5548,27 @@ async fn execute_task_plan_native(
       output_values: {},
       state_updates: {},
     }
+  }
+  match job_containers.get(plan.job_id) {
+    Some(container) =>
+      return execute_job_container_run_native(
+        workflow_name,
+        plan,
+        workspace_root,
+        file_commands,
+        resolved_script,
+        resolved_shell,
+        resolved_working_directory,
+        resolved_plan_env,
+        github_ctx,
+        runner_ctx,
+        resolve_job_container_spec(
+          container, state, workspace_root, resolved_plan_env, github_ctx, runner_ctx,
+          needs_outputs, needs_results,
+        ),
+        job_network_name,
+      )
+    None => ()
   }
   let (cmd, args) = shell_command(resolved_shell, file_commands.script_path)
   let env = default_runner_env(
@@ -4517,12 +5658,25 @@ pub async fn execute_lowered_native(
   let job_states : Map[String, JobRuntimeState] = {}
   let completed_job_outputs : Map[String, Map[String, String]] = {}
   let completed_job_results : Map[String, String] = {}
+  let completed_job_order : Array[String] = []
   let matrix_groups = matrix_group_members(lowered.plan)
   let cancelled_matrix_jobs : Map[String, Bool] = {}
   let evaluated_job_conditions : Map[String, Bool] = {}
   let started_job_tasks : Map[String, Bool] = {}
   let started_jobs : Map[String, Bool] = {}
+  let started_job_services : Map[String, Array[StartedJobService]] = {}
+  let remaining_job_tasks : Map[String, Int] = {}
   let mut required_failed = false
+
+  for task in selected_tasks {
+    match find_task_plan(lowered.plan, task.id) {
+      Some(plan) => {
+        let next = remaining_job_tasks.get(plan.job_id).unwrap_or(0)
+        remaining_job_tasks[plan.job_id] = next + 1
+      }
+      None => ()
+    }
+  }
 
   while ready_idx < ready_queue.length() {
     let batch_ids : Array[String] = []
@@ -4610,6 +5764,7 @@ pub async fn execute_lowered_native(
             })
             if plan.kind == "barrier" {
               completed_job_results[plan.job_id] = "cancelled"
+              completed_job_order.push(plan.job_id)
             }
           }
           None =>
@@ -4634,6 +5789,7 @@ pub async fn execute_lowered_native(
             })
             if plan.kind == "barrier" {
               completed_job_results[plan.job_id] = "skipped"
+              completed_job_order.push(plan.job_id)
             }
           }
           None =>
@@ -4667,6 +5823,10 @@ pub async fn execute_lowered_native(
               workspace_root,
               push_event,
             )
+            let job_ctx = plan_job_context(
+              lowered.plan.job_services,
+              plan.job_id,
+            )
             let vars_ctx = runner_vars_context()
             let runner_ctx = runner_context(plan, workspace_root)
             evaluate_if_condition(
@@ -4680,6 +5840,7 @@ pub async fn execute_lowered_native(
                   plan.env,
                   current_state.env_updates,
                 ),
+                job_context=job_ctx,
                 vars_context=vars_ctx,
                 github_context=github_ctx,
                 runner_context=runner_ctx,
@@ -4733,8 +5894,10 @@ pub async fn execute_lowered_native(
             message: "blocked by dependency: " + blocked_deps.join(", "),
           })
           match plan_opt {
-            Some(plan) if plan.kind == "barrier" =>
+            Some(plan) if plan.kind == "barrier" => {
               completed_job_results[plan.job_id] = "failure"
+              completed_job_order.push(plan.job_id)
+            }
             _ => ()
           }
           success[task.id] = false
@@ -4772,6 +5935,59 @@ pub async fn execute_lowered_native(
                 continue
               }
               if plan.kind != "barrier" {
+                if started_job_services.get(plan.job_id) is None {
+                  let github_ctx = github_context(
+                    ir.name,
+                    plan,
+                    workspace_root,
+                    push_event,
+                  )
+                  let job_ctx = plan_job_context(
+                    lowered.plan.job_services,
+                    plan.job_id,
+                  )
+                  let runner_ctx = runner_context(plan, workspace_root)
+                  let resolved_plan_env = resolve_plan_env(
+                    plan, current_state, workspace_root, job_ctx, github_ctx, runner_ctx,
+                    needs_outputs, needs_results,
+                  )
+                  let service_start = start_job_services_native(
+                    plan.job_id,
+                    lowered.plan.job_services.get(plan.job_id).unwrap_or({}),
+                    workspace_root,
+                    current_state,
+                    resolved_plan_env,
+                    github_ctx,
+                    runner_ctx,
+                    needs_outputs,
+                    needs_results,
+                  )
+                  match service_start.error {
+                    Some(message) => {
+                      let report = task_report_failure(
+                        plan,
+                        workspace_root,
+                        "job services failed to start: " + message,
+                      )
+                      reports.push(report)
+                      steps.push({
+                        id: task.id,
+                        status: "failed",
+                        required: task.required,
+                        message,
+                      })
+                      success[task.id] = false
+                      if task.required {
+                        required_failed = true
+                      }
+                      continue
+                    }
+                    None =>
+                      if service_start.started.length() > 0 {
+                        started_job_services[plan.job_id] = service_start.started
+                      }
+                  }
+                }
                 started_job_tasks[plan.job_id] = true
               }
               let result = execute_task_plan_native(
@@ -4782,6 +5998,8 @@ pub async fn execute_lowered_native(
                 needs_outputs,
                 needs_results,
                 push_event,
+                lowered.plan.job_containers,
+                lowered.plan.job_services,
               )
               let report = result.report
               reports.push(report)
@@ -4793,6 +6011,10 @@ pub async fn execute_lowered_native(
               )
               let vars_ctx = runner_vars_context()
               let runner_ctx = runner_context(plan, workspace_root)
+              let job_ctx = plan_job_context(
+                lowered.plan.job_services,
+                plan.job_id,
+              )
               let continue_on_error = if plan.kind == "barrier" {
                 false
               } else {
@@ -4807,6 +6029,7 @@ pub async fn execute_lowered_native(
                       plan.env,
                       current_state.env_updates,
                     ),
+                    job_context=job_ctx,
                     vars_context=vars_ctx,
                     github_context=github_ctx,
                     runner_context=runner_ctx,
@@ -4838,8 +6061,11 @@ pub async fn execute_lowered_native(
                     lowered.plan.job_outputs.get(plan.job_id).unwrap_or({}),
                     next_state,
                     workspace_root,
+                    needs_outputs~,
+                    needs_results~,
                   )
                   completed_job_results[plan.job_id] = "success"
+                  completed_job_order.push(plan.job_id)
                 }
                 steps.push({
                   id: task.id,
@@ -4851,6 +6077,7 @@ pub async fn execute_lowered_native(
               } else if conclusion == "skipped" {
                 if plan.kind == "barrier" {
                   completed_job_results[plan.job_id] = "skipped"
+                  completed_job_order.push(plan.job_id)
                 }
                 let message = if report.stderr.length() > 0 {
                   report.stderr
@@ -4869,6 +6096,7 @@ pub async fn execute_lowered_native(
               } else if conclusion == "cancelled" {
                 if plan.kind == "barrier" {
                   completed_job_results[plan.job_id] = "cancelled"
+                  completed_job_order.push(plan.job_id)
                 }
                 let message = if report.stderr.length() > 0 {
                   report.stderr
@@ -4890,6 +6118,7 @@ pub async fn execute_lowered_native(
               } else {
                 if plan.kind == "barrier" {
                   completed_job_results[plan.job_id] = "failure"
+                  completed_job_order.push(plan.job_id)
                 }
                 let message = if report.stderr.length() > 0 {
                   report.stderr
@@ -4947,6 +6176,26 @@ pub async fn execute_lowered_native(
           ready_queue.push(dependent_id)
         }
       }
+      match plan_opt {
+        Some(plan) => {
+          let next = remaining_job_tasks.get(plan.job_id).unwrap_or(0) - 1
+          remaining_job_tasks[plan.job_id] = next
+          if next == 0 {
+            match started_job_services.get(plan.job_id) {
+              Some(started) => cleanup_job_services_native(started)
+              None => ()
+            }
+          }
+        }
+        None => ()
+      }
+      materialize_virtual_jobs(
+        lowered.plan,
+        completed_job_outputs,
+        completed_job_results,
+        completed_job_order,
+        workspace_root,
+      )
     }
   }
 

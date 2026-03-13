@@ -1,0 +1,13 @@
+name: caller
+on: push
+jobs:
+  call:
+    uses: ./.github/workflows/reusable.yml
+  after:
+    needs: [call]
+    runs-on: ubuntu-latest
+    steps:
+      - id: package
+        run: |
+          mkdir -p artifacts
+          printf '%s' "${{ needs.call.outputs.result }}" > artifacts/result.txt
