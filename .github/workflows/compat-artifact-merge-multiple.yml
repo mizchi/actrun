@@ -1,0 +1,51 @@
+name: Compat Artifact Merge Multiple
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/compat-artifact-merge-multiple.yml
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Produce files
+        shell: bash
+        run: |
+          mkdir -p pkg/nested logs/linux logs/macos
+          printf '%s' root > pkg/root.txt
+          printf '%s' child > pkg/nested/child.txt
+          printf '%s' linux > logs/linux/out.txt
+          printf '%s' macos > logs/macos/out.txt
+      - name: Upload directory artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dir-bundle
+          path: pkg/
+      - name: Upload glob artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: log-bundle
+          path: logs/*/out.txt
+      - name: Download all merged
+        uses: actions/download-artifact@v4
+        with:
+          path: restored
+          merge-multiple: true
+      - name: Build report
+        shell: bash
+        run: |
+          mkdir -p report
+          printf '%s|%s|%s|%s|%s|%s' \
+            "$(cat restored/root.txt)" \
+            "$(cat restored/nested/child.txt)" \
+            "$(cat restored/linux/out.txt)" \
+            "$(cat restored/macos/out.txt)" \
+            "$(test -d restored/dir-bundle && echo yes || echo no)" \
+            "$(test -d restored/log-bundle && echo yes || echo no)" > report/result.txt
+      - name: Upload report
+        uses: actions/upload-artifact@v4
+        with:
+          name: compat-artifact-merge-multiple-report
+          path: report/result.txt

@@ -1915,6 +1915,12 @@ fn parse_artifact_overwrite(value : String) -> Bool {
 }
 
 ///|
+fn parse_artifact_merge_multiple(value : String) -> Bool {
+  let normalized = value.trim(chars=" \t\r\n").to_lower()
+  normalized == "true" || normalized == "1" || normalized == "yes"
+}
+
+///|
 fn parse_checkout_ref(value : String) -> String {
   value.trim(chars=" \t\r\n").to_string()
 }
@@ -3464,6 +3470,9 @@ fn execute_download_artifact_native(
 ) -> TaskRunReport {
   let name = resolved_plan_env.get("INPUT_NAME").unwrap_or("")
   let path_input = resolved_plan_env.get("INPUT_PATH").unwrap_or("")
+  let merge_multiple = parse_artifact_merge_multiple(
+    resolved_plan_env.get("INPUT_MERGE_MULTIPLE").unwrap_or("false"),
+  )
   let destination = if path_input.length() > 0 {
     resolve_task_cwd(workspace_root, path_input)
   } else {
@@ -3490,7 +3499,12 @@ fn execute_download_artifact_native(
       if not(exec_is_dir(artifact_root)) {
         continue
       }
-      if not(exec_copy_tree(artifact_root, destination + "/" + entry)) {
+      let target = if merge_multiple {
+        destination
+      } else {
+        destination + "/" + entry
+      }
+      if not(exec_copy_tree(artifact_root, target)) {
         return task_report_failure(
           plan,
           workspace_root,

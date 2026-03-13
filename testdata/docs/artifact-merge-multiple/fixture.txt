@@ -1,0 +1,8 @@
+id=docs-artifact-merge-multiple
+source=docs
+mode=supported
+kind=run
+url=https://github.com/actions/download-artifact/blob/main/README.md
+docs_urls=https://github.com/actions/download-artifact/blob/main/README.md
+added_at=2026-03-13
+notes=download-artifact merge-multiple flattens multiple matched artifacts into the destination path

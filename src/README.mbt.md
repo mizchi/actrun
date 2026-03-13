@@ -23,7 +23,7 @@ MVP の GitHub Actions 互換 push CI ランナー向けコア API。
 - `bit` repo から push commit を materialize する runtime
 - `uses: actions/checkout@*` と `uses: builtin://checkout` の最小 builtin 対応
 - `actions/checkout` の `path` / `sparse-checkout` / `sparse-checkout-cone-mode` / `fetch-depth` / `ref` / `clean` / `submodules` の最小 builtin 対応
-- `uses: actions/upload-artifact@*` / `uses: actions/download-artifact@*` の最小 builtin 対応 (`directory`, wildcard path, `if-no-files-found`, `overwrite`, download-all directory mode)
+- `uses: actions/upload-artifact@*` / `uses: actions/download-artifact@*` の最小 builtin 対応 (`directory`, wildcard path, `if-no-files-found`, `overwrite`, download-all directory mode, `merge-multiple`)
 - `uses: actions/setup-node@*` の最小 builtin 対応 (`node-version`, `cache: npm`, `registry-url`)
 - `uses: actions/cache@*` / `actions/cache/restore@*` の `restore-keys`, `lookup-only`, `fail-on-cache-miss` 対応
 - native prefetch による `owner/repo[/path]@ref` GitHub repo action の remote fetch / cache fill

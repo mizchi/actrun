@@ -1,0 +1,44 @@
+name: e2e-artifact-merge-multiple
+'on': push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: write
+        shell: bash
+        run: |
+          mkdir -p pkg/nested logs/linux logs/macos
+          printf '%s' root > pkg/root.txt
+          printf '%s' child > pkg/nested/child.txt
+          printf '%s' linux > logs/linux/out.txt
+          printf '%s' macos > logs/macos/out.txt
+      - id: upload_dir
+        uses: actions/upload-artifact@v4
+        with:
+          name: dir-bundle
+          path: pkg/
+      - id: upload_glob
+        uses: actions/upload-artifact@v4
+        with:
+          name: log-bundle
+          path: logs/*/out.txt
+      - id: remove
+        shell: bash
+        run: |
+          rm -rf pkg logs
+      - id: download_all
+        uses: actions/download-artifact@v4
+        with:
+          path: restored
+          merge-multiple: true
+      - id: verify
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          printf '%s|%s|%s|%s|%s|%s' \
+            "$(cat restored/root.txt)" \
+            "$(cat restored/nested/child.txt)" \
+            "$(cat restored/linux/out.txt)" \
+            "$(cat restored/macos/out.txt)" \
+            "$(test -d restored/dir-bundle && echo yes || echo no)" \
+            "$(test -d restored/log-bundle && echo yes || echo no)" > artifacts/result.txt

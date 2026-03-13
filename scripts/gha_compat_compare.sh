@@ -51,6 +51,9 @@ case "$workflow_file" in
   compat-artifact-overwrite.yml)
     report_name="compat-artifact-overwrite-report"
     ;;
+  compat-artifact-merge-multiple.yml)
+    report_name="compat-artifact-merge-multiple-report"
+    ;;
   compat-cache-roundtrip.yml)
     report_name="compat-cache-report"
     ;;
