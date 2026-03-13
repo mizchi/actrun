@@ -348,6 +348,55 @@ pub struct WorkflowSpec {
 }
 
 ///|
+pub fn strip_unsupported_workflow_fields(
+  workflow : WorkflowSpec,
+) -> WorkflowSpec {
+  let stripped_jobs : Array[JobSpec] = []
+  for job in workflow.jobs {
+    stripped_jobs.push({ ..job, permissions: None, concurrency: None })
+  }
+  { ..workflow, permissions: None, concurrency: None, jobs: stripped_jobs }
+}
+
+///|
+fn step_matches_skip_pattern(step : StepSpec, patterns : Array[String]) -> Bool {
+  match step.uses {
+    Some(uses) => {
+      let mut matched = false
+      for pattern in patterns {
+        if uses.contains(pattern) {
+          matched = true
+          break
+        }
+      }
+      matched
+    }
+    None => false
+  }
+}
+
+///|
+pub fn filter_workflow_steps(
+  workflow : WorkflowSpec,
+  skip_patterns : Array[String],
+) -> WorkflowSpec {
+  if skip_patterns.length() == 0 {
+    return workflow
+  }
+  let filtered_jobs : Array[JobSpec] = []
+  for job in workflow.jobs {
+    let filtered_steps : Array[StepSpec] = []
+    for step in job.steps {
+      if not(step_matches_skip_pattern(step, skip_patterns)) {
+        filtered_steps.push(step)
+      }
+    }
+    filtered_jobs.push({ ..job, steps: filtered_steps })
+  }
+  { ..workflow, jobs: filtered_jobs }
+}
+
+///|
 pub fn new_workflow(
   name : String,
   jobs : Array[JobSpec],
@@ -576,7 +625,11 @@ pub fn extract_add_mask_values(report : WorkflowRunReport) -> Array[String] {
     for line_view in task.stdout.split("\n") {
       let line = line_view.trim(chars=" \t\r").to_string()
       if line.has_prefix(prefix) && line.length() > prefix.length() {
-        let value = String::unsafe_substring(line, start=prefix.length(), end=line.length())
+        let value = String::unsafe_substring(
+          line,
+          start=prefix.length(),
+          end=line.length(),
+        )
         if value.length() > 0 {
           values.push(value)
         }
@@ -585,7 +638,11 @@ pub fn extract_add_mask_values(report : WorkflowRunReport) -> Array[String] {
     for line_view in task.stderr.split("\n") {
       let line = line_view.trim(chars=" \t\r").to_string()
       if line.has_prefix(prefix) && line.length() > prefix.length() {
-        let value = String::unsafe_substring(line, start=prefix.length(), end=line.length())
+        let value = String::unsafe_substring(
+          line,
+          start=prefix.length(),
+          end=line.length(),
+        )
         if value.length() > 0 {
           values.push(value)
         }
@@ -629,11 +686,7 @@ pub fn mask_report_secrets(
       message: mask_secrets(step.message, all_secrets),
     })
   }
-  {
-    ..report,
-    task_reports: masked_tasks,
-    steps: masked_steps,
-  }
+  { ..report, task_reports: masked_tasks, steps: masked_steps }
 }
 
 ///|

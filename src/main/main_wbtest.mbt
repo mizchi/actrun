@@ -870,7 +870,9 @@ async fn setup_workspace_test_repo(name : String) -> String {
   remove_main_test_tree(repo_root)
   ensure_main_test_dir(repo_root)
   let (code, _, _) = @process.collect_output(
-    "git", ["init", "-q"], cwd=repo_root,
+    "git",
+    ["init", "-q"],
+    cwd=repo_root,
   )
   assert_eq(code, 0)
   let (code2, _, _) = @process.collect_output(
@@ -887,7 +889,9 @@ async fn setup_workspace_test_repo(name : String) -> String {
   assert_eq(code3, 0)
   @xfs.write_string_to_file(repo_root + "/hello.txt", "hello\n")
   let (code4, _, _) = @process.collect_output(
-    "git", ["add", "."], cwd=repo_root,
+    "git",
+    ["add", "."],
+    cwd=repo_root,
   )
   assert_eq(code4, 0)
   let (code5, _, _) = @process.collect_output(
@@ -906,14 +910,14 @@ async test "workspace: worktree mode creates and cleans up git worktree" {
   let workspace_base = "_build/test-main/ws-worktree-out"
   remove_main_test_tree(workspace_base)
   ensure_main_test_dir(workspace_base)
-  let (ws, errors) = setup_local_workspace("worktree", repo_root, workspace_base)
+  let (ws, errors) = setup_local_workspace(
+    "worktree", repo_root, workspace_base,
+  )
   inspect(errors, content="[]")
   guard ws is Some(workspace) else { abort("workspace setup failed") }
   inspect(workspace.cleanup_mode, content="worktree")
   assert_true(@xfs.path_exists(workspace.execution_root))
-  assert_true(
-    @xfs.path_exists(workspace.execution_root + "/hello.txt"),
-  )
+  assert_true(@xfs.path_exists(workspace.execution_root + "/hello.txt"))
   inspect(
     @xfs.read_file_to_string(workspace.execution_root + "/hello.txt"),
     content="hello\n",
@@ -934,9 +938,7 @@ async test "workspace: tmp mode creates and cleans up cloned directory" {
   guard ws is Some(workspace) else { abort("workspace setup failed") }
   inspect(workspace.cleanup_mode, content="tmp")
   assert_true(@xfs.path_exists(workspace.execution_root))
-  assert_true(
-    @xfs.path_exists(workspace.execution_root + "/hello.txt"),
-  )
+  assert_true(@xfs.path_exists(workspace.execution_root + "/hello.txt"))
   inspect(
     @xfs.read_file_to_string(workspace.execution_root + "/hello.txt"),
     content="hello\n",
@@ -964,10 +966,9 @@ fn json_has_field(json_text : String, field : String) -> Bool {
 ///|
 test "cli: run.json schema has all required top-level fields" {
   let required_fields : Array[String] = [
-    "run_id", "workflow_name", "workflow_path", "workspace_root",
-    "workspace_mode", "started_at_ms", "finished_at_ms", "state",
-    "ok", "exit_code", "repository", "ref_name", "before_sha",
-    "after_sha", "changed_paths", "order", "issues", "steps",
+    "run_id", "workflow_name", "workflow_path", "workspace_root", "workspace_mode",
+    "started_at_ms", "finished_at_ms", "state", "ok", "exit_code", "repository",
+    "ref_name", "before_sha", "after_sha", "changed_paths", "order", "issues", "steps",
     "tasks", "jobs", "artifacts", "caches",
   ]
   let record : RunRecord = {
@@ -1008,7 +1009,10 @@ test "cli: job JSON schema has required fields" {
 
 ///|
 test "cli: artifact JSON schema has required fields" {
-  let artifact_json = run_artifact_json({ name: "report", files: ["result.txt"] })
+  let artifact_json = run_artifact_json({
+    name: "report",
+    files: ["result.txt"],
+  })
   for field in (["name", "files"] : Array[String]) {
     assert_true(json_has_field(artifact_json, field))
   }

@@ -16,6 +16,8 @@ struct CliOptions {
   before_sha : String
   after_sha : String
   changed_paths : Array[String]
+  skip_actions : Array[String]
+  dry_run : Bool
 }
 
 ///|
@@ -182,6 +184,8 @@ fn usage_text() -> String {
   "  --before <sha>               Before commit SHA\n" +
   "  --after <sha>                After commit SHA\n" +
   "  --changed <path>             Changed file path (repeatable)\n" +
+  "  --skip-action <pattern>      Skip actions matching pattern (repeatable)\n" +
+  "  --dry-run                    Show execution plan without running\n" +
   "\n" +
   "Storage flags:\n" +
   "  --artifact-root <path>       Artifact storage root\n" +
@@ -347,7 +351,10 @@ async fn setup_local_workspace(
     if code != 0 {
       return (
         None,
-        ["git worktree add failed: " + stderr.text().trim(chars=" \t\n\r").to_string()],
+        [
+          "git worktree add failed: " +
+          stderr.text().trim(chars=" \t\n\r").to_string(),
+        ],
       )
     }
     return (
@@ -362,9 +369,7 @@ async fn setup_local_workspace(
   if workspace_mode == "tmp" {
     let (code, _, stderr) = @process.collect_output(
       "git",
-      [
-        "clone", "--quiet", "--no-local", "file://" + abs_source, workspace_dir,
-      ],
+      ["clone", "--quiet", "--no-local", "file://" + abs_source, workspace_dir],
       cwd=".",
     )
     if code != 0 {
@@ -395,11 +400,9 @@ async fn cleanup_local_workspace(workspace : LocalWorkspace) -> Unit {
         ["worktree", "remove", "--force", workspace.execution_root],
         cwd=workspace.source_root,
       )
-
     }
     "tmp" => {
       let _ = remove_tree(workspace.execution_root)
-
     }
     _ => ()
   }
@@ -1407,10 +1410,17 @@ fn parse_cli_args(args : Array[String]) -> CliParseResult {
   let mut before_sha = ""
   let mut after_sha = ""
   let changed_paths : Array[String] = []
+  let skip_actions : Array[String] = []
+  let mut dry_run = false
   let mut index = 1
 
   while index < args.length() {
     let arg = args[index]
+    if arg == "--dry-run" {
+      dry_run = true
+      index += 1
+      continue
+    }
     if arg == "--repo" ||
       arg == "--workspace" ||
       arg == "--run-root" ||
@@ -1425,7 +1435,8 @@ fn parse_cli_args(args : Array[String]) -> CliParseResult {
       arg == "--ref" ||
       arg == "--before" ||
       arg == "--after" ||
-      arg == "--changed" {
+      arg == "--changed" ||
+      arg == "--skip-action" {
       if index + 1 >= args.length() {
         errors.push("missing value for " + arg)
         break
@@ -1459,6 +1470,8 @@ fn parse_cli_args(args : Array[String]) -> CliParseResult {
         before_sha = value
       } else if arg == "--after" {
         after_sha = value
+      } else if arg == "--skip-action" {
+        skip_actions.push(value)
       } else {
         changed_paths.push(value)
       }
@@ -1512,6 +1525,8 @@ fn parse_cli_args(args : Array[String]) -> CliParseResult {
       before_sha,
       after_sha,
       changed_paths,
+      skip_actions,
+      dry_run,
     }),
     errors,
   }
@@ -1831,6 +1846,34 @@ fn parse_workflow_run_args(args : Array[String]) -> CliParseResult {
 fn print_errors(errors : Array[String]) -> Unit {
   for err in errors {
     println("error: " + err)
+  }
+}
+
+///|
+fn print_dry_run_plan(
+  workflow : @ar.WorkflowSpec,
+  lowered : @ar.LoweringResult,
+) -> Unit {
+  println("workflow=" + workflow.name)
+  println("mode=dry-run")
+  println("")
+  let mut current_job = ""
+  for task in lowered.plan.tasks {
+    if task.job_id != current_job {
+      current_job = task.job_id
+      println("job: " + current_job)
+    }
+    let kind_label = match task.action {
+      Some(action) => task.kind + " (" + action.uses + ")"
+      None => task.kind
+    }
+    let if_label = if task.if_condition.length() > 0 &&
+      task.if_condition != "success()" {
+      " [if: " + task.if_condition + "]"
+    } else {
+      ""
+    }
+    println("  " + task.id + ": " + kind_label + if_label)
   }
 }
 
@@ -3005,15 +3048,43 @@ async fn handle_workflow_run_command(options : CliOptions) -> Int {
     return 0
   }
 
+  // Strip unsupported fields and filter skipped actions
+  let should_strip = options.skip_actions.length() > 0 || options.dry_run
+  let stripped_workflow = if should_strip {
+    @ar.strip_unsupported_workflow_fields(workflow)
+  } else {
+    workflow
+  }
+  let effective_workflow = if options.skip_actions.length() > 0 {
+    @ar.filter_workflow_steps(stripped_workflow, options.skip_actions)
+  } else {
+    stripped_workflow
+  }
+
+  if options.dry_run {
+    let lowered = @ar.lower_push_workflow_in_workspace(
+      effective_workflow, execution_root,
+    )
+    if lowered.errors.length() > 0 {
+      for err in lowered.errors {
+        println("warning: " + err)
+      }
+    }
+    print_dry_run_plan(effective_workflow, lowered)
+    return 0
+  }
+
   let prefetch = @ar.prefetch_workflow_github_actions_native(
-    workflow, execution_root,
+    effective_workflow, execution_root,
   )
   if prefetch.errors.length() > 0 {
     print_errors(prefetch.errors)
     return 1
   }
 
-  let lowered = @ar.lower_push_workflow_in_workspace(workflow, execution_root)
+  let lowered = @ar.lower_push_workflow_in_workspace(
+    effective_workflow, execution_root,
+  )
   if lowered.errors.length() > 0 {
     print_errors(lowered.errors)
     return 1
@@ -3072,8 +3143,10 @@ async fn handle_workflow_run_command(options : CliOptions) -> Int {
 async fn main {
   let cli_args = @xsys.get_cli_args()
   if cli_args.length() <= 1 ||
-    (cli_args.length() > 1 &&
-    (cli_args[1] == "--help" || cli_args[1] == "-h" || cli_args[1] == "help")) {
+    (
+      cli_args.length() > 1 &&
+      (cli_args[1] == "--help" || cli_args[1] == "-h" || cli_args[1] == "help")
+    ) {
     println(usage_text())
     return
   }
@@ -3175,7 +3248,9 @@ async fn main {
 
   // Legacy positional form: action_runner <workflow.yml> [flags...]
   // Prefer: action_runner workflow run <workflow.yml> [flags...]
-  println("warning: positional workflow path is deprecated, use 'workflow run' subcommand instead")
+  println(
+    "warning: positional workflow path is deprecated, use 'workflow run' subcommand instead",
+  )
   let parsed_args = parse_cli_args(cli_args)
   if parsed_args.errors.length() > 0 {
     print_errors(parsed_args.errors)

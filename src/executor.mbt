@@ -1029,7 +1029,9 @@ pub fn collect_secret_values() -> Array[String] {
   let values : Array[String] = []
   let prefix = "ACTION_RUNNER_SECRET_"
   for key, value in @xsys.get_env_vars() {
-    if key.has_prefix(prefix) && key.length() > prefix.length() && value.length() > 0 {
+    if key.has_prefix(prefix) &&
+      key.length() > prefix.length() &&
+      value.length() > 0 {
       values.push(value)
     }
   }
@@ -1422,7 +1424,10 @@ async fn ensure_container_registry_login(
   match container.credentials {
     Some(credentials) => {
       let login_args : Array[String] = [
-        "login", "--password-stdin", "-u", credentials.username,
+        "login",
+        "--password-stdin",
+        "-u",
+        credentials.username,
       ]
       match container_registry_host(container.image) {
         Some(registry) => login_args.push(registry)
@@ -1440,9 +1445,10 @@ async fn ensure_container_registry_login(
       if login_code != 0 {
         // Avoid leaking credentials in error messages
         let stderr_text = trim_exec_output(login_stderr.text())
-        let safe_message = mask_secrets(
-          stderr_text, [credentials.password, credentials.username],
-        )
+        let safe_message = mask_secrets(stderr_text, [
+          credentials.password,
+          credentials.username,
+        ])
         Some(safe_message)
       } else {
         None
@@ -2966,7 +2972,12 @@ async fn exec_git_clone_checkout(
       )
       if fetch_depth == 0 {
         let (fallback_code, fallback_stdout, fallback_stderr) = exec_git_clone_into(
-          git_bin, source_root, temp_root, 0, fetch_tags~, show_progress~,
+          git_bin,
+          source_root,
+          temp_root,
+          0,
+          fetch_tags~,
+          show_progress~,
         )
         if fallback_code != 0 {
           return Some(
@@ -3001,7 +3012,12 @@ async fn exec_git_clone_checkout(
   }
   if not(clone_ready) {
     let (clone_code, clone_stdout, clone_stderr) = exec_git_clone_into(
-      git_bin, source_root, temp_root, fetch_depth, fetch_tags~, show_progress~,
+      git_bin,
+      source_root,
+      temp_root,
+      fetch_depth,
+      fetch_tags~,
+      show_progress~,
     )
     if clone_code != 0 {
       return Some(
@@ -3022,7 +3038,12 @@ async fn exec_git_clone_checkout(
         if fetch_depth > 0 {
           ignore(exec_remove_tree(temp_root))
           let (full_clone_code, full_clone_stdout, full_clone_stderr) = exec_git_clone_into(
-            git_bin, source_root, temp_root, 0, fetch_tags~, show_progress~,
+            git_bin,
+            source_root,
+            temp_root,
+            0,
+            fetch_tags~,
+            show_progress~,
           )
           if full_clone_code != 0 {
             return Some(
@@ -3105,7 +3126,9 @@ async fn exec_git_clone_checkout(
   // lfs
   if lfs {
     let (lfs_code, lfs_stdout, lfs_stderr) = exec_git_command_text(
-      git_bin, ["lfs", "pull"], temp_root,
+      git_bin,
+      ["lfs", "pull"],
+      temp_root,
     )
     if lfs_code != 0 {
       return Some(
@@ -3748,7 +3771,10 @@ fn artifact_collect_relative_files(
     }
     if exec_is_dir(next_abs) {
       artifact_collect_relative_files(
-        next_abs, next_relative, files, include_hidden~,
+        next_abs,
+        next_relative,
+        files,
+        include_hidden~,
       )
     } else {
       files.push(next_relative)
@@ -3853,7 +3879,8 @@ fn artifact_select_upload_files(
   let included_files : Map[String, Bool] = {}
   let excluded_patterns : Array[String] = []
   let workspace_files = artifact_workspace_relative_files(
-    workspace_root, include_hidden~,
+    workspace_root,
+    include_hidden~,
   )
   for raw_path in upload_paths {
     let path = raw_path.trim(chars=" \t\r\n").to_string()
@@ -3987,8 +4014,18 @@ async fn execute_builtin_checkout_native(
   if exec_has_git_repo(source_root) {
     match
       exec_git_clone_checkout(
-        plan, workspace_root, source_root, checkout_root, fetch_depth, clean, resolved_plan_env,
-        fetch_tags~, show_progress~, persist_credentials~, set_safe_directory~, lfs~,
+        plan,
+        workspace_root,
+        source_root,
+        checkout_root,
+        fetch_depth,
+        clean,
+        resolved_plan_env,
+        fetch_tags~,
+        show_progress~,
+        persist_credentials~,
+        set_safe_directory~,
+        lfs~,
       ) {
       Some(report) => return report
       None => ()
@@ -4027,9 +4064,13 @@ async fn execute_setup_node_native(
   let requested_node_file = resolved_plan_env
     .get("INPUT_NODE_VERSION_FILE")
     .unwrap_or("")
-  let node_version_from_file = if requested_node_file.trim(chars=" \t\r\n").length() > 0 {
+  let node_version_from_file = if requested_node_file
+    .trim(chars=" \t\r\n")
+    .length() >
+    0 {
     let file_path = resolve_task_cwd(
-      workspace_root, requested_node_file.trim(chars=" \t\r\n").to_string(),
+      workspace_root,
+      requested_node_file.trim(chars=" \t\r\n").to_string(),
     )
     read_node_version_from_file(file_path)
   } else {
@@ -4183,11 +4224,16 @@ async fn execute_setup_node_native(
     let always_auth = parse_checkout_bool_false_default(
       resolved_plan_env.get("INPUT_ALWAYS_AUTH").unwrap_or("false"),
     )
-    let scope = resolved_plan_env.get("INPUT_SCOPE").unwrap_or("")
-      .trim(chars=" \t\r\n").to_string()
+    let scope = resolved_plan_env
+      .get("INPUT_SCOPE")
+      .unwrap_or("")
+      .trim(chars=" \t\r\n")
+      .to_string()
     let npmrc_path = prepare_runner_temp_dir(plan.job_id, workspace_root) +
       "/.npmrc"
-    if not(write_setup_node_npmrc(npmrc_path, registry_url, always_auth~, scope~)) {
+    if not(
+        write_setup_node_npmrc(npmrc_path, registry_url, always_auth~, scope~),
+      ) {
       return {
         report: task_report_failure(
           plan, workspace_root, "failed to write setup-node npm auth config",
@@ -4290,7 +4336,9 @@ fn execute_upload_artifact_native(
     "/" +
     sanitize_task_id(name)
   let selection = artifact_select_upload_files(
-    workspace_root, upload_paths, include_hidden~,
+    workspace_root,
+    upload_paths,
+    include_hidden~,
   )
   let if_no_files_found = match
     parse_artifact_if_no_files_found(
@@ -4394,8 +4442,7 @@ fn execute_download_artifact_native(
       if not(exec_is_dir(artifact_root)) {
         continue
       }
-      if pattern.length() > 0 &&
-        not(artifact_path_matches(pattern, entry)) {
+      if pattern.length() > 0 && not(artifact_path_matches(pattern, entry)) {
         continue
       }
       let target = if merge_multiple {

@@ -5687,17 +5687,24 @@ async fn run_substrate_parity() -> Unit {
   for item in modes {
     let (mode, _label) = item
     let run_root = e2e_prepare_dir(
-      "_build/e2e/workspaces", scenario + "-runs-" + mode,
+      "_build/e2e/workspaces",
+      scenario + "-runs-" + mode,
     )
     run_roots[mode] = run_root
     let result = e2e_run_cli([
-      "workflow", "run", e2e_join_path(workspace, workflow_rel),
-      "--workspace-mode", mode,
-      "--run-root", run_root,
+      "workflow",
+      "run",
+      e2e_join_path(workspace, workflow_rel),
+      "--workspace-mode",
+      mode,
+      "--run-root",
+      run_root,
     ])
     e2e_expect_ok(result, scenario + " " + mode)
     e2e_expect_contains(
-      result.stdout, "state=completed", scenario + " " + mode + " state",
+      result.stdout,
+      "state=completed",
+      scenario + " " + mode + " state",
     )
     results[mode] = result
   }
@@ -5707,19 +5714,23 @@ async fn run_substrate_parity() -> Unit {
     let (mode, _label) = item
     let result = results[mode]
     e2e_expect_contains(
-      result.stdout, "build/write: success",
+      result.stdout,
+      "build/write: success",
       scenario + " " + mode + " write",
     )
     e2e_expect_contains(
-      result.stdout, "build/read: success",
+      result.stdout,
+      "build/read: success",
       scenario + " " + mode + " read",
     )
     e2e_expect_contains(
-      result.stdout, "build/upload: success",
+      result.stdout,
+      "build/upload: success",
       scenario + " " + mode + " upload",
     )
     e2e_expect_contains(
-      result.stdout, "build/cache: success",
+      result.stdout,
+      "build/cache: success",
       scenario + " " + mode + " cache",
     )
   }
@@ -5735,23 +5746,27 @@ async fn run_substrate_parity() -> Unit {
     ])
     e2e_expect_ok(view, scenario + " " + mode + " view")
     e2e_expect_contains(
-      view.stdout, "\"workspace_mode\": \"" + mode + "\"",
+      view.stdout,
+      "\"workspace_mode\": \"" + mode + "\"",
       scenario + " " + mode + " mode",
     )
 
     // artifacts recorded in run
     e2e_expect_contains(
-      view.stdout, "\"name\": \"parity-report\"",
+      view.stdout,
+      "\"name\": \"parity-report\"",
       scenario + " " + mode + " artifact name",
     )
     e2e_expect_contains(
-      view.stdout, "\"files\": [\"result.txt\"]",
+      view.stdout,
+      "\"files\": [\"result.txt\"]",
       scenario + " " + mode + " artifact files",
     )
 
     // caches recorded in run
     e2e_expect_contains(
-      view.stdout, "\"key\": \"substrate-parity-key\"",
+      view.stdout,
+      "\"key\": \"substrate-parity-key\"",
       scenario + " " + mode + " cache key",
     )
 
@@ -5761,7 +5776,8 @@ async fn run_substrate_parity() -> Unit {
     ])
     e2e_expect_ok(artifact_list, scenario + " " + mode + " artifact list")
     e2e_expect_contains(
-      artifact_list.stdout, "\"name\": \"parity-report\"",
+      artifact_list.stdout,
+      "\"name\": \"parity-report\"",
       scenario + " " + mode + " artifact list name",
     )
 
@@ -5771,11 +5787,13 @@ async fn run_substrate_parity() -> Unit {
     ])
     e2e_expect_ok(logs, scenario + " " + mode + " logs")
     e2e_expect_contains(
-      logs.stdout, "hello-from-step|from-env-file",
+      logs.stdout,
+      "hello-from-step|from-env-file",
       scenario + " " + mode + " logs stdout",
     )
     e2e_expect_contains(
-      logs.stdout, "substrate-summary",
+      logs.stdout,
+      "substrate-summary",
       scenario + " " + mode + " logs summary",
     )
   }
@@ -5785,11 +5803,12 @@ async fn run_substrate_parity() -> Unit {
     let (mode, _label) = item
     let run_root = run_roots[mode]
     let download_dir = e2e_prepare_dir(
-      "_build/e2e/workspaces", scenario + "-dl-" + mode,
+      "_build/e2e/workspaces",
+      scenario + "-dl-" + mode,
     )
     let dl = e2e_run_cli([
-      "artifact", "download", "run-1", "--name", "parity-report",
-      "--run-root", run_root, "--dir", download_dir,
+      "artifact", "download", "run-1", "--name", "parity-report", "--run-root", run_root,
+      "--dir", download_dir,
     ])
     e2e_expect_ok(dl, scenario + " " + mode + " artifact download")
     e2e_expect_eq(
@@ -5816,25 +5835,25 @@ async fn run_substrate_parity_repo_mode() -> Unit {
   )
   e2e_prepare_git_checkout_workspace(repo_root)
 
-  let run_root = e2e_prepare_dir(
-    "_build/e2e/workspaces", scenario + "-runs",
-  )
+  let run_root = e2e_prepare_dir("_build/e2e/workspaces", scenario + "-runs")
 
   // Run in repo mode (default workspace-mode=tmp)
   let result = e2e_run_cli([
-    "workflow", "run", ".github/workflows/ci.yml",
-    "--repo", repo_root,
-    "--run-root", run_root,
-    "--repository", "test/substrate-parity",
+    "workflow", "run", ".github/workflows/ci.yml", "--repo", repo_root, "--run-root",
+    run_root, "--repository", "test/substrate-parity",
   ])
   e2e_expect_ok(result, scenario)
   e2e_expect_contains(result.stdout, "state=completed", scenario + " state")
   e2e_expect_contains(
-    result.stdout, "build/write: success", scenario + " write",
+    result.stdout,
+    "build/write: success",
+    scenario + " write",
   )
   e2e_expect_contains(result.stdout, "build/read: success", scenario + " read")
   e2e_expect_contains(
-    result.stdout, "build/upload: success", scenario + " upload",
+    result.stdout,
+    "build/upload: success",
+    scenario + " upload",
   )
 
   // Verify run record
@@ -5843,10 +5862,14 @@ async fn run_substrate_parity_repo_mode() -> Unit {
   ])
   e2e_expect_ok(view, scenario + " view")
   e2e_expect_contains(
-    view.stdout, "\"workspace_mode\": \"tmp\"", scenario + " mode",
+    view.stdout,
+    "\"workspace_mode\": \"tmp\"",
+    scenario + " mode",
   )
   e2e_expect_contains(
-    view.stdout, "\"name\": \"parity-report\"", scenario + " artifact",
+    view.stdout,
+    "\"name\": \"parity-report\"",
+    scenario + " artifact",
   )
 
   // Verify logs
@@ -5855,16 +5878,16 @@ async fn run_substrate_parity_repo_mode() -> Unit {
   ])
   e2e_expect_ok(logs, scenario + " logs")
   e2e_expect_contains(
-    logs.stdout, "hello-from-step|from-env-file", scenario + " logs stdout",
+    logs.stdout,
+    "hello-from-step|from-env-file",
+    scenario + " logs stdout",
   )
 
   // Verify artifact download
-  let download_dir = e2e_prepare_dir(
-    "_build/e2e/workspaces", scenario + "-dl",
-  )
+  let download_dir = e2e_prepare_dir("_build/e2e/workspaces", scenario + "-dl")
   let dl = e2e_run_cli([
-    "artifact", "download", "run-1", "--name", "parity-report",
-    "--run-root", run_root, "--dir", download_dir,
+    "artifact", "download", "run-1", "--name", "parity-report", "--run-root", run_root,
+    "--dir", download_dir,
   ])
   e2e_expect_ok(dl, scenario + " artifact download")
   e2e_expect_eq(
@@ -5879,25 +5902,31 @@ async fn run_substrate_parity_repo_mode() -> Unit {
 async fn run_shell_templates() -> Unit {
   let scenario = "shell-templates"
   let workspace = e2e_prepare_copied_dir(
-    "_build/e2e/workspaces", scenario, e2e_fixture_dir(scenario),
+    "_build/e2e/workspaces",
+    scenario,
+    e2e_fixture_dir(scenario),
   )
   let result = e2e_run_cli([
-    "workflow", "run", e2e_join_path(workspace, "workflow.yml"),
+    "workflow",
+    "run",
+    e2e_join_path(workspace, "workflow.yml"),
   ])
   e2e_expect_ok(result, scenario)
   e2e_expect_contains(result.stdout, "state=completed", scenario)
   e2e_expect_contains(
-    result.stdout, "build/bash-default: success", scenario + " bash default",
+    result.stdout,
+    "build/bash-default: success",
+    scenario + " bash default",
   )
   e2e_expect_contains(
-    result.stdout, "build/bash-explicit: success",
+    result.stdout,
+    "build/bash-explicit: success",
     scenario + " bash explicit",
   )
+  e2e_expect_contains(result.stdout, "build/sh: success", scenario + " sh")
   e2e_expect_contains(
-    result.stdout, "build/sh: success", scenario + " sh",
-  )
-  e2e_expect_contains(
-    result.stdout, "build/custom-template: success",
+    result.stdout,
+    "build/custom-template: success",
     scenario + " custom template",
   )
 }
@@ -5914,8 +5943,11 @@ async fn run_secret_mask() -> Unit {
   let secret_value = "super-secret-token-42"
   let result = e2e_run_cli(
     [
-      "workflow", "run", e2e_join_path(workspace, "workflow.yml"),
-      "--run-root", run_root,
+      "workflow",
+      "run",
+      e2e_join_path(workspace, "workflow.yml"),
+      "--run-root",
+      run_root,
     ],
     env={ "ACTION_RUNNER_SECRET_CALL_TOKEN": secret_value },
   )
@@ -5924,7 +5956,9 @@ async fn run_secret_mask() -> Unit {
 
   // stdout must not contain the secret value
   e2e_expect_not_contains(
-    result.stdout, secret_value, scenario + " stdout leak",
+    result.stdout,
+    secret_value,
+    scenario + " stdout leak",
   )
 
   // run view --json must not contain the secret value
@@ -5932,22 +5966,16 @@ async fn run_secret_mask() -> Unit {
     "run", "view", "run-1", "--run-root", run_root, "--json",
   ])
   e2e_expect_ok(view, scenario + " view")
-  e2e_expect_not_contains(
-    view.stdout, secret_value, scenario + " view leak",
-  )
+  e2e_expect_not_contains(view.stdout, secret_value, scenario + " view leak")
 
   // run logs must not contain the secret value
   let logs = e2e_run_cli([
     "run", "logs", "run-1", "--run-root", run_root, "--task", "build/leak",
   ])
   e2e_expect_ok(logs, scenario + " logs")
-  e2e_expect_not_contains(
-    logs.stdout, secret_value, scenario + " logs leak",
-  )
+  e2e_expect_not_contains(logs.stdout, secret_value, scenario + " logs leak")
   // masked value should appear as ***
-  e2e_expect_contains(
-    logs.stdout, "***", scenario + " logs masked",
-  )
+  e2e_expect_contains(logs.stdout, "***", scenario + " logs masked")
 
   // ::add-mask:: dynamic masking: "dynamic-secret-value" must be masked
   let add_mask_logs = e2e_run_cli([
@@ -5955,17 +5983,20 @@ async fn run_secret_mask() -> Unit {
   ])
   e2e_expect_ok(add_mask_logs, scenario + " add-mask logs")
   e2e_expect_not_contains(
-    add_mask_logs.stdout, "dynamic-secret-value",
+    add_mask_logs.stdout,
+    "dynamic-secret-value",
     scenario + " add-mask value leak",
   )
   // The ::add-mask:: line itself should be stripped
   e2e_expect_not_contains(
-    add_mask_logs.stdout, "::add-mask::",
+    add_mask_logs.stdout,
+    "::add-mask::",
     scenario + " add-mask command leak",
   )
   // The masked output should contain ***
   e2e_expect_contains(
-    add_mask_logs.stdout, "before-***-after",
+    add_mask_logs.stdout,
+    "before-***-after",
     scenario + " add-mask replaced",
   )
 }
@@ -5975,13 +6006,17 @@ async fn run_secret_mask() -> Unit {
 async fn run_checkout_fetch_tags() -> Unit {
   let scenario = "checkout-fetch-tags"
   let workspace = e2e_prepare_copied_dir(
-    "_build/e2e/workspaces", scenario, e2e_fixture_dir(scenario),
+    "_build/e2e/workspaces",
+    scenario,
+    e2e_fixture_dir(scenario),
   )
   e2e_prepare_git_checkout_workspace(workspace)
   // Create a tag in the repo
   e2e_require_ok("git tag", "git", ["tag", "v1.0.0"], workspace)
   let result = e2e_run_cli([
-    "workflow", "run", e2e_join_path(workspace, "workflow.yml"),
+    "workflow",
+    "run",
+    e2e_join_path(workspace, "workflow.yml"),
   ])
   e2e_expect_ok(result, scenario)
   e2e_expect_contains(result.stdout, "state=completed", scenario)
@@ -6003,18 +6038,20 @@ async fn run_checkout_fetch_tags() -> Unit {
 async fn run_checkout_persist_credentials() -> Unit {
   let scenario = "checkout-persist-credentials"
   let workspace = e2e_prepare_copied_dir(
-    "_build/e2e/workspaces", scenario, e2e_fixture_dir(scenario),
+    "_build/e2e/workspaces",
+    scenario,
+    e2e_fixture_dir(scenario),
   )
   e2e_prepare_git_checkout_workspace(workspace)
   let result = e2e_run_cli([
-    "workflow", "run", e2e_join_path(workspace, "workflow.yml"),
+    "workflow",
+    "run",
+    e2e_join_path(workspace, "workflow.yml"),
   ])
   e2e_expect_ok(result, scenario)
   e2e_expect_contains(result.stdout, "state=completed", scenario)
   e2e_expect_contains(result.stdout, "build/verify: success", scenario)
-  let cred = e2e_read_text(
-    e2e_join_path(workspace, "artifacts/credential.txt"),
-  )
+  let cred = e2e_read_text(e2e_join_path(workspace, "artifacts/credential.txt"))
   e2e_expect_eq(cred, "none", scenario + " no credential helper")
 }
 

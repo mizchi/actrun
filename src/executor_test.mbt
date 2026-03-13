@@ -4261,7 +4261,13 @@ async test "executor: github repo docker action lifecycle shares GITHUB_STATE ac
 #cfg(target="native")
 fn check_no_workspace_entries(dir : String, workspace : String) -> Bool {
   let abs_dir = executor_test_absolute_path(dir)
-  if not(try @xfs.is_dir(abs_dir) catch { _ => false } noraise { v => v }) {
+  if not(
+      try @xfs.is_dir(abs_dir) catch {
+        _ => false
+      } noraise {
+        v => v
+      },
+    ) {
     return true
   }
   let entries = try @xfs.read_dir(abs_dir) catch {
@@ -4286,15 +4292,11 @@ fn check_no_workspace_entries(dir : String, workspace : String) -> Bool {
 async test "security: file_commands and runner_temp are cleaned up after run" {
   let workspace = prepare_workspace("security-cleanup")
   let workflow = new_workflow("ci", [
-    new_job(
-      "build",
-      [
-        new_run_step(
-          "write-secret",
-          "printf '%s' 'SECRET_TOKEN_VALUE' > secret.txt\nprintf '%s' 'token=secret123' >> \"$GITHUB_ENV\"",
-        ),
-      ],
-    ),
+    new_job("build", [
+      new_run_step(
+        "write-secret", "printf '%s' 'SECRET_TOKEN_VALUE' > secret.txt\nprintf '%s' 'token=secret123' >> \"$GITHUB_ENV\"",
+      ),
+    ]),
   ])
   let lowered = lower_push_workflow_in_workspace(workflow, workspace)
   inspect(lowered.errors, content="[]")
@@ -4314,16 +4316,13 @@ async test "security: file_commands and runner_temp are cleaned up after run" {
 async test "security: step script files are not world-readable" {
   let workspace = prepare_workspace("security-permissions")
   let workflow = new_workflow("ci", [
-    new_job(
-      "build",
-      [
-        new_run_step(
-          "check-perms",
-          "perms=$(stat -f '%Lp' \"$GITHUB_ENV\") && [ \"$perms\" != '666' ]",
-          shell=Some("bash"),
-        ),
-      ],
-    ),
+    new_job("build", [
+      new_run_step(
+        "check-perms",
+        "perms=$(stat -f '%Lp' \"$GITHUB_ENV\") && [ \"$perms\" != '666' ]",
+        shell=Some("bash"),
+      ),
+    ]),
   ])
   let lowered = lower_push_workflow_in_workspace(workflow, workspace)
   inspect(lowered.errors, content="[]")
