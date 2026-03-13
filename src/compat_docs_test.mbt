@@ -493,6 +493,24 @@ async test "compat docs: artifact if-no-files-found exposes expected status tran
 
 ///|
 #cfg(target="native")
+async test "compat docs: artifact overwrite replaces existing content only with overwrite true" {
+  let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
+    "artifact-overwrite",
+  )
+  let report = execute_lowered_native(
+    lower_push_workflow(workflow),
+    workspace_root=workspace,
+  )
+  let task = compat_expect_task_report(report, "build/verify")
+
+  inspect(fixture.id, content="docs-artifact-overwrite")
+  inspect(report.ok, content="true")
+  inspect(task.status, content="success")
+  inspect(task.stdout, content="<failure|success|beta>")
+}
+
+///|
+#cfg(target="native")
 async test "compat docs: setup-node cache npm restores after save job" {
   let (fixture, workflow) = compat_expect_docs_fixture("setup-node-cache-npm")
   let workspace = prepare_workspace("compat-docs-setup-node-cache-npm")

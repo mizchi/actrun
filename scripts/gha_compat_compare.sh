@@ -48,6 +48,9 @@ case "$workflow_file" in
   compat-artifact-if-no-files-found.yml)
     report_name="compat-artifact-if-no-files-found-report"
     ;;
+  compat-artifact-overwrite.yml)
+    report_name="compat-artifact-overwrite-report"
+    ;;
   compat-cache-roundtrip.yml)
     report_name="compat-cache-report"
     ;;

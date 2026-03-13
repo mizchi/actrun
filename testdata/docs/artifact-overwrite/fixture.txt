@@ -1,0 +1,8 @@
+id=docs-artifact-overwrite
+source=docs
+mode=supported
+kind=run
+url=https://github.com/actions/upload-artifact/blob/main/README.md
+docs_urls=https://github.com/actions/upload-artifact/blob/main/README.md
+added_at=2026-03-13
+notes=upload-artifact fails on duplicate names by default and replaces the artifact only when overwrite is true

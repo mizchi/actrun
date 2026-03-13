@@ -1549,6 +1549,84 @@ async test "executor: upload-artifact if-no-files-found supports warn ignore and
 
 ///|
 #cfg(target="native")
+async test "executor: upload-artifact overwrite replaces existing artifact only when enabled" {
+  let workspace = prepare_workspace("executor-builtin-artifacts-overwrite")
+
+  let workflow = new_workflow("ci", [
+    new_job(
+      "build",
+      [
+        new_run_step(
+          "write_first",
+          "mkdir -p dist\nprintf '%s' alpha > dist/value.txt",
+          shell=Some("bash"),
+        ),
+        new_uses_step("upload_first", "actions/upload-artifact@v4", with_values={
+          "name": "bundle",
+          "path": "dist/value.txt",
+        }),
+        new_run_step(
+          "write_second",
+          "printf '%s' beta > dist/value.txt",
+          shell=Some("bash"),
+        ),
+        new_uses_step(
+          "upload_again",
+          "actions/upload-artifact@v4",
+          with_values={ "name": "bundle", "path": "dist/value.txt" },
+          continue_on_error="true",
+        ),
+        new_uses_step("upload_overwrite", "actions/upload-artifact@v4", with_values={
+          "name": "bundle",
+          "path": "dist/value.txt",
+          "overwrite": "true",
+        }),
+        new_run_step("remove", "rm -f dist/value.txt", shell=Some("bash")),
+        new_uses_step("download", "actions/download-artifact@v4", with_values={
+          "name": "bundle",
+          "path": "restored",
+        }),
+        new_run_step(
+          "verify",
+          "printf '%s|%s|%s' " +
+          "\"${{ steps.upload_again.outcome }}\" " +
+          "\"${{ steps.upload_again.conclusion }}\" " +
+          "\"$(cat restored/value.txt)\"",
+          shell=Some("bash"),
+        ),
+      ],
+      defaults=new_run_defaults(shell=Some("bash")),
+    ),
+  ])
+
+  let lowered = lower_push_workflow(workflow)
+  inspect(lowered.errors, content="[]")
+
+  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  inspect(report.ok, content="true")
+
+  inspect(
+    expect_task_report(report, "build/upload_first").status,
+    content="success",
+  )
+  inspect(
+    expect_task_report(report, "build/upload_again").status,
+    content="failed",
+  )
+  inspect(
+    expect_task_report(report, "build/upload_overwrite").status,
+    content="success",
+  )
+  let verify = expect_task_report(report, "build/verify")
+  inspect(verify.status, content="success")
+  inspect(
+    verify.stdout.trim(chars=" \n\r\t").to_string(),
+    content="failure|success|beta",
+  )
+}
+
+///|
+#cfg(target="native")
 async test "executor: builtin cache save and restore roundtrip across jobs" {
   let workspace = prepare_workspace("executor-builtin-cache")
   test_support_remove_tree(executor_test_cache_store_root(workspace))

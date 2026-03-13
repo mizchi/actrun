@@ -18,6 +18,8 @@ case "$workflow_file" in
     ;;
   compat-artifact-if-no-files-found.yml)
     ;;
+  compat-artifact-overwrite.yml)
+    ;;
   compat-cache-auto-save.yml)
     compat_key="compat-cache-auto-save-$(date +%s)-$$"
     dispatch_args=(-f "compat_key=$compat_key")

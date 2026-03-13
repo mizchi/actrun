@@ -1909,6 +1909,12 @@ fn parse_artifact_if_no_files_found(value : String) -> String? {
 }
 
 ///|
+fn parse_artifact_overwrite(value : String) -> Bool {
+  let normalized = value.trim(chars=" \t\r\n").to_lower()
+  normalized == "true" || normalized == "1" || normalized == "yes"
+}
+
+///|
 fn parse_checkout_ref(value : String) -> String {
   value.trim(chars=" \t\r\n").to_string()
 }
@@ -3368,6 +3374,9 @@ fn execute_upload_artifact_native(
 ) -> TaskRunReport {
   let name = resolved_plan_env.get("INPUT_NAME").unwrap_or("")
   let path_input = resolved_plan_env.get("INPUT_PATH").unwrap_or("")
+  let overwrite = parse_artifact_overwrite(
+    resolved_plan_env.get("INPUT_OVERWRITE").unwrap_or("false"),
+  )
   if name.length() == 0 {
     return task_report_failure(
       plan, workspace_root, "upload-artifact requires with.name",
@@ -3382,20 +3391,6 @@ fn execute_upload_artifact_native(
   let artifact_root = artifact_store_root(workspace_root) +
     "/" +
     sanitize_task_id(name)
-  if not(exec_remove_tree(artifact_root)) {
-    return task_report_failure(
-      plan,
-      workspace_root,
-      "failed to clear artifact store for '\{name}'",
-    )
-  }
-  if not(ensure_exec_dir_recursive(artifact_root)) {
-    return task_report_failure(
-      plan,
-      workspace_root,
-      "failed to prepare artifact store for '\{name}'",
-    )
-  }
   let selection = artifact_select_upload_files(workspace_root, upload_paths)
   let if_no_files_found = match
     parse_artifact_if_no_files_found(
@@ -3417,6 +3412,29 @@ fn execute_upload_artifact_native(
     } else {
       task_report_success(plan, workspace_root)
     }
+  }
+  if @xfs.path_exists(artifact_root) {
+    if not(overwrite) {
+      return task_report_failure(
+        plan,
+        workspace_root,
+        "upload-artifact artifact '\{name}' already exists and overwrite is false",
+      )
+    }
+    if not(exec_remove_tree(artifact_root)) {
+      return task_report_failure(
+        plan,
+        workspace_root,
+        "failed to clear artifact store for '\{name}'",
+      )
+    }
+  }
+  if not(ensure_exec_dir_recursive(artifact_root)) {
+    return task_report_failure(
+      plan,
+      workspace_root,
+      "failed to prepare artifact store for '\{name}'",
+    )
   }
   let artifact_root_path = artifact_common_ancestor(selection.root_paths)
   for absolute_path in selection.file_paths {
@@ -4439,6 +4457,7 @@ pub async fn execute_lowered_native(
   if issues.length() > 0 {
     return make_invalid_report(issues)
   }
+  ignore(exec_remove_tree(artifact_store_root(workspace_root)))
 
   let ir = lowered.ir
   let selected = selected_task_set(ir)

@@ -1,0 +1,48 @@
+name: docs-artifact-overwrite
+'on': push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: write_first
+        shell: bash
+        run: |
+          mkdir -p dist
+          printf '%s' alpha > dist/value.txt
+      - id: upload_first
+        uses: actions/upload-artifact@v4
+        with:
+          name: bundle
+          path: dist/value.txt
+      - id: write_second
+        shell: bash
+        run: |
+          printf '%s' beta > dist/value.txt
+      - id: upload_again
+        uses: actions/upload-artifact@v4
+        continue-on-error: true
+        with:
+          name: bundle
+          path: dist/value.txt
+      - id: upload_overwrite
+        uses: actions/upload-artifact@v4
+        with:
+          name: bundle
+          path: dist/value.txt
+          overwrite: true
+      - id: remove
+        shell: bash
+        run: |
+          rm -f dist/value.txt
+      - id: download
+        uses: actions/download-artifact@v4
+        with:
+          name: bundle
+          path: restored
+      - id: verify
+        shell: bash
+        run: |
+          printf '<%s|%s|%s>' \
+            "${{ steps.upload_again.outcome }}" \
+            "${{ steps.upload_again.conclusion }}" \
+            "$(cat restored/value.txt)"

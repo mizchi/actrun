@@ -15,6 +15,8 @@
 - `compat-artifact-glob-directory.yml` と local/GitHub-hosted artifact glob/directory compat coverage
 - `actions/upload-artifact@*` の `if-no-files-found` (`warn` / `ignore` / `error`) 対応
 - `compat-artifact-if-no-files-found.yml` と local/GitHub-hosted artifact if-no-files-found compat coverage
+- `actions/upload-artifact@*` の `overwrite` 対応
+- `compat-artifact-overwrite.yml` と local/GitHub-hosted artifact overwrite compat coverage
 - `compat-setup-node-cache-npm.yml` と `gha-compat-*` script の live compare 導線
 - expression function の最小 subset (`contains`, `startsWith`, `endsWith`, `fromJSON`, `toJSON`, `hashFiles`)
 - docs/E2E coverage for `fromJSON()` / `toJSON()` and `contains(fromJSON(...), ...)`

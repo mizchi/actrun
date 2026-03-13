@@ -972,6 +972,41 @@ async fn run_artifact_if_no_files_found() -> Unit {
 
 ///|
 #cfg(target="native")
+async fn run_artifact_overwrite() -> Unit {
+  let scenario = "artifact-overwrite"
+  let workspace = e2e_prepare_copied_dir(
+    "_build/e2e/workspaces",
+    scenario,
+    e2e_fixture_dir(scenario),
+  )
+  let result = e2e_run_cli([
+    e2e_join_path(workspace, "workflow.yml"),
+    "--event",
+    e2e_join_path(workspace, "event.json"),
+  ])
+  e2e_expect_ok(result, scenario)
+  e2e_expect_contains(
+    result.stdout,
+    "workflow=e2e-artifact-overwrite",
+    scenario,
+  )
+  e2e_expect_contains(result.stdout, "state=completed", scenario)
+  e2e_expect_contains(result.stdout, "build/upload_first: success", scenario)
+  e2e_expect_contains(result.stdout, "build/upload_again: success", scenario)
+  e2e_expect_contains(
+    result.stdout,
+    "build/upload_overwrite: success",
+    scenario,
+  )
+  e2e_expect_eq(
+    e2e_read_text(e2e_join_path(workspace, "artifacts/result.txt")),
+    "failure|success|beta",
+    scenario + " result artifact",
+  )
+}
+
+///|
+#cfg(target="native")
 async fn run_cache_actions_roundtrip() -> Unit {
   let scenario = "cache-actions-roundtrip"
   e2e_remove_tree("_build/action_runner/cache")
@@ -3890,6 +3925,10 @@ async fn main {
   println("e2e: artifact-if-no-files-found")
   run_artifact_if_no_files_found()
   println("e2e: artifact-if-no-files-found ok")
+
+  println("e2e: artifact-overwrite")
+  run_artifact_overwrite()
+  println("e2e: artifact-overwrite ok")
 
   println("e2e: cache-actions-roundtrip")
   run_cache_actions_roundtrip()
