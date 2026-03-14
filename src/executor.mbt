@@ -1649,8 +1649,7 @@ async fn container_inspect_health_status(
   let (code, stdout, stderr) = @process.collect_output(
     docker_bin,
     [
-      "inspect", "--format",
-      "{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}",
+      "inspect", "--format", "{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}",
       container_name,
     ],
     cwd=workspace_abs,
@@ -1696,9 +1695,7 @@ async fn wait_for_job_service_health_native(
       docker_bin, container_name, workspace_abs,
     )
     if code != 0 {
-      return Some(
-        "service '\{service_id}' health inspect failed: " + status,
-      )
+      return Some("service '\{service_id}' health inspect failed: " + status)
     }
     if status == "healthy" || status == "running" {
       return None
