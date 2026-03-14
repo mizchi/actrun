@@ -9,11 +9,19 @@ import {
 // Values
 pub fn backend_capabilities_for(String) -> BackendCapabilities
 
+pub fn cleanup_run_temp_files(String) -> Unit
+
+pub fn collect_secret_values() -> Array[String]
+
 pub fn compute_bit_changed_paths(&@types.RepoFileSystem, String, PushEvent) -> BitChangedPathsResult
 
 pub fn compute_bit_changed_paths_native(String, PushEvent) -> BitChangedPathsResult
 
 pub async fn execute_lowered_native(LoweringResult, workspace_root? : String, push_event? : PushEvent?) -> WorkflowRunReport
+
+pub fn extract_add_mask_values(WorkflowRunReport) -> Array[String]
+
+pub fn filter_workflow_steps(WorkflowSpec, Array[String]) -> WorkflowSpec
 
 pub fn find_task_plan(ExecutionPlan, String) -> TaskPlan?
 
@@ -24,6 +32,10 @@ pub fn find_workflow_step_report(WorkflowRunReport, String) -> WorkflowStepRepor
 pub fn lower_push_workflow(WorkflowSpec) -> LoweringResult
 
 pub fn lower_push_workflow_in_workspace(WorkflowSpec, String) -> LoweringResult
+
+pub fn mask_report_secrets(WorkflowRunReport, Array[String]) -> WorkflowRunReport
+
+pub fn mask_secrets(String, Array[String]) -> String
 
 pub fn matches_push_trigger(PushTrigger, PushEvent) -> Bool
 
@@ -82,6 +94,8 @@ pub async fn prefetch_workflow_github_actions_native(WorkflowSpec, String, git_b
 pub fn resolve_action_ref(ActionRef) -> ActionResolutionResult
 
 pub fn resolve_action_uses(String) -> ActionResolutionResult
+
+pub fn strip_unsupported_workflow_fields(WorkflowSpec) -> WorkflowSpec
 
 // Errors
 

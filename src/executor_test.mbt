@@ -4319,7 +4319,7 @@ async test "security: step script files are not world-readable" {
     new_job("build", [
       new_run_step(
         "check-perms",
-        "perms=$(stat -f '%Lp' \"$GITHUB_ENV\") && [ \"$perms\" != '666' ]",
+        "perms=$(stat -c '%a' \"$GITHUB_ENV\" 2>/dev/null || stat -f '%Lp' \"$GITHUB_ENV\") && [ \"$perms\" != '666' ]",
         shell=Some("bash"),
       ),
     ]),

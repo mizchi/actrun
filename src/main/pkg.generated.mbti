@@ -20,6 +20,8 @@ type CliOptions
 
 type CliParseResult
 
+type LocalWorkspace
+
 type RunArtifactRecord
 
 type RunCacheRecord
