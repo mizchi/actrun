@@ -4,70 +4,70 @@
 
 ### Added
 
-- `actions/setup-node@*` の最小 builtin emulator (`node-version`, `cache: npm`, `registry-url`)
-- job `container` 配下で `actions/checkout@*` が host 側に materialize した workspace を後続 container `run` step から見える形で扱う最小対応
-- job `container` 配下で `actions/setup-node@*` の PATH shim / output が後続 `run` step に伝播する最小対応
-- job `container` 配下で `actions/upload-artifact@*` / `actions/download-artifact@*` の roundtrip を後続 `run` step から扱う最小対応
-- job `container` 配下で `actions/cache@*` の miss -> deferred save -> next job restore を後続 `run` step から扱う最小対応
-- job `services` の detached service container start / cleanup を native docker adapter で実行する最小対応
-- `${{ job.services.<id>.ports[...] }}` context の最小対応
-- job `services` health check wait の最小対応
-- job `services` 用の docker network を job ごとに作成し、job `container` が同じ network / service alias を共有する最小対応
+- Minimal builtin emulator for `actions/setup-node@*` (`node-version`, `cache: npm`, `registry-url`)
+- Minimal support for `actions/checkout@*` under job `container` to make the workspace materialized on the host visible to subsequent container `run` steps
+- Minimal support for `actions/setup-node@*` under job `container` to propagate PATH shim / output to subsequent `run` steps
+- Minimal support for `actions/upload-artifact@*` / `actions/download-artifact@*` roundtrip under job `container` accessible from subsequent `run` steps
+- Minimal support for `actions/cache@*` miss -> deferred save -> next job restore under job `container` accessible from subsequent `run` steps
+- Minimal support for job `services` detached service container start / cleanup via native docker adapter
+- Minimal support for `${{ job.services.<id>.ports[...] }}` context
+- Minimal support for job `services` health check wait
+- Minimal support for creating a docker network per job for job `services`, sharing the same network / service alias with job `container`
 - unit/docs/E2E coverage for job `services` + job `container` networking
-- `ResolvedAction` に backend capability model (`host` / `docker` / `wasm`) を追加
+- Added backend capability model (`host` / `docker` / `wasm`) to `ResolvedAction`
 - resolver / lowering coverage for backend capability assignment on builtin / node / docker actions
-- manifest-backed custom registry action (`bit://...`) を `ACTION_RUNNER_ACTION_REGISTRY_ROOT/<scheme>/<name>/<version>` から解決し、composite / `node*` / `runs.using: docker` backend を lower/execute する最小対応
+- Minimal support for resolving manifest-backed custom registry actions (`bit://...`) from `ACTION_RUNNER_ACTION_REGISTRY_ROOT/<scheme>/<name>/<version>` and lowering/executing composite / `node*` / `runs.using: docker` backends
 - unit/E2E coverage for custom registry node action resolution and execution
-- reusable workflow `workflow_call.inputs` の `required` / implicit default / type validation の最小対応
+- Minimal support for `required` / implicit default / type validation of reusable workflow `workflow_call.inputs`
 - docs/unit/E2E coverage for typed reusable workflow inputs
-- reusable workflow caller job の `strategy.matrix` 最小対応
-- reusable workflow caller matrix + `workflow_call.outputs` 集約の最小対応
+- Minimal support for reusable workflow caller job `strategy.matrix`
+- Minimal support for reusable workflow caller matrix + `workflow_call.outputs` aggregation
 - docs/unit/E2E coverage for matrix caller reusable workflow execution and `workflow_call.outputs` aggregation
 - all vendored upstream fixtures are now validated for `supported` / `unsupported` / `known_diff` classification metadata in compat tests
-- CLI に `--run-root` と `--workspace-mode` の最小 contract を追加し、`_build/action_runner/runs/run-<n>/run.json` と `tasks/*.stdout.log|stderr.log|summary.md` へ local run record を保存する foundation を追加
-- `run.json` に job 状態と artifact/cache index を追加
-- run store に `started_at_ms` / `finished_at_ms` と `jobs.json` / `artifacts.json` / `caches.json` sidecar を追加し、`_build/action_runner/runs/<run-id>/` layout を固定
+- Added minimal `--run-root` and `--workspace-mode` contract to CLI, with foundation for saving local run records to `_build/action_runner/runs/run-<n>/run.json` and `tasks/*.stdout.log|stderr.log|summary.md`
+- Added job state and artifact/cache index to `run.json`
+- Added `started_at_ms` / `finished_at_ms` and `jobs.json` / `artifacts.json` / `caches.json` sidecars to run store, fixing the `_build/action_runner/runs/<run-id>/` layout
 - whitebox/E2E coverage for run store persistence, task log persistence, artifact/cache indexing, and workspace-mode parsing
-- `action_runner run view <run-id>` と `action_runner run logs <run-id>` の最小 read-only subcommand を追加
+- Added minimal read-only subcommand `action_runner run view <run-id>` and `action_runner run logs <run-id>`
 - whitebox/E2E coverage for run store readback via `run view` / `run logs`
-- `action_runner run list` の最小 read-only subcommand を追加
+- Added minimal read-only subcommand `action_runner run list`
 - whitebox/E2E coverage for run store listing via `run list`
-- `action_runner run watch <run-id>` の最小 read-only subcommand を追加
+- Added minimal read-only subcommand `action_runner run watch <run-id>`
 - whitebox/E2E coverage for run store polling via `run watch`
-- `action_runner run download <run-id>` の最小 read-only subcommand を追加
+- Added minimal read-only subcommand `action_runner run download <run-id>`
 - whitebox/E2E coverage for downloading all artifacts from a persisted run store
-- `action_runner artifact list <run-id>` と `action_runner artifact download <run-id>` の最小 read-only subcommand を追加
+- Added minimal read-only subcommands `action_runner artifact list <run-id>` and `action_runner artifact download <run-id>`
 - whitebox/E2E coverage for artifact index listing and artifact download from persisted run store
-- `action_runner cache list` の最小 read-only subcommand を追加
+- Added minimal read-only subcommand `action_runner cache list`
 - whitebox/E2E coverage for cache store listing across workspace roots
-- `action_runner cache prune --key <cache-key>` の最小 delete subcommand を追加
+- Added minimal delete subcommand `action_runner cache prune --key <cache-key>`
 - whitebox/E2E coverage for cache store pruning by exact key
-- `action_runner workflow list --repo <repo_root>` の最小 read-only subcommand を追加
+- Added minimal read-only subcommand `action_runner workflow list --repo <repo_root>`
 - whitebox/E2E coverage for listing `.github/workflows/*.yml|*.yaml` with file-stem fallback for unnamed workflows
-- `action_runner workflow run <workflow>` の最小 subcommand を追加
-- positional 実行と `workflow run` を同じ code path に整理
-- `run logs` / `run download` / `artifact download` の `--json` 対応を追加
-- `run.json` に `exit_code` を追加し、failed/cancelled 系 run に対する `run watch` の non-zero exit を固定
-- CLI に `--artifact-root`, `--cache-root`, `--github-action-cache-root`, `--registry-root`, `--wasm-action-root` を追加し、local injection point を env override ではなく flag で制御できるようにした
+- Added minimal subcommand `action_runner workflow run <workflow>`
+- Unified positional execution and `workflow run` into the same code path
+- Added `--json` support for `run logs` / `run download` / `artifact download`
+- Added `exit_code` to `run.json` and fixed non-zero exit for `run watch` on failed/cancelled runs
+- Added `--artifact-root`, `--cache-root`, `--github-action-cache-root`, `--registry-root`, `--wasm-action-root` to CLI, allowing local injection points to be controlled via flags instead of env overrides
 - black-box coverage for CLI root override flags via run store / remote reusable workflow / custom registry / wasm scenarios
-- `wasm://...` action を Wasm backend contract として resolve / lower し、`ACTION_RUNNER_WASM_BIN` + `ACTION_RUNNER_WASM_ACTION_ROOT` で file-based Wasm module を実行する最小 adapter
+- Minimal adapter for resolving/lowering `wasm://...` actions as Wasm backend contract and executing file-based Wasm modules via `ACTION_RUNNER_WASM_BIN` + `ACTION_RUNNER_WASM_ACTION_ROOT`
 - unit/E2E coverage for Wasm runner adapter and missing-module failure
-- `actions/cache@*` / `actions/cache/restore@*` の `restore-keys` prefix hit 対応
-- `compat-cache-restore-keys.yml` と local/GitHub-hosted cache restore-keys compat coverage
-- `actions/cache@*` / `actions/cache/restore@*` の `lookup-only` 対応
-- `compat-cache-lookup-only.yml` と local/GitHub-hosted cache lookup-only compat coverage
-- `actions/cache@*` / `actions/cache/restore@*` の `fail-on-cache-miss` 対応
-- `compat-cache-fail-on-cache-miss.yml` と local/GitHub-hosted cache fail-on-cache-miss compat coverage
-- `actions/upload-artifact@*` / `actions/download-artifact@*` の `directory`, wildcard path, download-all directory mode 対応
-- `compat-artifact-glob-directory.yml` と local/GitHub-hosted artifact glob/directory compat coverage
-- `actions/upload-artifact@*` の `if-no-files-found` (`warn` / `ignore` / `error`) 対応
-- `compat-artifact-if-no-files-found.yml` と local/GitHub-hosted artifact if-no-files-found compat coverage
-- `actions/upload-artifact@*` の `overwrite` 対応
-- `compat-artifact-overwrite.yml` と local/GitHub-hosted artifact overwrite compat coverage
-- `actions/download-artifact@*` の `merge-multiple` 対応
-- `compat-artifact-merge-multiple.yml` と local/GitHub-hosted artifact merge-multiple compat coverage
-- `compat-setup-node-cache-npm.yml` と `gha-compat-*` script の live compare 導線
-- expression function の最小 subset (`contains`, `startsWith`, `endsWith`, `fromJSON`, `toJSON`, `hashFiles`)
+- Added `restore-keys` prefix hit support for `actions/cache@*` / `actions/cache/restore@*`
+- `compat-cache-restore-keys.yml` and local/GitHub-hosted cache restore-keys compat coverage
+- Added `lookup-only` support for `actions/cache@*` / `actions/cache/restore@*`
+- `compat-cache-lookup-only.yml` and local/GitHub-hosted cache lookup-only compat coverage
+- Added `fail-on-cache-miss` support for `actions/cache@*` / `actions/cache/restore@*`
+- `compat-cache-fail-on-cache-miss.yml` and local/GitHub-hosted cache fail-on-cache-miss compat coverage
+- Added `directory`, wildcard path, and download-all directory mode support for `actions/upload-artifact@*` / `actions/download-artifact@*`
+- `compat-artifact-glob-directory.yml` and local/GitHub-hosted artifact glob/directory compat coverage
+- Added `if-no-files-found` (`warn` / `ignore` / `error`) support for `actions/upload-artifact@*`
+- `compat-artifact-if-no-files-found.yml` and local/GitHub-hosted artifact if-no-files-found compat coverage
+- Added `overwrite` support for `actions/upload-artifact@*`
+- `compat-artifact-overwrite.yml` and local/GitHub-hosted artifact overwrite compat coverage
+- Added `merge-multiple` support for `actions/download-artifact@*`
+- `compat-artifact-merge-multiple.yml` and local/GitHub-hosted artifact merge-multiple compat coverage
+- `compat-setup-node-cache-npm.yml` and `gha-compat-*` script live compare pipeline
+- Minimal subset of expression functions (`contains`, `startsWith`, `endsWith`, `fromJSON`, `toJSON`, `hashFiles`)
 - docs/E2E coverage for `fromJSON()` / `toJSON()` and `contains(fromJSON(...), ...)`
 - docs/E2E coverage for `hashFiles()` in script/env and step `if:`
 - minimal `${{ vars.* }}` support backed by `ACTION_RUNNER_VAR_<NAME>`
@@ -91,9 +91,9 @@
 - docs/E2E coverage for unsupported `job.container`
 - minimal job `container` execution for `run` steps via the docker adapter
 - unit/docs/E2E coverage for job `container` `run` execution
-- job `container` 内で cache 済み / prefetched GitHub repo `node*` action を docker adapter 経由で実行する最小対応
+- Minimal support for executing cached / prefetched GitHub repo `node*` actions via docker adapter under job `container`
 - unit/E2E coverage for job `container` GitHub repo `node*` action execution
-- job `container` 配下の GitHub repo / direct `runs.using: docker` action を sibling container として実行し、job container の volume mount を共有する最小対応
+- Minimal support for executing GitHub repo / direct `runs.using: docker` actions as sibling containers under job `container`, sharing the job container's volume mounts
 - unit/E2E coverage for job `container` GitHub repo `runs.using: docker` action sibling execution
 - job `services` mapping parse + contract support with explicit lowering reject in MVP
 - docs/E2E coverage for unsupported `job.services`
