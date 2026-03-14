@@ -315,7 +315,8 @@ fn local_workspace_root(workflow_path : String) -> String {
       if workflow_path.has_prefix(".github/workflows/") {
         "."
       } else {
-        parent_dir(workflow_path)
+        // For workflows outside .github/workflows/, use current directory
+        "."
       }
   }
 }
