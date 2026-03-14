@@ -8,6 +8,8 @@ on:
         required: true
         type: string
   push:
+    tags-ignore:
+      - "**"
     paths:
       - .github/workflows/__compat_cache_auto_save__.trigger
 

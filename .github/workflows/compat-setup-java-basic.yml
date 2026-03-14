@@ -3,6 +3,8 @@ name: Compat Setup Java Basic
 on:
   workflow_dispatch:
   push:
+    tags-ignore:
+      - "**"
     paths:
       - .github/workflows/__compat_setup_java_basic__.trigger
 

@@ -3,6 +3,8 @@ name: Compat Setup Python Basic
 on:
   workflow_dispatch:
   push:
+    tags-ignore:
+      - "**"
     paths:
       - .github/workflows/__compat_setup_python_basic__.trigger
 

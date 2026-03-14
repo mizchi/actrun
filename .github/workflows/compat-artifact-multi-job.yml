@@ -3,6 +3,8 @@ name: Compat Artifact Multi Job
 on:
   workflow_dispatch:
   push:
+    tags-ignore:
+      - "**"
     paths:
       - .github/workflows/compat-artifact-multi-job.yml
 

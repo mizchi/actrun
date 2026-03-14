@@ -3,6 +3,8 @@ name: Compat Artifact If No Files Found
 on:
   workflow_dispatch:
   push:
+    tags-ignore:
+      - "**"
     paths:
       - .github/workflows/compat-artifact-if-no-files-found.yml
 

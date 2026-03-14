@@ -3,6 +3,8 @@ name: Compat GitHub Script Basic
 on:
   workflow_dispatch:
   push:
+    tags-ignore:
+      - "**"
     paths:
       - .github/workflows/__compat_github_script_basic__.trigger
 

@@ -3,6 +3,8 @@ name: Compat Checkout Fetch Depth
 on:
   workflow_dispatch:
   push:
+    tags-ignore:
+      - "**"
     paths:
       - .github/workflows/compat-checkout-fetch-depth.yml
 

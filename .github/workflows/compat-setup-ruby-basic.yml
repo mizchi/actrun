@@ -3,6 +3,8 @@ name: Compat Setup Ruby Basic
 on:
   workflow_dispatch:
   push:
+    tags-ignore:
+      - "**"
     paths:
       - .github/workflows/__compat_setup_ruby_basic__.trigger
 

@@ -3,6 +3,8 @@ name: Compat Setup Go Basic
 on:
   workflow_dispatch:
   push:
+    tags-ignore:
+      - "**"
     paths:
       - .github/workflows/__compat_setup_go_basic__.trigger
 

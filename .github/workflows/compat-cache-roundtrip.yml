@@ -3,6 +3,8 @@ name: Compat Cache Roundtrip
 on:
   workflow_dispatch:
   push:
+    tags-ignore:
+      - "**"
     paths:
       - .github/workflows/compat-cache-roundtrip.yml
 

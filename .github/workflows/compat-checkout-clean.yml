@@ -3,6 +3,8 @@ name: Compat Checkout Clean
 on:
   workflow_dispatch:
   push:
+    tags-ignore:
+      - "**"
     paths:
       - .github/workflows/compat-checkout-clean.yml
 

@@ -3,6 +3,8 @@ name: Compat Checkout Artifact
 on:
   workflow_dispatch:
   push:
+    tags-ignore:
+      - "**"
     paths:
       - .github/workflows/compat-checkout-artifact.yml
 

@@ -3,6 +3,8 @@ name: Compat Setup Dotnet Basic
 on:
   workflow_dispatch:
   push:
+    tags-ignore:
+      - "**"
     paths:
       - .github/workflows/__compat_setup_dotnet_basic__.trigger
 

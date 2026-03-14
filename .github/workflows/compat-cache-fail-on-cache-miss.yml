@@ -8,6 +8,8 @@ on:
         required: true
         type: string
   push:
+    tags-ignore:
+      - "**"
     paths:
       - .github/workflows/__compat_cache_fail_on_cache_miss__.trigger
 

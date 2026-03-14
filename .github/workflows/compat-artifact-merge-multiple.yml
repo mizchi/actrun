@@ -3,6 +3,8 @@ name: Compat Artifact Merge Multiple
 on:
   workflow_dispatch:
   push:
+    tags-ignore:
+      - "**"
     paths:
       - .github/workflows/compat-artifact-merge-multiple.yml
 

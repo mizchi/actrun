@@ -3,6 +3,8 @@ name: Compat Workflow Call Matrix Output
 on:
   workflow_dispatch:
   push:
+    tags-ignore:
+      - "**"
     paths:
       - .github/workflows/compat-workflow-call-matrix-output.yml
       - .github/workflows/__compat_reusable_matrix_output.yml

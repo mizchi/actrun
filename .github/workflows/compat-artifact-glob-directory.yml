@@ -3,6 +3,8 @@ name: Compat Artifact Glob Directory
 on:
   workflow_dispatch:
   push:
+    tags-ignore:
+      - "**"
     paths:
       - .github/workflows/compat-artifact-glob-directory.yml
 

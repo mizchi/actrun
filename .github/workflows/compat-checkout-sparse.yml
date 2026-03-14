@@ -3,6 +3,8 @@ name: Compat Checkout Sparse
 on:
   workflow_dispatch:
   push:
+    tags-ignore:
+      - "**"
     paths:
       - .github/workflows/compat-checkout-sparse.yml
 

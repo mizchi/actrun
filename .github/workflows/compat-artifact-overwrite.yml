@@ -3,6 +3,8 @@ name: Compat Artifact Overwrite
 on:
   workflow_dispatch:
   push:
+    tags-ignore:
+      - "**"
     paths:
       - .github/workflows/compat-artifact-overwrite.yml
 

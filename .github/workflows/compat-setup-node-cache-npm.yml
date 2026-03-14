@@ -12,6 +12,8 @@ on:
         required: true
         type: string
   push:
+    tags-ignore:
+      - "**"
     paths:
       - .github/workflows/__compat_setup_node_cache_npm__.trigger
 
