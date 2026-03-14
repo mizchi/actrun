@@ -74,7 +74,7 @@ fn prepare_workspace(name : String) -> String raise {
 ///|
 fn executor_test_cache_store_root(workspace : String) -> String {
   executor_test_absolute_path(
-    "_build/action_runner/cache/" +
+    "_build/actrun/cache/" +
     workspace.replace_all(old="/", new="__").replace_all(old=":", new="_"),
   )
 }
@@ -303,9 +303,9 @@ fn prepare_cached_github_action_root_for_executor(
   subpath? : String = "",
 ) -> String raise {
   ensure_dir("_build")
-  ensure_dir("_build/action_runner")
-  ensure_dir("_build/action_runner/github_actions")
-  let root = "_build/action_runner/github_actions"
+  ensure_dir("_build/actrun")
+  ensure_dir("_build/actrun/github_actions")
+  let root = "_build/actrun/github_actions"
   let owner_dir = root + "/" + owner
   let repo_dir = owner_dir + "/" + repo
   let version_dir = repo_dir + "/" + version
@@ -1150,7 +1150,7 @@ async test "executor: checkout materialized on host is visible to job container 
           shell=Some("bash"),
         ),
       ],
-      env={ "ACTION_RUNNER_DOCKER_BIN": docker_bin },
+      env={ "ACTRUN_DOCKER_BIN": docker_bin },
       container=Some(new_job_container_spec("node:20-bookworm")),
       defaults=new_run_defaults(shell=Some("bash")),
     ),
@@ -1338,7 +1338,7 @@ async test "executor: cached github repo node action runs main entrypoint" {
         defaults=new_run_defaults(shell=Some("bash")),
       ),
     ],
-    env={ "ACTION_RUNNER_NODE_BIN": node_bin },
+    env={ "ACTRUN_NODE_BIN": node_bin },
   )
 
   let lowered = lower_push_workflow_in_workspace(workflow, workspace)
@@ -1399,10 +1399,7 @@ async test "executor: job container runs github repo node action via docker adap
         ),
       ),
     ],
-    env={
-      "ACTION_RUNNER_DOCKER_BIN": docker_bin,
-      "ACTION_RUNNER_NODE_BIN": node_bin,
-    },
+    env={ "ACTRUN_DOCKER_BIN": docker_bin, "ACTRUN_NODE_BIN": node_bin },
   )
 
   let lowered = lower_push_workflow_in_workspace(workflow, workspace)
@@ -1428,7 +1425,7 @@ async test "executor: job container runs github repo node action via docker adap
 async test "executor: github repo action cache miss fetches and runs inner steps" {
   let workspace = prepare_workspace("executor-github-repo-remote-fetch")
   let action_uses = "mizchi-fetch-exec/demo-action-exec/composite@v1"
-  let repo_cache_root = "_build/action_runner/github_actions/mizchi-fetch-exec/demo-action-exec/v1"
+  let repo_cache_root = "_build/actrun/github_actions/mizchi-fetch-exec/demo-action-exec/v1"
   let log_path = workspace + "/git.log"
   test_support_remove_tree(repo_cache_root)
   let action_src =
@@ -1602,7 +1599,7 @@ async test "executor: builtin artifact actions roundtrip across job container ru
           shell=Some("bash"),
         ),
       ],
-      env={ "ACTION_RUNNER_DOCKER_BIN": docker_bin },
+      env={ "ACTRUN_DOCKER_BIN": docker_bin },
       container=Some(new_job_container_spec("node:20-bookworm")),
       defaults=new_run_defaults(shell=Some("bash")),
     ),
@@ -2057,7 +2054,7 @@ async test "executor: builtin cache action auto-saves across job container jobs"
           shell=Some("bash"),
         ),
       ],
-      env={ "ACTION_RUNNER_DOCKER_BIN": docker_bin },
+      env={ "ACTRUN_DOCKER_BIN": docker_bin },
       container=Some(new_job_container_spec("alpine:3.21")),
       defaults=new_run_defaults(shell=Some("bash")),
     ),
@@ -2076,7 +2073,7 @@ async test "executor: builtin cache action auto-saves across job container jobs"
         ),
       ],
       needs=["save"],
-      env={ "ACTION_RUNNER_DOCKER_BIN": docker_bin },
+      env={ "ACTRUN_DOCKER_BIN": docker_bin },
       container=Some(new_job_container_spec("alpine:3.21")),
       defaults=new_run_defaults(shell=Some("bash")),
     ),
@@ -2557,7 +2554,7 @@ async test "executor: builtin setup-node exposes requested node version output a
           shell=Some("bash"),
         ),
       ],
-      env={ "ACTION_RUNNER_SETUP_NODE_BIN": fake_node },
+      env={ "ACTRUN_SETUP_NODE_BIN": fake_node },
       defaults=new_run_defaults(shell=Some("bash")),
     ),
   ])
@@ -2605,8 +2602,8 @@ async test "executor: builtin setup-node works in job container run step" {
         ),
       ],
       env={
-        "ACTION_RUNNER_SETUP_NODE_BIN": fake_node,
-        "ACTION_RUNNER_DOCKER_BIN": docker_bin,
+        "ACTRUN_SETUP_NODE_BIN": fake_node,
+        "ACTRUN_DOCKER_BIN": docker_bin,
       },
       container=Some(new_job_container_spec("node:20-bookworm")),
       defaults=new_run_defaults(shell=Some("bash")),
@@ -2696,7 +2693,7 @@ async test "executor: builtin setup-node cache npm restores after deferred post 
           shell=Some("bash"),
         ),
       ],
-      env={ "ACTION_RUNNER_SETUP_NODE_BIN": fake_node },
+      env={ "ACTRUN_SETUP_NODE_BIN": fake_node },
       defaults=new_run_defaults(shell=Some("bash")),
     ),
     new_job(
@@ -2713,7 +2710,7 @@ async test "executor: builtin setup-node cache npm restores after deferred post 
         ),
       ],
       needs=["save"],
-      env={ "ACTION_RUNNER_SETUP_NODE_BIN": fake_node },
+      env={ "ACTRUN_SETUP_NODE_BIN": fake_node },
       defaults=new_run_defaults(shell=Some("bash")),
     ),
   ])
@@ -3267,13 +3264,11 @@ async test "executor: hashFiles returns a stable hex digest and empty string on 
 
 ///|
 #cfg(target="native")
-async test "executor: vars context resolves from ACTION_RUNNER_VAR prefix and missing vars are empty" {
+async test "executor: vars context resolves from ACTRUN_VAR prefix and missing vars are empty" {
   let workspace = prepare_workspace("executor-vars-context")
-  let previous_color = executor_test_set_env_var(
-    "ACTION_RUNNER_VAR_COLOR", "ocean",
-  )
+  let previous_color = executor_test_set_env_var("ACTRUN_VAR_COLOR", "ocean")
   let previous_enabled = executor_test_set_env_var(
-    "ACTION_RUNNER_VAR_FEATURE_ENABLED", "true",
+    "ACTRUN_VAR_FEATURE_ENABLED", "true",
   )
 
   let workflow = new_workflow("ci", [
@@ -3308,10 +3303,8 @@ async test "executor: vars context resolves from ACTION_RUNNER_VAR prefix and mi
     workspace_root=workspace,
   )
 
-  executor_test_restore_env_var("ACTION_RUNNER_VAR_COLOR", previous_color)
-  executor_test_restore_env_var(
-    "ACTION_RUNNER_VAR_FEATURE_ENABLED", previous_enabled,
-  )
+  executor_test_restore_env_var("ACTRUN_VAR_COLOR", previous_color)
+  executor_test_restore_env_var("ACTRUN_VAR_FEATURE_ENABLED", previous_enabled)
 
   inspect(report.ok, content="true")
   inspect(
@@ -3328,10 +3321,10 @@ async test "executor: vars context resolves from ACTION_RUNNER_VAR prefix and mi
 
 ///|
 #cfg(target="native")
-async test "executor: secrets context resolves from ACTION_RUNNER_SECRET prefix and missing secrets are empty" {
+async test "executor: secrets context resolves from ACTRUN_SECRET prefix and missing secrets are empty" {
   let workspace = prepare_workspace("executor-secrets-context")
   let previous_token = executor_test_set_env_var(
-    "ACTION_RUNNER_SECRET_TOKEN", "s3cr3t",
+    "ACTRUN_SECRET_TOKEN", "s3cr3t",
   )
 
   let workflow = new_workflow("ci", [
@@ -3356,7 +3349,7 @@ async test "executor: secrets context resolves from ACTION_RUNNER_SECRET prefix 
     workspace_root=workspace,
   )
 
-  executor_test_restore_env_var("ACTION_RUNNER_SECRET_TOKEN", previous_token)
+  executor_test_restore_env_var("ACTRUN_SECRET_TOKEN", previous_token)
 
   inspect(report.ok, content="true")
   inspect(
@@ -3601,7 +3594,7 @@ async test "executor: docker actions run via docker adapter" {
         defaults=new_run_defaults(shell=Some("bash")),
       ),
     ],
-    env={ "ACTION_RUNNER_DOCKER_BIN": docker_bin },
+    env={ "ACTRUN_DOCKER_BIN": docker_bin },
   )
 
   let docker_image_report = execute_lowered_native(
@@ -3653,7 +3646,7 @@ async test "executor: docker actions run via docker adapter" {
         defaults=new_run_defaults(shell=Some("bash")),
       ),
     ],
-    env={ "ACTION_RUNNER_DOCKER_BIN": docker_bin },
+    env={ "ACTRUN_DOCKER_BIN": docker_bin },
   )
 
   let lowered = lower_push_workflow_in_workspace(
@@ -3712,10 +3705,7 @@ async test "executor: wasm actions run via configured wasm runner" {
           shell=Some("bash"),
         ),
       ],
-      env={
-        "ACTION_RUNNER_WASM_BIN": wasm_bin,
-        "ACTION_RUNNER_WASM_ACTION_ROOT": wasm_root,
-      },
+      env={ "ACTRUN_WASM_BIN": wasm_bin, "ACTRUN_WASM_ACTION_ROOT": wasm_root },
       defaults=new_run_defaults(shell=Some("bash")),
     ),
   ])
@@ -3752,8 +3742,8 @@ async test "executor: wasm actions fail when module is missing" {
       "build",
       [new_uses_step("module", "wasm://std/echo@v1")],
       env={
-        "ACTION_RUNNER_WASM_BIN": wasm_bin,
-        "ACTION_RUNNER_WASM_ACTION_ROOT": workspace + "/missing-root",
+        "ACTRUN_WASM_BIN": wasm_bin,
+        "ACTRUN_WASM_ACTION_ROOT": workspace + "/missing-root",
       },
       defaults=new_run_defaults(shell=Some("bash")),
     ),
@@ -3788,7 +3778,7 @@ async test "executor: custom registry node action runs via configured registry r
   let node_log_path = tools_root + "/node.log"
   let node_bin = test_support_prepare_fake_node_bin(tools_root, node_log_path)
   let previous_registry_root = executor_test_set_env_var(
-    "ACTION_RUNNER_ACTION_REGISTRY_ROOT", registry_root,
+    "ACTRUN_ACTION_REGISTRY_ROOT", registry_root,
   )
   let action_root = prepare_custom_registry_action_root_for_executor(
     registry_root, "bit", "std/cache", "v1",
@@ -3823,7 +3813,7 @@ async test "executor: custom registry node action runs via configured registry r
           shell=Some("bash"),
         ),
       ],
-      env={ "ACTION_RUNNER_NODE_BIN": node_bin },
+      env={ "ACTRUN_NODE_BIN": node_bin },
       defaults=new_run_defaults(shell=Some("bash")),
     ),
   ])
@@ -3833,7 +3823,7 @@ async test "executor: custom registry node action runs via configured registry r
     workspace_root=workspace,
   )
   executor_test_restore_env_var(
-    "ACTION_RUNNER_ACTION_REGISTRY_ROOT", previous_registry_root,
+    "ACTRUN_ACTION_REGISTRY_ROOT", previous_registry_root,
   )
 
   inspect(report.ok, content="true")
@@ -3879,7 +3869,7 @@ async test "executor: job container runs run steps via docker adapter" {
         defaults=new_run_defaults(working_directory=Some("nested")),
       ),
     ],
-    env={ "ACTION_RUNNER_DOCKER_BIN": docker_bin },
+    env={ "ACTRUN_DOCKER_BIN": docker_bin },
   )
 
   let lowered = lower_push_workflow(workflow)
@@ -3925,7 +3915,7 @@ async test "executor: job container shares docker network with job services" {
         defaults=new_run_defaults(shell=Some("bash")),
       ),
     ],
-    env={ "ACTION_RUNNER_DOCKER_BIN": docker_bin },
+    env={ "ACTRUN_DOCKER_BIN": docker_bin },
   )
 
   let lowered = lower_push_workflow(workflow)
@@ -3985,7 +3975,7 @@ async test "executor: job services start before steps, expose ports context, and
         defaults=new_run_defaults(shell=Some("bash")),
       ),
     ],
-    env={ "ACTION_RUNNER_DOCKER_BIN": docker_bin },
+    env={ "ACTRUN_DOCKER_BIN": docker_bin },
   )
 
   let lowered = lower_push_workflow(workflow)
@@ -4042,7 +4032,7 @@ async test "executor: job services fail when health check becomes unhealthy" {
         defaults=new_run_defaults(shell=Some("bash")),
       ),
     ],
-    env={ "ACTION_RUNNER_DOCKER_BIN": docker_bin },
+    env={ "ACTRUN_DOCKER_BIN": docker_bin },
   )
 
   let lowered = lower_push_workflow(workflow)
@@ -4109,7 +4099,7 @@ async test "executor: job container runs docker action as sibling container" {
         ),
       ),
     ],
-    env={ "ACTION_RUNNER_DOCKER_BIN": docker_bin },
+    env={ "ACTRUN_DOCKER_BIN": docker_bin },
   )
 
   let lowered = lower_push_workflow_in_workspace(workflow, workspace)
@@ -4170,7 +4160,7 @@ async test "executor: github repo node action lifecycle shares GITHUB_STATE acro
         defaults=new_run_defaults(shell=Some("bash")),
       ),
     ],
-    env={ "ACTION_RUNNER_NODE_BIN": node_bin },
+    env={ "ACTRUN_NODE_BIN": node_bin },
   )
 
   let lowered = lower_push_workflow_in_workspace(workflow, workspace)
@@ -4232,7 +4222,7 @@ async test "executor: github repo docker action lifecycle shares GITHUB_STATE ac
         defaults=new_run_defaults(shell=Some("bash")),
       ),
     ],
-    env={ "ACTION_RUNNER_DOCKER_BIN": docker_bin },
+    env={ "ACTRUN_DOCKER_BIN": docker_bin },
   )
 
   let lowered = lower_push_workflow_in_workspace(workflow, workspace)
@@ -4304,10 +4294,10 @@ async test "security: file_commands and runner_temp are cleaned up after run" {
   inspect(report.ok, content="true")
   cleanup_run_temp_files(workspace)
   assert_true(
-    check_no_workspace_entries("_build/action_runner/file_commands", workspace),
+    check_no_workspace_entries("_build/actrun/file_commands", workspace),
   )
   assert_true(
-    check_no_workspace_entries("_build/action_runner/runner_temp", workspace),
+    check_no_workspace_entries("_build/actrun/runner_temp", workspace),
   )
 }
 

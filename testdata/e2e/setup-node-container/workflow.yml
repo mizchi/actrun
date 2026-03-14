@@ -6,7 +6,7 @@ jobs:
     container:
       image: node:20-bookworm
     env:
-      ACTION_RUNNER_SETUP_NODE_BIN: bin/node
+      ACTRUN_SETUP_NODE_BIN: bin/node
     steps:
       - id: setup
         uses: actions/setup-node@v4

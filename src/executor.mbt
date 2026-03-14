@@ -404,13 +404,13 @@ fn runner_environment_name() -> String {
 ///|
 fn prepare_runner_temp_dir(job_id : String, workspace_root : String) -> String {
   ignore(ensure_exec_dir("_build"))
-  ignore(ensure_exec_dir("_build/action_runner"))
-  ignore(ensure_exec_dir("_build/action_runner/runner_temp"))
+  ignore(ensure_exec_dir("_build/actrun"))
+  ignore(ensure_exec_dir("_build/actrun/runner_temp"))
   let workspace_key = sanitize_task_id(
     absolute_exec_path(resolve_task_cwd(workspace_root, "")),
   )
   let dir = absolute_exec_path(
-    "_build/action_runner/runner_temp/" +
+    "_build/actrun/runner_temp/" +
     workspace_key +
     "__" +
     sanitize_task_id(job_id),
@@ -449,15 +449,13 @@ fn prepare_step_file_commands(
   workspace_root : String,
 ) -> StepFileCommands? {
   guard ensure_exec_dir("_build") else { return None }
-  guard ensure_exec_dir("_build/action_runner") else { return None }
-  guard ensure_exec_dir("_build/action_runner/file_commands") else {
-    return None
-  }
+  guard ensure_exec_dir("_build/actrun") else { return None }
+  guard ensure_exec_dir("_build/actrun/file_commands") else { return None }
   let workspace_key = sanitize_task_id(
     absolute_exec_path(resolve_task_cwd(workspace_root, "")),
   )
   let prefix = absolute_exec_path(
-    "_build/action_runner/file_commands/" +
+    "_build/actrun/file_commands/" +
     workspace_key +
     "__" +
     sanitize_task_id(task_id),
@@ -992,7 +990,7 @@ async fn runner_context(
 ///|
 fn runner_vars_context() -> Map[String, String] {
   let values : Map[String, String] = {}
-  let prefix = "ACTION_RUNNER_VAR_"
+  let prefix = "ACTRUN_VAR_"
   for key, value in @xsys.get_env_vars() {
     if key.has_prefix(prefix) && key.length() > prefix.length() {
       values[exec_text_slice(key, prefix.length(), key.length())] = value
@@ -1004,7 +1002,7 @@ fn runner_vars_context() -> Map[String, String] {
 ///|
 fn runner_secrets_context() -> Map[String, String] {
   let values : Map[String, String] = {}
-  let prefix = "ACTION_RUNNER_SECRET_"
+  let prefix = "ACTRUN_SECRET_"
   for key, value in @xsys.get_env_vars() {
     if key.has_prefix(prefix) && key.length() > prefix.length() {
       values[exec_text_slice(key, prefix.length(), key.length())] = value
@@ -1027,7 +1025,7 @@ pub fn mask_secrets(text : String, secret_values : Array[String]) -> String {
 ///|
 pub fn collect_secret_values() -> Array[String] {
   let values : Array[String] = []
-  let prefix = "ACTION_RUNNER_SECRET_"
+  let prefix = "ACTRUN_SECRET_"
   for key, value in @xsys.get_env_vars() {
     if key.has_prefix(prefix) &&
       key.length() > prefix.length() &&
@@ -1702,9 +1700,7 @@ async fn start_job_services_native(
   }
   match
     create_job_service_network_native(
-      configured_exec_bin(
-        "ACTION_RUNNER_DOCKER_BIN", resolved_plan_env, "docker",
-      ),
+      configured_exec_bin("ACTRUN_DOCKER_BIN", resolved_plan_env, "docker"),
       workspace_abs,
       network_name,
     ) {
@@ -1724,7 +1720,7 @@ async fn start_job_services_native(
       continue
     }
     let docker_bin = configured_exec_bin(
-      "ACTION_RUNNER_DOCKER_BIN",
+      "ACTRUN_DOCKER_BIN",
       merge_runner_env(resolved_plan_env, resolved.env),
       "docker",
     )
@@ -2756,15 +2752,12 @@ fn read_node_version_from_file(file_path : String) -> String {
 
 ///|
 fn checkout_temp_root(workspace_root : String, task_id : String) -> String {
-  ignore(ensure_exec_dir_recursive("_build/action_runner/checkouts"))
+  ignore(ensure_exec_dir_recursive("_build/actrun/checkouts"))
   let workspace_key = sanitize_task_id(
     absolute_exec_path(resolve_task_cwd(workspace_root, "")),
   )
   let root = absolute_exec_path(
-    "_build/action_runner/checkouts/" +
-    workspace_key +
-    "/" +
-    sanitize_task_id(task_id),
+    "_build/actrun/checkouts/" + workspace_key + "/" + sanitize_task_id(task_id),
   )
   ignore(exec_remove_tree(root))
   ignore(ensure_exec_dir_recursive(root))
@@ -2943,9 +2936,7 @@ async fn exec_git_clone_checkout(
   lfs? : Bool = false,
 ) -> TaskRunReport? {
   let temp_root = checkout_temp_root(workspace_root, plan.id)
-  let git_bin = configured_exec_bin(
-    "ACTION_RUNNER_GIT_BIN", resolved_plan_env, "git",
-  )
+  let git_bin = configured_exec_bin("ACTRUN_GIT_BIN", resolved_plan_env, "git")
   let checkout_ref = parse_checkout_ref(
     resolved_plan_env.get("INPUT_REF").unwrap_or(""),
   )
@@ -3180,8 +3171,8 @@ async fn exec_git_clone_checkout(
 
 ///|
 fn artifact_store_root(workspace_root : String) -> String {
-  let configured = @xsys.get_env_var("ACTION_RUNNER_ARTIFACT_ROOT").unwrap_or(
-    "_build/action_runner/artifacts",
+  let configured = @xsys.get_env_var("ACTRUN_ARTIFACT_ROOT").unwrap_or(
+    "_build/actrun/artifacts",
   )
   ignore(ensure_exec_dir_recursive(configured))
   let workspace_key = sanitize_task_id(
@@ -3194,8 +3185,8 @@ fn artifact_store_root(workspace_root : String) -> String {
 
 ///|
 fn cache_store_root(workspace_root : String) -> String {
-  let configured = @xsys.get_env_var("ACTION_RUNNER_CACHE_ROOT").unwrap_or(
-    "_build/action_runner/cache",
+  let configured = @xsys.get_env_var("ACTRUN_CACHE_ROOT").unwrap_or(
+    "_build/actrun/cache",
   )
   ignore(ensure_exec_dir_recursive(configured))
   let workspace_key = sanitize_task_id(
@@ -3208,17 +3199,17 @@ fn cache_store_root(workspace_root : String) -> String {
 
 ///|
 fn cache_sequence_path(workspace_root : String) -> String {
-  cache_store_root(workspace_root) + "/__action_runner_sequence.txt"
+  cache_store_root(workspace_root) + "/__actrun_sequence.txt"
 }
 
 ///|
 fn cache_key_metadata_path(cache_root : String) -> String {
-  cache_root + "/__action_runner_cache_key.txt"
+  cache_root + "/__actrun_cache_key.txt"
 }
 
 ///|
 fn cache_sequence_metadata_path(cache_root : String) -> String {
-  cache_root + "/__action_runner_cache_sequence.txt"
+  cache_root + "/__actrun_cache_sequence.txt"
 }
 
 ///|
@@ -3322,7 +3313,7 @@ fn resolve_cache_restore_lookup(
     let mut selected_key = ""
     let mut selected_sequence = -1
     for entry in entries {
-      if entry == "__action_runner_sequence.txt" {
+      if entry == "__actrun_sequence.txt" {
         continue
       }
       let entry_root = store_root + "/" + entry
@@ -3344,13 +3335,11 @@ fn resolve_cache_restore_lookup(
 
 ///|
 fn setup_node_store_root(workspace_root : String) -> String {
-  ignore(ensure_exec_dir_recursive("_build/action_runner/setup_node"))
+  ignore(ensure_exec_dir_recursive("_build/actrun/setup_node"))
   let workspace_key = sanitize_task_id(
     absolute_exec_path(resolve_task_cwd(workspace_root, "")),
   )
-  let root = absolute_exec_path(
-    "_build/action_runner/setup_node/" + workspace_key,
-  )
+  let root = absolute_exec_path("_build/actrun/setup_node/" + workspace_key)
   ignore(ensure_exec_dir_recursive(root))
   root
 }
@@ -4077,17 +4066,15 @@ async fn execute_setup_node_native(
     ""
   }
   let configured_node_fallback = resolved_plan_env
-    .get("ACTION_RUNNER_NODE_BIN")
-    .unwrap_or(@xsys.get_env_var("ACTION_RUNNER_NODE_BIN").unwrap_or("node"))
+    .get("ACTRUN_NODE_BIN")
+    .unwrap_or(@xsys.get_env_var("ACTRUN_NODE_BIN").unwrap_or("node"))
   let fallback_node_bin = resolve_exec_bin_for_workspace(
     configured_node_fallback, workspace_root,
   )
   let configured_setup_node_bin = resolved_plan_env
-    .get("ACTION_RUNNER_SETUP_NODE_BIN")
+    .get("ACTRUN_SETUP_NODE_BIN")
     .unwrap_or(
-      @xsys.get_env_var("ACTION_RUNNER_SETUP_NODE_BIN").unwrap_or(
-        fallback_node_bin,
-      ),
+      @xsys.get_env_var("ACTRUN_SETUP_NODE_BIN").unwrap_or(fallback_node_bin),
     )
   let node_bin = resolve_exec_bin_for_workspace(
     configured_setup_node_bin, workspace_root,
@@ -4626,8 +4613,8 @@ fn restore_cache_store_native(
     value => value
   }
   for entry in entries {
-    if entry == "__action_runner_cache_key.txt" ||
-      entry == "__action_runner_cache_sequence.txt" {
+    if entry == "__actrun_cache_key.txt" ||
+      entry == "__actrun_cache_sequence.txt" {
       continue
     }
     let source = cache_root + "/" + entry
@@ -4953,8 +4940,7 @@ fn resolve_wasm_module_path(
   entrypoint : String,
 ) -> String? {
   let root = configured_path_root(
-    "ACTION_RUNNER_WASM_ACTION_ROOT", resolved_plan_env, "_build/action_runner/wasm_actions",
-    workspace_root,
+    "ACTRUN_WASM_ACTION_ROOT", resolved_plan_env, "_build/actrun/wasm_actions", workspace_root,
   )
   for candidate in wasm_module_candidate_paths(root, entrypoint) {
     if @xfs.path_exists(candidate) {
@@ -5017,7 +5003,7 @@ async fn execute_wasm_action_native(
     runner_ctx,
   )
   let cmd = configured_exec_bin(
-    "ACTION_RUNNER_WASM_BIN", resolved_plan_env, "wasmtime",
+    "ACTRUN_WASM_BIN", resolved_plan_env, "wasmtime",
   )
   let cwd = action.action_path.unwrap_or(resolve_task_cwd(workspace_root, ""))
   let env_args = env_command_args(cmd, [module_path], env)
@@ -5084,9 +5070,7 @@ async fn execute_node_action_native(
     workflow_name, plan, workspace_root, github_ctx, resolved_plan_env, file_commands,
     runner_ctx,
   )
-  let cmd = configured_exec_bin(
-    "ACTION_RUNNER_NODE_BIN", resolved_plan_env, "node",
-  )
+  let cmd = configured_exec_bin("ACTRUN_NODE_BIN", resolved_plan_env, "node")
   let cwd = action.action_path.unwrap_or(resolve_task_cwd(workspace_root, ""))
   let env_args = env_command_args(cmd, [entrypoint], env)
   let (code, stdout, stderr) = @process.collect_output("env", env_args, cwd~)
@@ -5155,7 +5139,7 @@ async fn execute_docker_action_native(
     runner_ctx,
   )
   let docker_bin = configured_exec_bin(
-    "ACTION_RUNNER_DOCKER_BIN", resolved_plan_env, "docker",
+    "ACTRUN_DOCKER_BIN", resolved_plan_env, "docker",
   )
   let workspace_abs = absolute_exec_path(resolve_task_cwd(workspace_root, ""))
   let container_cwd = absolute_exec_path(
@@ -5200,9 +5184,9 @@ async fn execute_docker_action_native(
     "-v",
     workspace_abs + ":" + workspace_abs,
     "-v",
-    absolute_exec_path("_build/action_runner") +
+    absolute_exec_path("_build/actrun") +
     ":" +
-    absolute_exec_path("_build/action_runner"),
+    absolute_exec_path("_build/actrun"),
     "-w",
     container_cwd,
   ]
@@ -5303,14 +5287,14 @@ async fn execute_job_container_node_action_native(
     runner_ctx,
   )
   let docker_bin = configured_exec_bin(
-    "ACTION_RUNNER_DOCKER_BIN", merged_plan_env, "docker",
+    "ACTRUN_DOCKER_BIN", merged_plan_env, "docker",
   )
   let node_bin = resolve_exec_bin_for_workspace(
-    configured_exec_bin("ACTION_RUNNER_NODE_BIN", merged_plan_env, "node"),
+    configured_exec_bin("ACTRUN_NODE_BIN", merged_plan_env, "node"),
     workspace_root,
   )
   let workspace_abs = absolute_exec_path(resolve_task_cwd(workspace_root, ""))
-  let build_root = absolute_exec_path("_build/action_runner")
+  let build_root = absolute_exec_path("_build/actrun")
   let container_cwd = absolute_exec_path(
     action.action_path.unwrap_or(resolve_task_cwd(workspace_root, "")),
   )
@@ -5419,10 +5403,10 @@ async fn execute_job_container_run_native(
     runner_ctx,
   )
   let docker_bin = configured_exec_bin(
-    "ACTION_RUNNER_DOCKER_BIN", merged_plan_env, "docker",
+    "ACTRUN_DOCKER_BIN", merged_plan_env, "docker",
   )
   let workspace_abs = absolute_exec_path(resolve_task_cwd(workspace_root, ""))
-  let build_root = absolute_exec_path("_build/action_runner")
+  let build_root = absolute_exec_path("_build/actrun")
   let container_cwd = absolute_exec_path(
     resolve_task_cwd(workspace_root, resolved_working_directory),
   )
@@ -5699,7 +5683,7 @@ fn default_runner_env(
     "RUNNER_ENVIRONMENT": runner_context.get("environment").unwrap_or(""),
     "RUNNER_OS": runner_context.get("os").unwrap_or(""),
     "RUNNER_TEMP": runner_context.get("temp").unwrap_or(""),
-    "ACTION_RUNNER_LOCAL": "true",
+    "ACTRUN_LOCAL": "true",
   }
   match github_context.get("action_path") {
     Some(value) if value.length() > 0 =>
@@ -6008,9 +5992,7 @@ pub async fn execute_lowered_native(
               )
               let vars_ctx = runner_vars_context()
               let runner_ctx = runner_context(plan, workspace_root)
-              let job_env : Map[String, String] = {
-                "ACTION_RUNNER_LOCAL": "true",
-              }
+              let job_env : Map[String, String] = { "ACTRUN_LOCAL": "true" }
               let value = evaluate_if_condition(
                 lowered.plan.job_if_conditions
                 .get(plan.job_id)
@@ -6119,11 +6101,8 @@ pub async fn execute_lowered_native(
             )
             let vars_ctx = runner_vars_context()
             let runner_ctx = runner_context(plan, workspace_root)
-            let step_env = merge_runner_env(
-              plan.env,
-              current_state.env_updates,
-            )
-            step_env["ACTION_RUNNER_LOCAL"] = "true"
+            let step_env = merge_runner_env(plan.env, current_state.env_updates)
+            step_env["ACTRUN_LOCAL"] = "true"
             evaluate_if_condition(
               plan.if_condition,
               new_if_condition_context(
@@ -6510,12 +6489,8 @@ pub fn cleanup_run_temp_files(workspace_root : String) -> Unit {
   let workspace_key = sanitize_task_id(
     absolute_exec_path(resolve_task_cwd(workspace_root, "")),
   )
-  cleanup_dir_entries_by_prefix(
-    "_build/action_runner/file_commands", workspace_key,
-  )
-  cleanup_dir_entries_by_prefix(
-    "_build/action_runner/runner_temp", workspace_key,
-  )
+  cleanup_dir_entries_by_prefix("_build/actrun/file_commands", workspace_key)
+  cleanup_dir_entries_by_prefix("_build/actrun/runner_temp", workspace_key)
 }
 
 ///|

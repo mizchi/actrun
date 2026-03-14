@@ -1,4 +1,4 @@
-# action_runner
+# actrun
 
 A local GitHub Actions runner built with [MoonBit](https://docs.moonbitlang.com). Run and debug GitHub Actions workflows locally with a `gh`-compatible CLI.
 
@@ -15,23 +15,23 @@ moon build src/main --target native
 
 ```bash
 # Run a workflow locally
-action_runner workflow run .github/workflows/ci.yml
+actrun workflow run .github/workflows/ci.yml
 
 # Show execution plan without running
-action_runner workflow run .github/workflows/ci.yml --dry-run
+actrun workflow run .github/workflows/ci.yml --dry-run
 
 # Skip actions not needed locally (e.g. setup tools already installed)
-action_runner workflow run .github/workflows/ci.yml \
+actrun workflow run .github/workflows/ci.yml \
   --skip-action actions/checkout \
   --skip-action extractions/setup-just
 
 # Run in isolated worktree
-action_runner workflow run .github/workflows/ci.yml \
+actrun workflow run .github/workflows/ci.yml \
   --workspace-mode worktree
 
 # View results
-action_runner run view run-1
-action_runner run logs run-1 --task build/test
+actrun run view run-1
+actrun run logs run-1 --task build/test
 ```
 
 ## CLI Reference
@@ -39,29 +39,29 @@ action_runner run logs run-1 --task build/test
 ### Workflow Commands
 
 ```bash
-action_runner workflow list                 # List workflows in .github/workflows/
-action_runner workflow run <workflow.yml>    # Run a workflow locally
+actrun workflow list                 # List workflows in .github/workflows/
+actrun workflow run <workflow.yml>    # Run a workflow locally
 ```
 
 ### Run Commands
 
 ```bash
-action_runner run list                      # List past runs
-action_runner run view <run-id>             # View run summary
-action_runner run view <run-id> --json      # View run as JSON
-action_runner run watch <run-id>            # Watch until completion
-action_runner run logs <run-id>             # View all logs
-action_runner run logs <run-id> --task <id> # View specific task log
-action_runner run download <run-id>         # Download all artifacts
+actrun run list                      # List past runs
+actrun run view <run-id>             # View run summary
+actrun run view <run-id> --json      # View run as JSON
+actrun run watch <run-id>            # Watch until completion
+actrun run logs <run-id>             # View all logs
+actrun run logs <run-id> --task <id> # View specific task log
+actrun run download <run-id>         # Download all artifacts
 ```
 
 ### Artifact & Cache Commands
 
 ```bash
-action_runner artifact list <run-id>                          # List artifacts
-action_runner artifact download <run-id> --name <name>        # Download artifact
-action_runner cache list                                      # List cache entries
-action_runner cache prune --key <key>                         # Delete cache entry
+actrun artifact list <run-id>                          # List artifacts
+actrun artifact download <run-id> --name <name>        # Download artifact
+actrun cache list                                      # List cache entries
+actrun cache prune --key <key>                         # Delete cache entry
 ```
 
 ### Workflow Run Flags
@@ -111,29 +111,29 @@ action_runner cache prune --key <key>                         # Delete cache ent
 
 ## Local-Only Execution Flag
 
-action_runner sets `ACTION_RUNNER_LOCAL=true` in the execution environment. Use this in `if:` conditions to skip steps locally or run steps only locally:
+actrun sets `ACTRUN_LOCAL=true` in the execution environment. Use this in `if:` conditions to skip steps locally or run steps only locally:
 
 ```yaml
 steps:
   # Skipped when running locally (runs on GitHub Actions)
   - uses: actions/checkout@v5
-    if: ${{ !env.ACTION_RUNNER_LOCAL }}
+    if: ${{ !env.ACTRUN_LOCAL }}
 
   # Runs only locally (skipped on GitHub Actions)
   - run: echo "local debug info"
-    if: ${{ env.ACTION_RUNNER_LOCAL }}
+    if: ${{ env.ACTRUN_LOCAL }}
 ```
 
-On GitHub Actions, `ACTION_RUNNER_LOCAL` is not set, so `!env.ACTION_RUNNER_LOCAL` evaluates to `true` and all steps run normally.
+On GitHub Actions, `ACTRUN_LOCAL` is not set, so `!env.ACTRUN_LOCAL` evaluates to `true` and all steps run normally.
 
 ## Secrets & Variables
 
 ```bash
 # Provide secrets via environment variables
-ACTION_RUNNER_SECRET_MY_TOKEN=xxx action_runner workflow run ci.yml
+ACTRUN_SECRET_MY_TOKEN=xxx actrun workflow run ci.yml
 
 # Provide variables
-ACTION_RUNNER_VAR_MY_VAR=value action_runner workflow run ci.yml
+ACTRUN_VAR_MY_VAR=value actrun workflow run ci.yml
 ```
 
 Secrets are automatically masked in stdout, stderr, logs, and run store. The `::add-mask::` workflow command is also supported.
@@ -142,18 +142,18 @@ Secrets are automatically masked in stdout, stderr, logs, and run store. The `::
 
 | Variable | Description |
 |----------|-------------|
-| `ACTION_RUNNER_SECRET_<NAME>` | `${{ secrets.<name> }}` |
-| `ACTION_RUNNER_VAR_<NAME>` | `${{ vars.<name> }}` |
-| `ACTION_RUNNER_NODE_BIN` | Node.js binary path |
-| `ACTION_RUNNER_DOCKER_BIN` | Docker binary path |
-| `ACTION_RUNNER_WASM_BIN` | Wasm runtime binary (default: `wasmtime`) |
-| `ACTION_RUNNER_GIT_BIN` | Git binary path |
-| `ACTION_RUNNER_GITHUB_BASE_URL` | GitHub API base URL |
-| `ACTION_RUNNER_ARTIFACT_ROOT` | Artifact storage root |
-| `ACTION_RUNNER_CACHE_ROOT` | Cache storage root |
-| `ACTION_RUNNER_GITHUB_ACTION_CACHE_ROOT` | Remote action cache root |
-| `ACTION_RUNNER_ACTION_REGISTRY_ROOT` | Custom registry root |
-| `ACTION_RUNNER_WASM_ACTION_ROOT` | Wasm action module root |
+| `ACTRUN_SECRET_<NAME>` | `${{ secrets.<name> }}` |
+| `ACTRUN_VAR_<NAME>` | `${{ vars.<name> }}` |
+| `ACTRUN_NODE_BIN` | Node.js binary path |
+| `ACTRUN_DOCKER_BIN` | Docker binary path |
+| `ACTRUN_WASM_BIN` | Wasm runtime binary (default: `wasmtime`) |
+| `ACTRUN_GIT_BIN` | Git binary path |
+| `ACTRUN_GITHUB_BASE_URL` | GitHub API base URL |
+| `ACTRUN_ARTIFACT_ROOT` | Artifact storage root |
+| `ACTRUN_CACHE_ROOT` | Cache storage root |
+| `ACTRUN_GITHUB_ACTION_CACHE_ROOT` | Remote action cache root |
+| `ACTRUN_ACTION_REGISTRY_ROOT` | Custom registry root |
+| `ACTRUN_WASM_ACTION_ROOT` | Wasm action module root |
 
 ## Workflow Features
 

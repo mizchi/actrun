@@ -68,7 +68,7 @@
 - `event-cli-overrides`: `--event` より CLI flag (`--ref` / `--repository` / `--after` / `--changed`) が優先される
 - `event-head-commit-fallback`: `commits` が無くても `head_commit` から changed paths を読んで trigger 判定する
 - `docker-image-basic`: direct `docker://...` action を native docker adapter で実行する
-- `custom-registry-node-action`: manifest-backed custom registry `node20` action を `ACTION_RUNNER_ACTION_REGISTRY_ROOT` 配下から解決して実行する
+- `custom-registry-node-action`: manifest-backed custom registry `node20` action を `ACTRUN_ACTION_REGISTRY_ROOT` 配下から解決して実行する
 - `wasm-action-basic`: `wasm://...` action が file-based Wasm module と fake runner 経由で実行される
 - `remote-composite-fetch`: GitHub repo action prefetch + remote composite action
 - `remote-composite-nested-prefetch`: remote composite action が nested remote action を再帰 prefetch する

@@ -18,8 +18,8 @@ workflow_dst="$workspace_root/.github/workflows/$workflow_file"
 event_path="$workspace_root/event.json"
 cli_bin="$repo_root/_build/native/debug/build/main/main.exe"
 event_added_path=".github/workflows/$workflow_file"
-compat_key="${ACTION_RUNNER_COMPAT_CACHE_KEY:-}"
-compat_node_version="${ACTION_RUNNER_COMPAT_NODE_VERSION:-}"
+compat_key="${ACTRUN_COMPAT_CACHE_KEY:-}"
+compat_node_version="${ACTRUN_COMPAT_NODE_VERSION:-}"
 seed_license=0
 seed_git_history=0
 extra_workflow_copy=""
@@ -191,7 +191,7 @@ if [ ! -x "$cli_bin" ]; then
 fi
 
 if [ "$workflow_file" = "compat-workflow-call-secrets-inherit.yml" ]; then
-  ACTION_RUNNER_SECRET_COMPAT_SECRET="compat-local-token" \
+  ACTRUN_SECRET_COMPAT_SECRET="compat-local-token" \
     "$cli_bin" "$workflow_dst" --event "$event_path" >/dev/null
 else
   "$cli_bin" "$workflow_dst" --event "$event_path" >/dev/null

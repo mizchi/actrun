@@ -16,7 +16,7 @@
 - unit/docs/E2E coverage for job `services` + job `container` networking
 - Added backend capability model (`host` / `docker` / `wasm`) to `ResolvedAction`
 - resolver / lowering coverage for backend capability assignment on builtin / node / docker actions
-- Minimal support for resolving manifest-backed custom registry actions (`bit://...`) from `ACTION_RUNNER_ACTION_REGISTRY_ROOT/<scheme>/<name>/<version>` and lowering/executing composite / `node*` / `runs.using: docker` backends
+- Minimal support for resolving manifest-backed custom registry actions (`bit://...`) from `ACTRUN_ACTION_REGISTRY_ROOT/<scheme>/<name>/<version>` and lowering/executing composite / `node*` / `runs.using: docker` backends
 - unit/E2E coverage for custom registry node action resolution and execution
 - Minimal support for `required` / implicit default / type validation of reusable workflow `workflow_call.inputs`
 - docs/unit/E2E coverage for typed reusable workflow inputs
@@ -24,33 +24,33 @@
 - Minimal support for reusable workflow caller matrix + `workflow_call.outputs` aggregation
 - docs/unit/E2E coverage for matrix caller reusable workflow execution and `workflow_call.outputs` aggregation
 - all vendored upstream fixtures are now validated for `supported` / `unsupported` / `known_diff` classification metadata in compat tests
-- Added minimal `--run-root` and `--workspace-mode` contract to CLI, with foundation for saving local run records to `_build/action_runner/runs/run-<n>/run.json` and `tasks/*.stdout.log|stderr.log|summary.md`
+- Added minimal `--run-root` and `--workspace-mode` contract to CLI, with foundation for saving local run records to `_build/actrun/runs/run-<n>/run.json` and `tasks/*.stdout.log|stderr.log|summary.md`
 - Added job state and artifact/cache index to `run.json`
-- Added `started_at_ms` / `finished_at_ms` and `jobs.json` / `artifacts.json` / `caches.json` sidecars to run store, fixing the `_build/action_runner/runs/<run-id>/` layout
+- Added `started_at_ms` / `finished_at_ms` and `jobs.json` / `artifacts.json` / `caches.json` sidecars to run store, fixing the `_build/actrun/runs/<run-id>/` layout
 - whitebox/E2E coverage for run store persistence, task log persistence, artifact/cache indexing, and workspace-mode parsing
-- Added minimal read-only subcommand `action_runner run view <run-id>` and `action_runner run logs <run-id>`
+- Added minimal read-only subcommand `actrun run view <run-id>` and `actrun run logs <run-id>`
 - whitebox/E2E coverage for run store readback via `run view` / `run logs`
-- Added minimal read-only subcommand `action_runner run list`
+- Added minimal read-only subcommand `actrun run list`
 - whitebox/E2E coverage for run store listing via `run list`
-- Added minimal read-only subcommand `action_runner run watch <run-id>`
+- Added minimal read-only subcommand `actrun run watch <run-id>`
 - whitebox/E2E coverage for run store polling via `run watch`
-- Added minimal read-only subcommand `action_runner run download <run-id>`
+- Added minimal read-only subcommand `actrun run download <run-id>`
 - whitebox/E2E coverage for downloading all artifacts from a persisted run store
-- Added minimal read-only subcommands `action_runner artifact list <run-id>` and `action_runner artifact download <run-id>`
+- Added minimal read-only subcommands `actrun artifact list <run-id>` and `actrun artifact download <run-id>`
 - whitebox/E2E coverage for artifact index listing and artifact download from persisted run store
-- Added minimal read-only subcommand `action_runner cache list`
+- Added minimal read-only subcommand `actrun cache list`
 - whitebox/E2E coverage for cache store listing across workspace roots
-- Added minimal delete subcommand `action_runner cache prune --key <cache-key>`
+- Added minimal delete subcommand `actrun cache prune --key <cache-key>`
 - whitebox/E2E coverage for cache store pruning by exact key
-- Added minimal read-only subcommand `action_runner workflow list --repo <repo_root>`
+- Added minimal read-only subcommand `actrun workflow list --repo <repo_root>`
 - whitebox/E2E coverage for listing `.github/workflows/*.yml|*.yaml` with file-stem fallback for unnamed workflows
-- Added minimal subcommand `action_runner workflow run <workflow>`
+- Added minimal subcommand `actrun workflow run <workflow>`
 - Unified positional execution and `workflow run` into the same code path
 - Added `--json` support for `run logs` / `run download` / `artifact download`
 - Added `exit_code` to `run.json` and fixed non-zero exit for `run watch` on failed/cancelled runs
 - Added `--artifact-root`, `--cache-root`, `--github-action-cache-root`, `--registry-root`, `--wasm-action-root` to CLI, allowing local injection points to be controlled via flags instead of env overrides
 - black-box coverage for CLI root override flags via run store / remote reusable workflow / custom registry / wasm scenarios
-- Minimal adapter for resolving/lowering `wasm://...` actions as Wasm backend contract and executing file-based Wasm modules via `ACTION_RUNNER_WASM_BIN` + `ACTION_RUNNER_WASM_ACTION_ROOT`
+- Minimal adapter for resolving/lowering `wasm://...` actions as Wasm backend contract and executing file-based Wasm modules via `ACTRUN_WASM_BIN` + `ACTRUN_WASM_ACTION_ROOT`
 - unit/E2E coverage for Wasm runner adapter and missing-module failure
 - Added `restore-keys` prefix hit support for `actions/cache@*` / `actions/cache/restore@*`
 - `compat-cache-restore-keys.yml` and local/GitHub-hosted cache restore-keys compat coverage
@@ -70,9 +70,9 @@
 - Minimal subset of expression functions (`contains`, `startsWith`, `endsWith`, `fromJSON`, `toJSON`, `hashFiles`)
 - docs/E2E coverage for `fromJSON()` / `toJSON()` and `contains(fromJSON(...), ...)`
 - docs/E2E coverage for `hashFiles()` in script/env and step `if:`
-- minimal `${{ vars.* }}` support backed by `ACTION_RUNNER_VAR_<NAME>`
+- minimal `${{ vars.* }}` support backed by `ACTRUN_VAR_<NAME>`
 - docs/E2E coverage for `${{ vars.* }}` in script/env and step `if:`
-- minimal `${{ secrets.* }}` support backed by `ACTION_RUNNER_SECRET_<NAME>`
+- minimal `${{ secrets.* }}` support backed by `ACTRUN_SECRET_<NAME>`
 - docs/E2E coverage for `${{ secrets.* }}` in script/env
 - workflow/job `permissions` parse + contract support with explicit lowering reject in MVP
 - docs/E2E coverage for unsupported `permissions`
@@ -139,7 +139,7 @@
 - file-based shell execution for `bash` / `sh` / `pwsh` and `{0}` custom shell templates
 - nested `uses` support inside local composite actions for local actions and builtin checkout
 - native GitHub action prefetch that clones `owner/repo[/path]@ref` into the action cache before lowering
-- workspace-aware expansion for cached GitHub repo composite actions under `_build/action_runner/github_actions`
+- workspace-aware expansion for cached GitHub repo composite actions under `_build/actrun/github_actions`
 - native execution for cached / prefetched GitHub repo `node*` actions via `runs.main`
 - native docker execution for `docker://...` actions and cached / prefetched GitHub repo `runs.using: docker` actions
 - deferred `post` cleanup scheduling and `GITHUB_STATE` sharing for cached / prefetched GitHub repo `node*` actions

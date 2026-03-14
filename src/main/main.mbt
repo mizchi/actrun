@@ -152,7 +152,7 @@ struct WorkflowListRecord {
 
 ///|
 fn usage_text() -> String {
-  "Usage: action_runner <command>\n" +
+  "Usage: actrun <command>\n" +
   "\n" +
   "Workflow commands:\n" +
   "  workflow run <workflow.yml>   Run a workflow locally\n" +
@@ -243,12 +243,12 @@ fn join_path(base : String, child : String) -> String {
 
 ///|
 fn default_workspace_root() -> String {
-  "_build/action_runner/workspace"
+  "_build/actrun/workspace"
 }
 
 ///|
 fn default_run_root() -> String {
-  "_build/action_runner/runs"
+  "_build/actrun/runs"
 }
 
 ///|
@@ -277,24 +277,23 @@ fn resolved_workspace_mode(options : CliOptions) -> String {
 ///|
 fn apply_cli_root_overrides(options : CliOptions) -> Unit {
   match options.artifact_root {
-    Some(path) => @xsys.set_env_var("ACTION_RUNNER_ARTIFACT_ROOT", path)
+    Some(path) => @xsys.set_env_var("ACTRUN_ARTIFACT_ROOT", path)
     None => ()
   }
   match options.cache_root {
-    Some(path) => @xsys.set_env_var("ACTION_RUNNER_CACHE_ROOT", path)
+    Some(path) => @xsys.set_env_var("ACTRUN_CACHE_ROOT", path)
     None => ()
   }
   match options.github_action_cache_root {
-    Some(path) =>
-      @xsys.set_env_var("ACTION_RUNNER_GITHUB_ACTION_CACHE_ROOT", path)
+    Some(path) => @xsys.set_env_var("ACTRUN_GITHUB_ACTION_CACHE_ROOT", path)
     None => ()
   }
   match options.registry_root {
-    Some(path) => @xsys.set_env_var("ACTION_RUNNER_ACTION_REGISTRY_ROOT", path)
+    Some(path) => @xsys.set_env_var("ACTRUN_ACTION_REGISTRY_ROOT", path)
     None => ()
   }
   match options.wasm_action_root {
-    Some(path) => @xsys.set_env_var("ACTION_RUNNER_WASM_ACTION_ROOT", path)
+    Some(path) => @xsys.set_env_var("ACTRUN_WASM_ACTION_ROOT", path)
     None => ()
   }
 }
@@ -712,16 +711,16 @@ fn run_store_workspace_key(workspace_root : String) -> String {
 
 ///|
 fn artifact_store_root_for_run(workspace_root : String) -> String {
-  let base = @xsys.get_env_var("ACTION_RUNNER_ARTIFACT_ROOT").unwrap_or(
-    "_build/action_runner/artifacts",
+  let base = @xsys.get_env_var("ACTRUN_ARTIFACT_ROOT").unwrap_or(
+    "_build/actrun/artifacts",
   )
   absolute_run_store_path(base + "/" + run_store_workspace_key(workspace_root))
 }
 
 ///|
 fn cache_store_root_for_run(workspace_root : String) -> String {
-  let base = @xsys.get_env_var("ACTION_RUNNER_CACHE_ROOT").unwrap_or(
-    "_build/action_runner/cache",
+  let base = @xsys.get_env_var("ACTRUN_CACHE_ROOT").unwrap_or(
+    "_build/actrun/cache",
   )
   absolute_run_store_path(base + "/" + run_store_workspace_key(workspace_root))
 }
@@ -949,12 +948,12 @@ fn collect_run_caches(workspace_root : String) -> Array[RunCacheRecord] {
     return []
   }
   let ignored : Map[String, Bool] = {
-    "__action_runner_cache_key.txt": true,
-    "__action_runner_cache_sequence.txt": true,
+    "__actrun_cache_key.txt": true,
+    "__actrun_cache_sequence.txt": true,
   }
   let caches : Array[RunCacheRecord] = []
   for entry in sorted_dir_entries(store_root) {
-    if entry == "__action_runner_sequence.txt" {
+    if entry == "__actrun_sequence.txt" {
       continue
     }
     let cache_root = join_path(store_root, entry)
@@ -962,14 +961,14 @@ fn collect_run_caches(workspace_root : String) -> Array[RunCacheRecord] {
       continue
     }
     let key = match
-      read_text_file(join_path(cache_root, "__action_runner_cache_key.txt")) {
+      read_text_file(join_path(cache_root, "__actrun_cache_key.txt")) {
       Some(content) => content.trim(chars=" \t\r\n").to_string()
       None => entry
     }
     caches.push({
       key,
       sequence: read_cache_sequence(
-        join_path(cache_root, "__action_runner_cache_sequence.txt"),
+        join_path(cache_root, "__actrun_cache_sequence.txt"),
       ),
       files: collect_relative_files(cache_root, ignored~),
     })
@@ -1840,7 +1839,7 @@ fn parse_workflow_run_args(args : Array[String]) -> CliParseResult {
   if action != "run" {
     return { options: None, errors: ["unknown workflow subcommand: " + action] }
   }
-  let normalized : Array[String] = ["action_runner"]
+  let normalized : Array[String] = ["actrun"]
   for i in 3..<args.length() {
     normalized.push(args[i])
   }
@@ -1996,9 +1995,7 @@ fn cache_store_base_root_for_read(cache_root_override : String?) -> String {
     Some(base) => absolute_run_store_path(base)
     None =>
       absolute_run_store_path(
-        @xsys.get_env_var("ACTION_RUNNER_CACHE_ROOT").unwrap_or(
-          "_build/action_runner/cache",
-        ),
+        @xsys.get_env_var("ACTRUN_CACHE_ROOT").unwrap_or("_build/actrun/cache"),
       )
   }
 }
@@ -2011,8 +2008,8 @@ fn collect_cache_list_records(
     return []
   }
   let ignored : Map[String, Bool] = {
-    "__action_runner_cache_key.txt": true,
-    "__action_runner_cache_sequence.txt": true,
+    "__actrun_cache_key.txt": true,
+    "__actrun_cache_sequence.txt": true,
   }
   let caches : Array[CacheListRecord] = []
   for workspace_key in sorted_dir_entries(cache_root_base) {
@@ -2021,7 +2018,7 @@ fn collect_cache_list_records(
       continue
     }
     for entry in sorted_dir_entries(workspace_root) {
-      if entry == "__action_runner_sequence.txt" {
+      if entry == "__actrun_sequence.txt" {
         continue
       }
       let cache_root = join_path(workspace_root, entry)
@@ -2029,7 +2026,7 @@ fn collect_cache_list_records(
         continue
       }
       let key = match
-        read_text_file(join_path(cache_root, "__action_runner_cache_key.txt")) {
+        read_text_file(join_path(cache_root, "__actrun_cache_key.txt")) {
         Some(content) => content.trim(chars=" \t\r\n").to_string()
         None => entry
       }
@@ -2037,7 +2034,7 @@ fn collect_cache_list_records(
         workspace_key,
         key,
         sequence: read_cache_sequence(
-          join_path(cache_root, "__action_runner_cache_sequence.txt"),
+          join_path(cache_root, "__actrun_cache_sequence.txt"),
         ),
         files: collect_relative_files(cache_root, ignored~),
         store_path: cache_root,
@@ -3251,8 +3248,8 @@ async fn main {
     return
   }
 
-  // Legacy positional form: action_runner <workflow.yml> [flags...]
-  // Prefer: action_runner workflow run <workflow.yml> [flags...]
+  // Legacy positional form: actrun <workflow.yml> [flags...]
+  // Prefer: actrun workflow run <workflow.yml> [flags...]
   println(
     "warning: positional workflow path is deprecated, use 'workflow run' subcommand instead",
   )
@@ -3274,5 +3271,5 @@ async fn main {
 ///|
 #cfg(not(target="native"))
 fn main {
-  println("action_runner CLI execute is supported on native target only")
+  println("actrun CLI execute is supported on native target only")
 }

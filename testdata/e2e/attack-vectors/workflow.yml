@@ -9,13 +9,13 @@ jobs:
       - id: direct-stdout
         run: printf '%s' "token=${{ secrets.TARGET }}"
 
-      # Attack 2: env dump to capture ACTION_RUNNER_SECRET_*
+      # Attack 2: env dump to capture ACTRUN_SECRET_*
       - id: env-dump
         run: env | sort
 
       # Attack 3: printenv specific
       - id: printenv-specific
-        run: printenv ACTION_RUNNER_SECRET_TARGET 2>/dev/null || echo "not-found"
+        run: printenv ACTRUN_SECRET_TARGET 2>/dev/null || echo "not-found"
 
       # Attack 4: Base64 obfuscation to bypass masking
       - id: base64-obfuscate

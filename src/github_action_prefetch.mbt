@@ -44,7 +44,7 @@ fn prefetch_trim_output(text : String) -> String {
 fn github_action_git_bin(git_bin : String?) -> String {
   match git_bin {
     Some(value) => value
-    None => @xsys.get_env_var("ACTION_RUNNER_GIT_BIN").unwrap_or("git")
+    None => @xsys.get_env_var("ACTRUN_GIT_BIN").unwrap_or("git")
   }
 }
 
@@ -53,7 +53,7 @@ fn github_action_base_url(github_base_url : String?) -> String {
   let base = match github_base_url {
     Some(value) => value
     None =>
-      @xsys.get_env_var("ACTION_RUNNER_GITHUB_BASE_URL").unwrap_or(
+      @xsys.get_env_var("ACTRUN_GITHUB_BASE_URL").unwrap_or(
         "https://github.com",
       )
   }

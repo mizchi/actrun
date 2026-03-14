@@ -1,6 +1,6 @@
 # compat testdata
 
-`action_runner` の compat fixture 置き場。
+`actrun` の compat fixture 置き場。
 
 各 fixture directory は最低でも次を持つ。
 

@@ -1,5 +1,5 @@
 import {
-  "mizchi/action_runner" @ar,
+  "mizchi/actrun" @ar,
   "moonbitlang/async",
   "moonbitlang/async/process" @process,
   "moonbitlang/core/env" @env,

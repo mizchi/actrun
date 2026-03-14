@@ -4,7 +4,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      ACTION_RUNNER_WASM_ACTION_ROOT: wasm-actions
+      ACTRUN_WASM_ACTION_ROOT: wasm-actions
     steps:
       - id: module
         uses: wasm://std/echo@v1

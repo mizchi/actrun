@@ -217,7 +217,7 @@ async fn test_support_prepare_fake_docker_bin(
     "  exit 0\n" +
     "fi\n" +
     "if [ \"$cmd\" = inspect ]; then\n" +
-    "  sequence=\"${ACTION_RUNNER_FAKE_DOCKER_INSPECT_SEQUENCE:-" +
+    "  sequence=\"${ACTRUN_FAKE_DOCKER_INSPECT_SEQUENCE:-" +
     inspect_sequence +
     "}\"\n" +
     "  count=$(cat '" +

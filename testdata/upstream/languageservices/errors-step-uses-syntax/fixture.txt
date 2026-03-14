@@ -4,5 +4,5 @@ mode=known_diff
 kind=lower
 url=https://raw.githubusercontent.com/actions/languageservices/main/workflow-parser/testdata/reader/errors-step-uses-syntax.yml
 added_at=2026-03-12
-notes=upstream rejects invalid uses syntax earlier; action_runner accepts custom schemes and reports a different mix of unsupported and parse errors
+notes=upstream rejects invalid uses syntax earlier; actrun accepts custom schemes and reports a different mix of unsupported and parse errors
 origin=workflow-parser/testdata/reader/errors-step-uses-syntax.yml

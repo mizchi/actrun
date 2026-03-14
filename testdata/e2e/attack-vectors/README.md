@@ -1,13 +1,13 @@
 # Attack Vector Test Workflows
 
-These workflows test secret exfiltration vectors against the action_runner's masking implementation.
+These workflows test secret exfiltration vectors against the actrun's masking implementation.
 
 ## Results
 
 | Vector | Masked | Notes |
 |--------|--------|-------|
 | Direct stdout | Yes | `${{ secrets.* }}` replaced with `***` |
-| env dump | Yes | `ACTION_RUNNER_SECRET_*` values masked |
+| env dump | Yes | `ACTRUN_SECRET_*` values masked |
 | printenv specific | Yes | Direct env var access masked |
 | Base64 encode | **No** | Inherent limitation (same as GitHub Actions) |
 | String reverse | **No** | Inherent limitation (same as GitHub Actions) |

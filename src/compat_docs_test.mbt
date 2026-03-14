@@ -14,9 +14,9 @@ fn compat_docs_cache_store_root(workspace : String) -> String {
     .replace_all(old="/", new="__")
     .replace_all(old=":", new="_")
   if cwd.has_suffix("/") {
-    cwd + "_build/action_runner/cache/" + workspace_key
+    cwd + "_build/actrun/cache/" + workspace_key
   } else {
-    cwd + "/_build/action_runner/cache/" + workspace_key
+    cwd + "/_build/actrun/cache/" + workspace_key
   }
 }
 
@@ -204,11 +204,11 @@ async test "compat docs: local reusable workflow executes callee jobs" {
     copy_fixture=true,
   )
   let prev_secret = compat_docs_set_env_var(
-    "ACTION_RUNNER_SECRET_CALL_TOKEN", "s3cr3t",
+    "ACTRUN_SECRET_CALL_TOKEN", "s3cr3t",
   )
   let lowered = lower_push_workflow_in_workspace(workflow, workspace)
   let report = execute_lowered_native(lowered, workspace_root=workspace)
-  compat_docs_restore_env_var("ACTION_RUNNER_SECRET_CALL_TOKEN", prev_secret)
+  compat_docs_restore_env_var("ACTRUN_SECRET_CALL_TOKEN", prev_secret)
 
   inspect(fixture.id, content="docs-workflow-call-local")
   inspect(lowered.errors, content="[]")
@@ -284,11 +284,11 @@ async test "compat docs: nested local reusable workflow executes callee jobs" {
     copy_fixture=true,
   )
   let prev_secret = compat_docs_set_env_var(
-    "ACTION_RUNNER_SECRET_CALL_TOKEN", "s3cr3t",
+    "ACTRUN_SECRET_CALL_TOKEN", "s3cr3t",
   )
   let lowered = lower_push_workflow_in_workspace(workflow, workspace)
   let report = execute_lowered_native(lowered, workspace_root=workspace)
-  compat_docs_restore_env_var("ACTION_RUNNER_SECRET_CALL_TOKEN", prev_secret)
+  compat_docs_restore_env_var("ACTRUN_SECRET_CALL_TOKEN", prev_secret)
 
   inspect(fixture.id, content="docs-workflow-call-nested-local")
   inspect(lowered.errors, content="[]")
@@ -306,12 +306,10 @@ async test "compat docs: local reusable workflow secrets inherit executes callee
     "workflow-call-secrets-inherit",
     copy_fixture=true,
   )
-  let prev_secret = compat_docs_set_env_var(
-    "ACTION_RUNNER_SECRET_TOKEN", "s3cr3t",
-  )
+  let prev_secret = compat_docs_set_env_var("ACTRUN_SECRET_TOKEN", "s3cr3t")
   let lowered = lower_push_workflow_in_workspace(workflow, workspace)
   let report = execute_lowered_native(lowered, workspace_root=workspace)
-  compat_docs_restore_env_var("ACTION_RUNNER_SECRET_TOKEN", prev_secret)
+  compat_docs_restore_env_var("ACTRUN_SECRET_TOKEN", prev_secret)
 
   inspect(fixture.id, content="docs-workflow-call-secrets-inherit")
   inspect(lowered.errors, content="[]")
@@ -360,7 +358,7 @@ async test "compat docs: job container fixture executes run step via docker adap
     workspace, docker_log_path,
   )
   let workflow_env = workflow.env
-  workflow_env["ACTION_RUNNER_DOCKER_BIN"] = docker_bin
+  workflow_env["ACTRUN_DOCKER_BIN"] = docker_bin
   let runtime_workflow = new_workflow(
     workflow.name,
     workflow.jobs,
@@ -436,7 +434,7 @@ async test "compat docs: job services ports context is available in step script,
     workspace, docker_log_path,
   )
   let workflow_env = workflow.env
-  workflow_env["ACTION_RUNNER_DOCKER_BIN"] = docker_bin
+  workflow_env["ACTRUN_DOCKER_BIN"] = docker_bin
   let runtime_workflow = new_workflow(
     workflow.name,
     workflow.jobs,
@@ -482,7 +480,7 @@ async test "compat docs: job container shares docker network with services" {
     workspace, docker_log_path,
   )
   let workflow_env = workflow.env
-  workflow_env["ACTION_RUNNER_DOCKER_BIN"] = docker_bin
+  workflow_env["ACTRUN_DOCKER_BIN"] = docker_bin
   let runtime_workflow = new_workflow(
     workflow.name,
     workflow.jobs,
@@ -1368,9 +1366,7 @@ async test "compat docs: hashFiles is available in step script and env" {
 ///|
 #cfg(target="native")
 async test "compat docs: vars context is available in step script and env" {
-  let previous_color = compat_docs_set_env_var(
-    "ACTION_RUNNER_VAR_COLOR", "ocean",
-  )
+  let previous_color = compat_docs_set_env_var("ACTRUN_VAR_COLOR", "ocean")
   let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
     "context-vars",
   )
@@ -1379,7 +1375,7 @@ async test "compat docs: vars context is available in step script and env" {
     workspace_root=workspace,
     push_event=compat_push_event_fixture(fixture),
   )
-  compat_docs_restore_env_var("ACTION_RUNNER_VAR_COLOR", previous_color)
+  compat_docs_restore_env_var("ACTRUN_VAR_COLOR", previous_color)
   let task = compat_expect_task_report(report, "build/show")
 
   inspect(fixture.id, content="docs-context-vars")
@@ -1391,9 +1387,7 @@ async test "compat docs: vars context is available in step script and env" {
 ///|
 #cfg(target="native")
 async test "compat docs: secrets context is available in step script and env" {
-  let previous_token = compat_docs_set_env_var(
-    "ACTION_RUNNER_SECRET_TOKEN", "s3cr3t",
-  )
+  let previous_token = compat_docs_set_env_var("ACTRUN_SECRET_TOKEN", "s3cr3t")
   let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
     "context-secrets",
   )
@@ -1402,7 +1396,7 @@ async test "compat docs: secrets context is available in step script and env" {
     workspace_root=workspace,
     push_event=compat_push_event_fixture(fixture),
   )
-  compat_docs_restore_env_var("ACTION_RUNNER_SECRET_TOKEN", previous_token)
+  compat_docs_restore_env_var("ACTRUN_SECRET_TOKEN", previous_token)
   let task = compat_expect_task_report(report, "build/show")
 
   inspect(fixture.id, content="docs-context-secrets")
@@ -1604,7 +1598,7 @@ async test "compat docs: step if hashFiles works in push workflow" {
 #cfg(target="native")
 async test "compat docs: step if vars works in push workflow" {
   let previous_enabled = compat_docs_set_env_var(
-    "ACTION_RUNNER_VAR_FEATURE_ENABLED", "true",
+    "ACTRUN_VAR_FEATURE_ENABLED", "true",
   )
   let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
     "steps-if-vars",
@@ -1614,9 +1608,7 @@ async test "compat docs: step if vars works in push workflow" {
     workspace_root=workspace,
     push_event=compat_push_event_fixture(fixture),
   )
-  compat_docs_restore_env_var(
-    "ACTION_RUNNER_VAR_FEATURE_ENABLED", previous_enabled,
-  )
+  compat_docs_restore_env_var("ACTRUN_VAR_FEATURE_ENABLED", previous_enabled)
   let verify = compat_expect_task_report(report, "build/verify")
 
   inspect(fixture.id, content="docs-steps-if-vars")

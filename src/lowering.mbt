@@ -235,8 +235,8 @@ fn rewrite_reusable_step_local_uses(
 ///|
 fn github_action_cache_root() -> String {
   absolute_lowering_path(
-    @xsys.get_env_var("ACTION_RUNNER_GITHUB_ACTION_CACHE_ROOT").unwrap_or(
-      "_build/action_runner/github_actions",
+    @xsys.get_env_var("ACTRUN_GITHUB_ACTION_CACHE_ROOT").unwrap_or(
+      "_build/actrun/github_actions",
     ),
   )
 }
@@ -244,8 +244,8 @@ fn github_action_cache_root() -> String {
 ///|
 fn action_registry_root() -> String {
   absolute_lowering_path(
-    @xsys.get_env_var("ACTION_RUNNER_ACTION_REGISTRY_ROOT").unwrap_or(
-      "_build/action_runner/registry_actions",
+    @xsys.get_env_var("ACTRUN_ACTION_REGISTRY_ROOT").unwrap_or(
+      "_build/actrun/registry_actions",
     ),
   )
 }
@@ -1776,13 +1776,7 @@ fn append_action_task(
   requires_action_started? : Bool = false,
 ) -> Unit {
   tasks.push(
-    @wf.new_task(
-      task_id,
-      job.id,
-      "__action_runner_" + action.kind + "__",
-      needs,
-      env~,
-    ),
+    @wf.new_task(task_id, job.id, "__actrun_" + action.kind + "__", needs, env~),
   )
   task_plans.push(
     new_task_plan(
@@ -2783,12 +2777,7 @@ pub fn lower_push_workflow_in_workspace(
     let barrier_id = finish_task_id(job.id)
     let barrier_needs = task_needs(job, previous_task_id)
     tasks.push(
-      @wf.new_task(
-        barrier_id,
-        job.id,
-        "__action_runner_barrier__",
-        barrier_needs,
-      ),
+      @wf.new_task(barrier_id, job.id, "__actrun_barrier__", barrier_needs),
     )
     task_plans.push(
       new_task_plan(

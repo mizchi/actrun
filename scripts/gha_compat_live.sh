@@ -39,12 +39,12 @@ case "$workflow_file" in
     dispatch_args=(-f "compat_key=$compat_key")
     ;;
   compat-setup-node-basic.yml)
-    compat_node_version="${ACTION_RUNNER_COMPAT_NODE_VERSION:-$(node --version | sed 's/^v//')}"
+    compat_node_version="${ACTRUN_COMPAT_NODE_VERSION:-$(node --version | sed 's/^v//')}"
     dispatch_args=(-f "compat_node_version=$compat_node_version")
     ;;
   compat-setup-node-cache-npm.yml)
     compat_key="compat-setup-node-cache-npm-$(date +%s)-$$"
-    compat_node_version="${ACTION_RUNNER_COMPAT_NODE_VERSION:-$(node --version | sed 's/^v//')}"
+    compat_node_version="${ACTRUN_COMPAT_NODE_VERSION:-$(node --version | sed 's/^v//')}"
     dispatch_args=(
       -f "compat_key=$compat_key"
       -f "compat_node_version=$compat_node_version"
@@ -144,6 +144,6 @@ cli_bin="_build/native/debug/build/main/main.exe"
 if [ ! -x "$cli_bin" ]; then
   moon build src/main --target native >/dev/null
 fi
-ACTION_RUNNER_COMPAT_CACHE_KEY="$compat_key" \
-ACTION_RUNNER_COMPAT_NODE_VERSION="$compat_node_version" \
+ACTRUN_COMPAT_CACHE_KEY="$compat_key" \
+ACTRUN_COMPAT_NODE_VERSION="$compat_node_version" \
   bash scripts/gha_compat_compare.sh "$workflow_file" "$download_dir"

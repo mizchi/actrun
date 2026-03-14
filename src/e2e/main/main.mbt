@@ -678,7 +678,7 @@ async fn e2e_prepare_fake_docker_bin(
     "  exit 0\n" +
     "fi\n" +
     "if [ \"$cmd\" = inspect ]; then\n" +
-    "  sequence=\"${ACTION_RUNNER_FAKE_DOCKER_INSPECT_SEQUENCE:-" +
+    "  sequence=\"${ACTRUN_FAKE_DOCKER_INSPECT_SEQUENCE:-" +
     inspect_sequence +
     "}\"\n" +
     "  count=$(cat '" +
@@ -888,7 +888,7 @@ async fn run_local_push_basic() -> Unit {
       "--event",
       e2e_join_path(workspace, "event.json"),
     ],
-    env={ "ACTION_RUNNER_SECRET_CALL_TOKEN": "s3cr3t" },
+    env={ "ACTRUN_SECRET_CALL_TOKEN": "s3cr3t" },
   )
   e2e_expect_ok(result, scenario)
   e2e_expect_contains(result.stdout, "workflow=e2e-basic", scenario)
@@ -1336,7 +1336,7 @@ async fn run_local_composite_nested() -> Unit {
       "--event",
       e2e_join_path(workspace, "event.json"),
     ],
-    env={ "ACTION_RUNNER_SECRET_CALL_TOKEN": "s3cr3t" },
+    env={ "ACTRUN_SECRET_CALL_TOKEN": "s3cr3t" },
   )
   e2e_expect_ok(result, scenario)
   e2e_expect_contains(result.stdout, "workflow=e2e-composite", scenario)
@@ -1364,7 +1364,7 @@ async fn run_local_reusable_workflow() -> Unit {
       "--event",
       e2e_join_path(workspace, "event.json"),
     ],
-    env={ "ACTION_RUNNER_SECRET_CALL_TOKEN": "s3cr3t" },
+    env={ "ACTRUN_SECRET_CALL_TOKEN": "s3cr3t" },
   )
   e2e_expect_ok(result, scenario)
   e2e_expect_contains(result.stdout, "workflow=e2e-reusable", scenario)
@@ -1392,7 +1392,7 @@ async fn run_local_reusable_workflow_inherit() -> Unit {
       "--event",
       e2e_join_path(workspace, "event.json"),
     ],
-    env={ "ACTION_RUNNER_SECRET_TOKEN": "s3cr3t" },
+    env={ "ACTRUN_SECRET_TOKEN": "s3cr3t" },
   )
   e2e_expect_ok(result, scenario)
   e2e_expect_contains(result.stdout, "workflow=e2e-reusable-inherit", scenario)
@@ -1508,8 +1508,8 @@ async fn run_remote_reusable_workflow() -> Unit {
     log_path,
   )
   let env : Map[String, String] = {
-    "ACTION_RUNNER_GIT_BIN": fake_git,
-    "ACTION_RUNNER_SECRET_CALL_TOKEN": "s3cr3t",
+    "ACTRUN_GIT_BIN": fake_git,
+    "ACTRUN_SECRET_CALL_TOKEN": "s3cr3t",
   }
   let result = e2e_run_cli(
     [
@@ -1554,11 +1554,11 @@ async fn run_remote_reusable_local_action() -> Unit {
     log_path,
   )
   let env : Map[String, String] = {
-    "ACTION_RUNNER_GIT_BIN": fake_git,
-    "ACTION_RUNNER_GITHUB_ACTION_CACHE_ROOT": e2e_join_path(
+    "ACTRUN_GIT_BIN": fake_git,
+    "ACTRUN_GITHUB_ACTION_CACHE_ROOT": e2e_join_path(
       workspace, "github_actions_cache",
     ),
-    "ACTION_RUNNER_SECRET_CALL_TOKEN": "s3cr3t",
+    "ACTRUN_SECRET_CALL_TOKEN": "s3cr3t",
   }
   let result = e2e_run_cli(
     [
@@ -1608,11 +1608,11 @@ async fn run_remote_nested_reusable_workflow() -> Unit {
     log_path,
   )
   let env : Map[String, String] = {
-    "ACTION_RUNNER_GIT_BIN": fake_git,
-    "ACTION_RUNNER_GITHUB_ACTION_CACHE_ROOT": e2e_join_path(
+    "ACTRUN_GIT_BIN": fake_git,
+    "ACTRUN_GITHUB_ACTION_CACHE_ROOT": e2e_join_path(
       workspace, "github_actions_cache",
     ),
-    "ACTION_RUNNER_SECRET_CALL_TOKEN": "s3cr3t",
+    "ACTRUN_SECRET_CALL_TOKEN": "s3cr3t",
   }
   let result = e2e_run_cli(
     [
@@ -1745,7 +1745,7 @@ async fn run_artifact_actions_roundtrip_container() -> Unit {
       "--event",
       e2e_join_path(workspace, "event.json"),
     ],
-    env={ "ACTION_RUNNER_DOCKER_BIN": fake_docker },
+    env={ "ACTRUN_DOCKER_BIN": fake_docker },
   )
   e2e_expect_ok(result, scenario)
   e2e_expect_contains(
@@ -1898,7 +1898,7 @@ async fn run_artifact_merge_multiple() -> Unit {
 #cfg(target="native")
 async fn run_cache_actions_roundtrip() -> Unit {
   let scenario = "cache-actions-roundtrip"
-  e2e_remove_tree("_build/action_runner/cache")
+  e2e_remove_tree("_build/actrun/cache")
   let workspace = e2e_prepare_copied_dir(
     "_build/e2e/workspaces",
     scenario,
@@ -1925,7 +1925,7 @@ async fn run_cache_actions_roundtrip() -> Unit {
 #cfg(target="native")
 async fn run_cache_auto_save_roundtrip() -> Unit {
   let scenario = "cache-auto-save-roundtrip"
-  e2e_remove_tree("_build/action_runner/cache")
+  e2e_remove_tree("_build/actrun/cache")
   let workspace = e2e_prepare_copied_dir(
     "_build/e2e/workspaces",
     scenario,
@@ -1953,7 +1953,7 @@ async fn run_cache_auto_save_roundtrip() -> Unit {
 #cfg(target="native")
 async fn run_cache_auto_save_container() -> Unit {
   let scenario = "cache-auto-save-container"
-  e2e_remove_tree("_build/action_runner/cache")
+  e2e_remove_tree("_build/actrun/cache")
   let workspace = e2e_prepare_copied_dir(
     "_build/e2e/workspaces",
     scenario,
@@ -1967,7 +1967,7 @@ async fn run_cache_auto_save_container() -> Unit {
       "--event",
       e2e_join_path(workspace, "event.json"),
     ],
-    env={ "ACTION_RUNNER_DOCKER_BIN": fake_docker },
+    env={ "ACTRUN_DOCKER_BIN": fake_docker },
   )
   e2e_expect_ok(result, scenario)
   e2e_expect_contains(
@@ -1993,7 +1993,7 @@ async fn run_cache_auto_save_container() -> Unit {
 #cfg(target="native")
 async fn run_cache_restore_keys() -> Unit {
   let scenario = "cache-restore-keys"
-  e2e_remove_tree("_build/action_runner/cache")
+  e2e_remove_tree("_build/actrun/cache")
   let workspace = e2e_prepare_copied_dir(
     "_build/e2e/workspaces",
     scenario,
@@ -2024,7 +2024,7 @@ async fn run_cache_restore_keys() -> Unit {
 #cfg(target="native")
 async fn run_cache_lookup_only() -> Unit {
   let scenario = "cache-lookup-only"
-  e2e_remove_tree("_build/action_runner/cache")
+  e2e_remove_tree("_build/actrun/cache")
   let workspace = e2e_prepare_copied_dir(
     "_build/e2e/workspaces",
     scenario,
@@ -2051,7 +2051,7 @@ async fn run_cache_lookup_only() -> Unit {
 #cfg(target="native")
 async fn run_cache_fail_on_cache_miss() -> Unit {
   let scenario = "cache-fail-on-cache-miss"
-  e2e_remove_tree("_build/action_runner/cache")
+  e2e_remove_tree("_build/actrun/cache")
   let workspace = e2e_prepare_copied_dir(
     "_build/e2e/workspaces",
     scenario,
@@ -2251,7 +2251,7 @@ async fn run_checkout_container() -> Unit {
       "--event",
       e2e_join_path(workspace, "event.json"),
     ],
-    env={ "ACTION_RUNNER_DOCKER_BIN": fake_docker },
+    env={ "ACTRUN_DOCKER_BIN": fake_docker },
   )
   e2e_expect_ok(result, scenario)
   e2e_expect_contains(
@@ -2359,7 +2359,7 @@ async fn run_setup_node_container() -> Unit {
       "--event",
       e2e_join_path(workspace, "event.json"),
     ],
-    env={ "ACTION_RUNNER_DOCKER_BIN": fake_docker },
+    env={ "ACTRUN_DOCKER_BIN": fake_docker },
   )
   e2e_expect_ok(result, scenario)
   e2e_expect_contains(
@@ -2508,10 +2508,7 @@ async fn run_expression_vars() -> Unit {
       "--event",
       e2e_join_path(workspace, "event.json"),
     ],
-    env={
-      "ACTION_RUNNER_VAR_COLOR": "ocean",
-      "ACTION_RUNNER_VAR_FEATURE_ENABLED": "true",
-    },
+    env={ "ACTRUN_VAR_COLOR": "ocean", "ACTRUN_VAR_FEATURE_ENABLED": "true" },
   )
   e2e_expect_ok(result, scenario)
   e2e_expect_contains(result.stdout, "workflow=e2e-expression-vars", scenario)
@@ -2546,7 +2543,7 @@ async fn run_expression_secrets() -> Unit {
       "--event",
       e2e_join_path(workspace, "event.json"),
     ],
-    env={ "ACTION_RUNNER_SECRET_TOKEN": "s3cr3t" },
+    env={ "ACTRUN_SECRET_TOKEN": "s3cr3t" },
   )
   e2e_expect_ok(result, scenario)
   e2e_expect_contains(
@@ -3053,7 +3050,7 @@ async fn run_job_container_basic() -> Unit {
   let docker_log_path = e2e_join_path(workspace, "docker.log")
   let fake_docker = e2e_prepare_fake_docker_bin(workspace, docker_log_path)
   let result = e2e_run_cli([e2e_join_path(workspace, "workflow.yml")], env={
-    "ACTION_RUNNER_DOCKER_BIN": fake_docker,
+    "ACTRUN_DOCKER_BIN": fake_docker,
   })
   e2e_expect_ok(result, scenario)
   e2e_expect_contains(result.stdout, "workflow=job-container-basic", scenario)
@@ -3089,9 +3086,9 @@ async fn run_job_container_node_action() -> Unit {
   let docker_log_path = e2e_join_path(workspace, "docker.log")
   let fake_docker = e2e_prepare_fake_docker_bin(workspace, docker_log_path)
   let result = e2e_run_cli([e2e_join_path(workspace, "workflow.yml")], env={
-    "ACTION_RUNNER_DOCKER_BIN": fake_docker,
-    "ACTION_RUNNER_GITHUB_ACTION_CACHE_ROOT": cache_root,
-    "ACTION_RUNNER_NODE_BIN": fake_node,
+    "ACTRUN_DOCKER_BIN": fake_docker,
+    "ACTRUN_GITHUB_ACTION_CACHE_ROOT": cache_root,
+    "ACTRUN_NODE_BIN": fake_node,
   })
   e2e_expect_ok(result, scenario)
   e2e_expect_contains(
@@ -3137,8 +3134,8 @@ async fn run_job_container_docker_action() -> Unit {
   let docker_log_path = e2e_join_path(workspace, "docker.log")
   let fake_docker = e2e_prepare_fake_docker_bin(workspace, docker_log_path)
   let result = e2e_run_cli([e2e_join_path(workspace, "workflow.yml")], env={
-    "ACTION_RUNNER_DOCKER_BIN": fake_docker,
-    "ACTION_RUNNER_GITHUB_ACTION_CACHE_ROOT": cache_root,
+    "ACTRUN_DOCKER_BIN": fake_docker,
+    "ACTRUN_GITHUB_ACTION_CACHE_ROOT": cache_root,
   })
   e2e_expect_ok(result, scenario)
   e2e_expect_contains(
@@ -3181,7 +3178,7 @@ async fn run_job_services_basic() -> Unit {
       "--event",
       e2e_join_path(workspace, "event.json"),
     ],
-    env={ "ACTION_RUNNER_DOCKER_BIN": fake_docker },
+    env={ "ACTRUN_DOCKER_BIN": fake_docker },
   )
   e2e_expect_ok(result, scenario)
   e2e_expect_contains(result.stdout, "workflow=job-services-basic", scenario)
@@ -3223,7 +3220,7 @@ async fn run_job_services_container_network() -> Unit {
       "--event",
       e2e_join_path(workspace, "event.json"),
     ],
-    env={ "ACTION_RUNNER_DOCKER_BIN": fake_docker },
+    env={ "ACTRUN_DOCKER_BIN": fake_docker },
   )
   e2e_expect_ok(result, scenario)
   e2e_expect_contains(
@@ -3300,7 +3297,7 @@ async fn run_docker_image_basic() -> Unit {
   )
   let docker_log_path = e2e_join_path(workspace, "docker.log")
   let fake_docker = e2e_prepare_fake_docker_bin(workspace, docker_log_path)
-  let env : Map[String, String] = { "ACTION_RUNNER_DOCKER_BIN": fake_docker }
+  let env : Map[String, String] = { "ACTRUN_DOCKER_BIN": fake_docker }
   let result = e2e_run_cli(
     [
       e2e_join_path(workspace, "workflow.yml"),
@@ -3341,7 +3338,7 @@ async fn run_wasm_action_basic() -> Unit {
       "--wasm-action-root",
       e2e_join_path(workspace, "wasm-actions"),
     ],
-    env={ "ACTION_RUNNER_WASM_BIN": wasm_bin },
+    env={ "ACTRUN_WASM_BIN": wasm_bin },
   )
   e2e_expect_ok(result, scenario)
   e2e_expect_contains(result.stdout, "workflow=e2e-wasm-action", scenario)
@@ -3379,7 +3376,7 @@ async fn run_custom_registry_node_action() -> Unit {
       "--registry-root",
       e2e_join_path(workspace, "registry-actions"),
     ],
-    env={ "ACTION_RUNNER_NODE_BIN": fake_node },
+    env={ "ACTRUN_NODE_BIN": fake_node },
   )
   e2e_expect_ok(result, scenario)
   e2e_expect_contains(
@@ -3446,8 +3443,8 @@ async fn run_remote_composite_fetch() -> Unit {
     #|        printf '%s|%s|%s' "${{ inputs.message }}" "${{ github.action_repository }}" "${{ github.action_ref }}" > remote.txt
   let fake_git = e2e_prepare_fake_git_bin(workspace, action_src, log_path)
   let env : Map[String, String] = {
-    "ACTION_RUNNER_GIT_BIN": fake_git,
-    "ACTION_RUNNER_GITHUB_ACTION_CACHE_ROOT": e2e_join_path(
+    "ACTRUN_GIT_BIN": fake_git,
+    "ACTRUN_GITHUB_ACTION_CACHE_ROOT": e2e_join_path(
       workspace, "github_actions_cache",
     ),
   }
@@ -3501,8 +3498,8 @@ async fn run_remote_composite_nested_prefetch() -> Unit {
     log_path,
   )
   let env : Map[String, String] = {
-    "ACTION_RUNNER_GIT_BIN": fake_git,
-    "ACTION_RUNNER_GITHUB_ACTION_CACHE_ROOT": e2e_join_path(
+    "ACTRUN_GIT_BIN": fake_git,
+    "ACTRUN_GITHUB_ACTION_CACHE_ROOT": e2e_join_path(
       workspace, "github_actions_cache",
     ),
   }
@@ -3566,8 +3563,8 @@ async fn run_remote_composite_nested_cache_hit() -> Unit {
     log_path,
   )
   let env : Map[String, String] = {
-    "ACTION_RUNNER_GIT_BIN": fake_git,
-    "ACTION_RUNNER_GITHUB_ACTION_CACHE_ROOT": cache_root,
+    "ACTRUN_GIT_BIN": fake_git,
+    "ACTRUN_GITHUB_ACTION_CACHE_ROOT": cache_root,
   }
   let result = e2e_run_cli(
     [
@@ -3620,8 +3617,8 @@ async fn run_remote_composite_cache_hit() -> Unit {
   @xfs.write_string_to_file(log_path, "")
   let fake_git = e2e_prepare_fake_git_bin(workspace, action_src, log_path)
   let env : Map[String, String] = {
-    "ACTION_RUNNER_GIT_BIN": fake_git,
-    "ACTION_RUNNER_GITHUB_ACTION_CACHE_ROOT": cache_root,
+    "ACTRUN_GIT_BIN": fake_git,
+    "ACTRUN_GITHUB_ACTION_CACHE_ROOT": cache_root,
   }
   let result = e2e_run_cli(
     [
@@ -3660,11 +3657,11 @@ async fn run_remote_node_lifecycle() -> Unit {
   let node_log_path = e2e_join_path(workspace, "node.log")
   let fake_node = e2e_prepare_fake_node_bin(workspace, node_log_path)
   let env : Map[String, String] = {
-    "ACTION_RUNNER_GIT_BIN": fake_git,
-    "ACTION_RUNNER_GITHUB_ACTION_CACHE_ROOT": e2e_join_path(
+    "ACTRUN_GIT_BIN": fake_git,
+    "ACTRUN_GITHUB_ACTION_CACHE_ROOT": e2e_join_path(
       workspace, "github_actions_cache",
     ),
-    "ACTION_RUNNER_NODE_BIN": fake_node,
+    "ACTRUN_NODE_BIN": fake_node,
   }
   let result = e2e_run_cli(
     [
@@ -3714,11 +3711,11 @@ async fn run_remote_node_failure_cleanup() -> Unit {
   let node_log_path = e2e_join_path(workspace, "node.log")
   let fake_node = e2e_prepare_fake_node_bin(workspace, node_log_path)
   let env : Map[String, String] = {
-    "ACTION_RUNNER_GIT_BIN": fake_git,
-    "ACTION_RUNNER_GITHUB_ACTION_CACHE_ROOT": e2e_join_path(
+    "ACTRUN_GIT_BIN": fake_git,
+    "ACTRUN_GITHUB_ACTION_CACHE_ROOT": e2e_join_path(
       workspace, "github_actions_cache",
     ),
-    "ACTION_RUNNER_NODE_BIN": fake_node,
+    "ACTRUN_NODE_BIN": fake_node,
   }
   let result = e2e_run_cli(
     [
@@ -3774,9 +3771,9 @@ async fn run_remote_node_failure_cache_hit() -> Unit {
   let node_log_path = e2e_join_path(workspace, "node.log")
   let fake_node = e2e_prepare_fake_node_bin(workspace, node_log_path)
   let env : Map[String, String] = {
-    "ACTION_RUNNER_GIT_BIN": fake_git,
-    "ACTION_RUNNER_GITHUB_ACTION_CACHE_ROOT": cache_root,
-    "ACTION_RUNNER_NODE_BIN": fake_node,
+    "ACTRUN_GIT_BIN": fake_git,
+    "ACTRUN_GITHUB_ACTION_CACHE_ROOT": cache_root,
+    "ACTRUN_NODE_BIN": fake_node,
   }
   let result = e2e_run_cli(
     [
@@ -3835,11 +3832,11 @@ async fn run_remote_node_nested_prefetch() -> Unit {
   let node_log_path = e2e_join_path(workspace, "node.log")
   let fake_node = e2e_prepare_fake_node_bin(workspace, node_log_path)
   let env : Map[String, String] = {
-    "ACTION_RUNNER_GIT_BIN": fake_git,
-    "ACTION_RUNNER_GITHUB_ACTION_CACHE_ROOT": e2e_join_path(
+    "ACTRUN_GIT_BIN": fake_git,
+    "ACTRUN_GITHUB_ACTION_CACHE_ROOT": e2e_join_path(
       workspace, "github_actions_cache",
     ),
-    "ACTION_RUNNER_NODE_BIN": fake_node,
+    "ACTRUN_NODE_BIN": fake_node,
   }
   let result = e2e_run_cli(
     [
@@ -3909,9 +3906,9 @@ async fn run_remote_node_nested_cache_hit() -> Unit {
   let node_log_path = e2e_join_path(workspace, "node.log")
   let fake_node = e2e_prepare_fake_node_bin(workspace, node_log_path)
   let env : Map[String, String] = {
-    "ACTION_RUNNER_GIT_BIN": fake_git,
-    "ACTION_RUNNER_GITHUB_ACTION_CACHE_ROOT": cache_root,
-    "ACTION_RUNNER_NODE_BIN": fake_node,
+    "ACTRUN_GIT_BIN": fake_git,
+    "ACTRUN_GITHUB_ACTION_CACHE_ROOT": cache_root,
+    "ACTRUN_NODE_BIN": fake_node,
   }
   let result = e2e_run_cli(
     [
@@ -3963,9 +3960,9 @@ async fn run_remote_node_cache_hit() -> Unit {
   let node_log_path = e2e_join_path(workspace, "node.log")
   let fake_node = e2e_prepare_fake_node_bin(workspace, node_log_path)
   let env : Map[String, String] = {
-    "ACTION_RUNNER_GIT_BIN": fake_git,
-    "ACTION_RUNNER_GITHUB_ACTION_CACHE_ROOT": cache_root,
-    "ACTION_RUNNER_NODE_BIN": fake_node,
+    "ACTRUN_GIT_BIN": fake_git,
+    "ACTRUN_GITHUB_ACTION_CACHE_ROOT": cache_root,
+    "ACTRUN_NODE_BIN": fake_node,
   }
   let result = e2e_run_cli(
     [
@@ -4013,11 +4010,11 @@ async fn run_remote_docker_lifecycle() -> Unit {
   let docker_log_path = e2e_join_path(workspace, "docker.log")
   let fake_docker = e2e_prepare_fake_docker_bin(workspace, docker_log_path)
   let env : Map[String, String] = {
-    "ACTION_RUNNER_GIT_BIN": fake_git,
-    "ACTION_RUNNER_GITHUB_ACTION_CACHE_ROOT": e2e_join_path(
+    "ACTRUN_GIT_BIN": fake_git,
+    "ACTRUN_GITHUB_ACTION_CACHE_ROOT": e2e_join_path(
       workspace, "github_actions_cache",
     ),
-    "ACTION_RUNNER_DOCKER_BIN": fake_docker,
+    "ACTRUN_DOCKER_BIN": fake_docker,
   }
   let result = e2e_run_cli(
     [
@@ -4066,11 +4063,11 @@ async fn run_remote_docker_failure_cleanup() -> Unit {
   let docker_log_path = e2e_join_path(workspace, "docker.log")
   let fake_docker = e2e_prepare_fake_docker_bin(workspace, docker_log_path)
   let env : Map[String, String] = {
-    "ACTION_RUNNER_GIT_BIN": fake_git,
-    "ACTION_RUNNER_GITHUB_ACTION_CACHE_ROOT": e2e_join_path(
+    "ACTRUN_GIT_BIN": fake_git,
+    "ACTRUN_GITHUB_ACTION_CACHE_ROOT": e2e_join_path(
       workspace, "github_actions_cache",
     ),
-    "ACTION_RUNNER_DOCKER_BIN": fake_docker,
+    "ACTRUN_DOCKER_BIN": fake_docker,
   }
   let result = e2e_run_cli(
     [
@@ -4127,9 +4124,9 @@ async fn run_remote_docker_failure_cache_hit() -> Unit {
   let docker_log_path = e2e_join_path(workspace, "docker.log")
   let fake_docker = e2e_prepare_fake_docker_bin(workspace, docker_log_path)
   let env : Map[String, String] = {
-    "ACTION_RUNNER_GIT_BIN": fake_git,
-    "ACTION_RUNNER_GITHUB_ACTION_CACHE_ROOT": cache_root,
-    "ACTION_RUNNER_DOCKER_BIN": fake_docker,
+    "ACTRUN_GIT_BIN": fake_git,
+    "ACTRUN_GITHUB_ACTION_CACHE_ROOT": cache_root,
+    "ACTRUN_DOCKER_BIN": fake_docker,
   }
   let result = e2e_run_cli(
     [
@@ -4189,11 +4186,11 @@ async fn run_remote_docker_nested_prefetch() -> Unit {
   let docker_log_path = e2e_join_path(workspace, "docker.log")
   let fake_docker = e2e_prepare_fake_docker_bin(workspace, docker_log_path)
   let env : Map[String, String] = {
-    "ACTION_RUNNER_GIT_BIN": fake_git,
-    "ACTION_RUNNER_GITHUB_ACTION_CACHE_ROOT": e2e_join_path(
+    "ACTRUN_GIT_BIN": fake_git,
+    "ACTRUN_GITHUB_ACTION_CACHE_ROOT": e2e_join_path(
       workspace, "github_actions_cache",
     ),
-    "ACTION_RUNNER_DOCKER_BIN": fake_docker,
+    "ACTRUN_DOCKER_BIN": fake_docker,
   }
   let result = e2e_run_cli(
     [
@@ -4269,9 +4266,9 @@ async fn run_remote_docker_nested_cache_hit() -> Unit {
   let docker_log_path = e2e_join_path(workspace, "docker.log")
   let fake_docker = e2e_prepare_fake_docker_bin(workspace, docker_log_path)
   let env : Map[String, String] = {
-    "ACTION_RUNNER_GIT_BIN": fake_git,
-    "ACTION_RUNNER_GITHUB_ACTION_CACHE_ROOT": cache_root,
-    "ACTION_RUNNER_DOCKER_BIN": fake_docker,
+    "ACTRUN_GIT_BIN": fake_git,
+    "ACTRUN_GITHUB_ACTION_CACHE_ROOT": cache_root,
+    "ACTRUN_DOCKER_BIN": fake_docker,
   }
   let result = e2e_run_cli(
     [
@@ -4329,9 +4326,9 @@ async fn run_remote_docker_cache_hit() -> Unit {
   let docker_log_path = e2e_join_path(workspace, "docker.log")
   let fake_docker = e2e_prepare_fake_docker_bin(workspace, docker_log_path)
   let env : Map[String, String] = {
-    "ACTION_RUNNER_GIT_BIN": fake_git,
-    "ACTION_RUNNER_GITHUB_ACTION_CACHE_ROOT": cache_root,
-    "ACTION_RUNNER_DOCKER_BIN": fake_docker,
+    "ACTRUN_GIT_BIN": fake_git,
+    "ACTRUN_GITHUB_ACTION_CACHE_ROOT": cache_root,
+    "ACTRUN_DOCKER_BIN": fake_docker,
   }
   let result = e2e_run_cli(
     [
@@ -4637,11 +4634,11 @@ async fn run_repo_remote_node_failure_cleanup() -> Unit {
   let node_log_path = e2e_join_path(tools_root, "node.log")
   let fake_node = e2e_prepare_fake_node_bin(tools_root, node_log_path)
   let env : Map[String, String] = {
-    "ACTION_RUNNER_GIT_BIN": fake_git,
-    "ACTION_RUNNER_GITHUB_ACTION_CACHE_ROOT": e2e_join_path(
+    "ACTRUN_GIT_BIN": fake_git,
+    "ACTRUN_GITHUB_ACTION_CACHE_ROOT": e2e_join_path(
       tools_root, "github_actions_cache",
     ),
-    "ACTION_RUNNER_NODE_BIN": fake_node,
+    "ACTRUN_NODE_BIN": fake_node,
   }
   let result = e2e_run_cli(
     [
@@ -4721,9 +4718,9 @@ async fn run_repo_remote_node_failure_cache_hit() -> Unit {
   let node_log_path = e2e_join_path(tools_root, "node.log")
   let fake_node = e2e_prepare_fake_node_bin(tools_root, node_log_path)
   let env : Map[String, String] = {
-    "ACTION_RUNNER_GIT_BIN": fake_git,
-    "ACTION_RUNNER_GITHUB_ACTION_CACHE_ROOT": cache_root,
-    "ACTION_RUNNER_NODE_BIN": fake_node,
+    "ACTRUN_GIT_BIN": fake_git,
+    "ACTRUN_GITHUB_ACTION_CACHE_ROOT": cache_root,
+    "ACTRUN_NODE_BIN": fake_node,
   }
   let result = e2e_run_cli(
     [
@@ -4791,11 +4788,11 @@ async fn run_repo_remote_docker_failure_cleanup() -> Unit {
   let docker_log_path = e2e_join_path(tools_root, "docker.log")
   let fake_docker = e2e_prepare_fake_docker_bin(tools_root, docker_log_path)
   let env : Map[String, String] = {
-    "ACTION_RUNNER_GIT_BIN": fake_git,
-    "ACTION_RUNNER_GITHUB_ACTION_CACHE_ROOT": e2e_join_path(
+    "ACTRUN_GIT_BIN": fake_git,
+    "ACTRUN_GITHUB_ACTION_CACHE_ROOT": e2e_join_path(
       tools_root, "github_actions_cache",
     ),
-    "ACTION_RUNNER_DOCKER_BIN": fake_docker,
+    "ACTRUN_DOCKER_BIN": fake_docker,
   }
   let result = e2e_run_cli(
     [
@@ -4876,9 +4873,9 @@ async fn run_repo_remote_docker_failure_cache_hit() -> Unit {
   let docker_log_path = e2e_join_path(tools_root, "docker.log")
   let fake_docker = e2e_prepare_fake_docker_bin(tools_root, docker_log_path)
   let env : Map[String, String] = {
-    "ACTION_RUNNER_GIT_BIN": fake_git,
-    "ACTION_RUNNER_GITHUB_ACTION_CACHE_ROOT": cache_root,
-    "ACTION_RUNNER_DOCKER_BIN": fake_docker,
+    "ACTRUN_GIT_BIN": fake_git,
+    "ACTRUN_GITHUB_ACTION_CACHE_ROOT": cache_root,
+    "ACTRUN_DOCKER_BIN": fake_docker,
   }
   let result = e2e_run_cli(
     [
@@ -5949,7 +5946,7 @@ async fn run_secret_mask() -> Unit {
       "--run-root",
       run_root,
     ],
-    env={ "ACTION_RUNNER_SECRET_CALL_TOKEN": secret_value },
+    env={ "ACTRUN_SECRET_CALL_TOKEN": secret_value },
   )
   e2e_expect_ok(result, scenario)
   e2e_expect_contains(result.stdout, "state=completed", scenario + " state")
@@ -6058,5 +6055,5 @@ async fn run_checkout_persist_credentials() -> Unit {
 ///|
 #cfg(not(target="native"))
 fn main {
-  println("action_runner e2e harness is supported on native target only")
+  println("actrun e2e harness is supported on native target only")
 }

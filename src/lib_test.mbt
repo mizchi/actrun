@@ -98,9 +98,9 @@ fn prepare_cached_github_action_root(
   subpath? : String = "",
 ) -> String raise {
   test_ensure_dir("_build")
-  test_ensure_dir("_build/action_runner")
-  test_ensure_dir("_build/action_runner/github_actions")
-  let root = "_build/action_runner/github_actions"
+  test_ensure_dir("_build/actrun")
+  test_ensure_dir("_build/actrun/github_actions")
+  let root = "_build/actrun/github_actions"
   let owner_dir = root + "/" + owner
   let repo_dir = owner_dir + "/" + repo
   let version_dir = repo_dir + "/" + version
@@ -598,7 +598,7 @@ test "lowering: custom registry composite action expands from registry root" {
     "custom-registry-composite-root",
   )
   let previous_root = lib_test_set_env_var(
-    "ACTION_RUNNER_ACTION_REGISTRY_ROOT", registry_root,
+    "ACTRUN_ACTION_REGISTRY_ROOT", registry_root,
   )
   let action_root = prepare_custom_registry_action_root(
     registry_root, "bit", "std/cache", "v1",
@@ -621,7 +621,7 @@ test "lowering: custom registry composite action expands from registry root" {
   ])
 
   let result = lower_push_workflow_in_workspace(workflow, workspace)
-  lib_test_restore_env_var("ACTION_RUNNER_ACTION_REGISTRY_ROOT", previous_root)
+  lib_test_restore_env_var("ACTRUN_ACTION_REGISTRY_ROOT", previous_root)
 
   inspect(result.errors, content="[]")
   let write_plan = expect_task_plan(result.plan, "test/setup__write")
@@ -636,7 +636,7 @@ test "lowering: custom registry node action resolves backend from manifest" {
     "custom-registry-node-root",
   )
   let previous_root = lib_test_set_env_var(
-    "ACTION_RUNNER_ACTION_REGISTRY_ROOT", registry_root,
+    "ACTRUN_ACTION_REGISTRY_ROOT", registry_root,
   )
   let action_root = prepare_custom_registry_action_root(
     registry_root, "bit", "std/cache", "v1",
@@ -659,7 +659,7 @@ test "lowering: custom registry node action resolves backend from manifest" {
   ])
 
   let result = lower_push_workflow_in_workspace(workflow, workspace)
-  lib_test_restore_env_var("ACTION_RUNNER_ACTION_REGISTRY_ROOT", previous_root)
+  lib_test_restore_env_var("ACTRUN_ACTION_REGISTRY_ROOT", previous_root)
 
   inspect(result.errors, content="[]")
   let setup_plan = expect_task_plan(result.plan, "test/setup")
@@ -682,7 +682,7 @@ test "lowering: custom registry docker action resolves backend from manifest" {
     "custom-registry-docker-root",
   )
   let previous_root = lib_test_set_env_var(
-    "ACTION_RUNNER_ACTION_REGISTRY_ROOT", registry_root,
+    "ACTRUN_ACTION_REGISTRY_ROOT", registry_root,
   )
   let action_root = prepare_custom_registry_action_root(
     registry_root, "bit", "std/docker-cache", "v1",
@@ -708,7 +708,7 @@ test "lowering: custom registry docker action resolves backend from manifest" {
   ])
 
   let result = lower_push_workflow_in_workspace(workflow, workspace)
-  lib_test_restore_env_var("ACTION_RUNNER_ACTION_REGISTRY_ROOT", previous_root)
+  lib_test_restore_env_var("ACTRUN_ACTION_REGISTRY_ROOT", previous_root)
 
   inspect(result.errors, content="[]")
   let setup_plan = expect_task_plan(result.plan, "test/setup")
@@ -1390,7 +1390,7 @@ async test "lowering: github repo action cache miss fetches and expands composit
     "lower-github-repo-remote-fetch",
   )
   let action_uses = "mizchi-fetch-lib/demo-action-lib/composite@v1"
-  let repo_cache_root = "_build/action_runner/github_actions/mizchi-fetch-lib/demo-action-lib/v1"
+  let repo_cache_root = "_build/actrun/github_actions/mizchi-fetch-lib/demo-action-lib/v1"
   let log_path = workspace + "/git.log"
   test_support_remove_tree(repo_cache_root)
   let action_src =
@@ -2184,7 +2184,7 @@ async test "lowering: remote reusable workflow cache miss fetches and expands wo
   inspect(parsed.errors, content="[]")
   let workflow = parsed.workflow.unwrap()
   let log_path = workspace + "/git.log"
-  let cache_root = "_build/action_runner/github_actions/demo/tools/v1"
+  let cache_root = "_build/actrun/github_actions/demo/tools/v1"
   test_support_remove_tree(cache_root)
   let git_path = test_support_prepare_fake_git_bin_from_source(
     workspace, remote_repo, log_path,
@@ -2303,7 +2303,7 @@ async test "lowering: remote reusable workflow local action is resolved from cac
   inspect(parsed.errors, content="[]")
   let workflow = parsed.workflow.unwrap()
   let log_path = workspace + "/git.log"
-  let cache_root = "_build/action_runner/github_actions/demo/local-tools/v1"
+  let cache_root = "_build/actrun/github_actions/demo/local-tools/v1"
   test_support_remove_tree(cache_root)
   let git_path = test_support_prepare_fake_git_bin_from_source(
     workspace, remote_repo, log_path,

@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "mizchi/action_runner"
+package "mizchi/actrun"
 
 import {
   "mizchi/bit/types",

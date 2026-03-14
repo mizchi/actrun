@@ -1,6 +1,6 @@
 # TODO
 
-The current goal is to make `action_runner` a "runner that reproduces GitHub Actions workflows locally, handles all standard actions, and can be controlled via a `gh`-compatible CLI."
+The current goal is to make `actrun` a "runner that reproduces GitHub Actions workflows locally, handles all standard actions, and can be controlled via a `gh`-compatible CLI."
 
 Priorities are structured around three pillars:
 
@@ -48,8 +48,8 @@ Priorities are structured around three pillars:
 Lock down "where to execute" first. If this is ambiguous, both actions compatibility and CLI will be unstable.
 
 - [x] Run record persistence
-  - [x] Minimal save to `_build/action_runner/runs/<run-id>/run.json`
-  - [x] Fix the layout of `_build/action_runner/runs/<run-id>/`
+  - [x] Minimal save to `_build/actrun/runs/<run-id>/run.json`
+  - [x] Fix the layout of `_build/actrun/runs/<run-id>/`
   - [x] Save `run.json` / step state / task state / exit code / task log path
   - [x] Save step log / summary
   - [x] Save job state / artifact index / cache index
@@ -61,7 +61,7 @@ Lock down "where to execute" first. If this is ambiguous, both actions compatibi
   - [x] `--workspace-mode tmp` (isolation via `git clone`)
   - [ ] `--workspace-mode docker`
   - [x] Fix cleanup / isolation policy for each mode
-  - [x] Security test confirming `_build/action_runner/file_commands` / `runner_temp` (which may contain secrets) are cleaned up after runs
+  - [x] Security test confirming `_build/actrun/file_commands` / `runner_temp` (which may contain secrets) are cleaned up after runs
   - [x] Security test confirming step scripts / `.npmrc` / file command files are not world-readable
 - [x] Promote local injection points to CLI flags
   - [x] `--run-root`
@@ -80,19 +80,19 @@ Lock down "where to execute" first. If this is ambiguous, both actions compatibi
 Stage for turning the current positional CLI into a product. Ultimately enable `gh`-like operation of the local runner.
 
 - [x] Introduce command families
-  - [x] `action_runner workflow list`
-  - [x] `action_runner workflow run <workflow>`
-  - [x] `action_runner run list`
-  - [x] `action_runner run view <run-id>`
-  - [x] `action_runner run watch <run-id>`
-  - [x] `action_runner run logs <run-id>`
-  - [x] `action_runner run download <run-id>`
-  - [x] `action_runner artifact list <run-id>`
-  - [x] `action_runner artifact download <run-id>`
-  - [x] `action_runner cache list`
-  - [x] `action_runner cache prune`
+  - [x] `actrun workflow list`
+  - [x] `actrun workflow run <workflow>`
+  - [x] `actrun run list`
+  - [x] `actrun run view <run-id>`
+  - [x] `actrun run watch <run-id>`
+  - [x] `actrun run logs <run-id>`
+  - [x] `actrun run download <run-id>`
+  - [x] `actrun artifact list <run-id>`
+  - [x] `actrun artifact download <run-id>`
+  - [x] `actrun cache list`
+  - [x] `actrun cache prune`
 - [x] Compatibility layer with the existing CLI
-  - [x] Migrate existing `action_runner <workflow.yml> ...` to `workflow run` (add deprecation warning)
+  - [x] Migrate existing `actrun <workflow.yml> ...` to `workflow run` (add deprecation warning)
   - [x] Organize repo mode / event mode / substrate mode into subcommands
 - [x] CLI output contract
   - [x] Add `--json` to all read commands
@@ -171,16 +171,16 @@ The approach has two stages:
 
 - [ ] Remote fetch / protocol resolution for custom registry actions
 - [x] Registry cache layout / versioning / auth policy
-  - [x] GitHub actions: `_build/action_runner/github_actions/{owner}/{repo}/{version}/`
-  - [x] Custom registry: `_build/action_runner/registry_actions/{scheme}/{name}/{version}/`
-  - [x] Environment variable override: `ACTION_RUNNER_GITHUB_ACTION_CACHE_ROOT`, `ACTION_RUNNER_ACTION_REGISTRY_ROOT`
+  - [x] GitHub actions: `_build/actrun/github_actions/{owner}/{repo}/{version}/`
+  - [x] Custom registry: `_build/actrun/registry_actions/{scheme}/{name}/{version}/`
+  - [x] Environment variable override: `ACTRUN_GITHUB_ACTION_CACHE_ROOT`, `ACTRUN_ACTION_REGISTRY_ROOT`
 - [x] Broad compatibility for Wasm backend
   - [x] env / input / output contract (via file commands: GITHUB_ENV/OUTPUT/STATE)
   - [x] pre/post lifecycle policy (wasm has no manifest, single entrypoint model. pre/post to be extended when action.yml support is added)
   - [x] artifact / cache integration (covered by host-side builtin actions)
 - [x] Make backend selection policy controllable from CLI / config
   - [x] Auto-selection: determine backend by action ref type (builtin/node/docker/wasm)
-  - [x] Environment variable override: `ACTION_RUNNER_WASM_BIN`, `ACTION_RUNNER_DOCKER_BIN`, `ACTION_RUNNER_NODE_BIN`, `ACTION_RUNNER_GIT_BIN`
+  - [x] Environment variable override: `ACTRUN_WASM_BIN`, `ACTRUN_DOCKER_BIN`, `ACTRUN_NODE_BIN`, `ACTRUN_GIT_BIN`
 
 ## P5: Establish Compatibility Operations
 

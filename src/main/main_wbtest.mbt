@@ -60,7 +60,7 @@ fn main_test_absolute_path(path : String) -> String {
 
 ///|
 test "cli: parse local workflow path" {
-  let result = parse_cli_args(["action_runner", ".github/workflows/ci.yml"])
+  let result = parse_cli_args(["actrun", ".github/workflows/ci.yml"])
   inspect(result.errors, content="[]")
 
   let options = expect_cli_options(result)
@@ -74,12 +74,12 @@ test "cli: parse local workflow path" {
 ///|
 test "cli: parse repo mode flags" {
   let result = parse_cli_args([
-    "action_runner", ".github/workflows/ci.yml", "--repo", "/repo", "--workspace",
-    "/tmp/work", "--run-root", "/tmp/runs", "--artifact-root", "/tmp/artifacts",
-    "--cache-root", "/tmp/cache", "--github-action-cache-root", "/tmp/gha-cache",
-    "--registry-root", "/tmp/registry", "--wasm-action-root", "/tmp/wasm", "--workspace-mode",
-    "tmp", "--event", "push.json", "--ref", "feature/demo", "--before", "def456",
-    "--after", "abc123", "--repository", "mizchi/action_runner", "--changed", "src/lib.mbt",
+    "actrun", ".github/workflows/ci.yml", "--repo", "/repo", "--workspace", "/tmp/work",
+    "--run-root", "/tmp/runs", "--artifact-root", "/tmp/artifacts", "--cache-root",
+    "/tmp/cache", "--github-action-cache-root", "/tmp/gha-cache", "--registry-root",
+    "/tmp/registry", "--wasm-action-root", "/tmp/wasm", "--workspace-mode", "tmp",
+    "--event", "push.json", "--ref", "feature/demo", "--before", "def456", "--after",
+    "abc123", "--repository", "mizchi/action_runner", "--changed", "src/lib.mbt",
     "--changed", "README.md",
   ])
   inspect(result.errors, content="[]")
@@ -108,7 +108,7 @@ test "cli: parse repo mode flags" {
 ///|
 test "cli: parse run list flags" {
   let result = parse_run_read_args([
-    "action_runner", "run", "list", "--run-root", "/tmp/runs", "--json",
+    "actrun", "run", "list", "--run-root", "/tmp/runs", "--json",
   ])
   inspect(result.errors, content="[]")
   let options = match result.options {
@@ -125,7 +125,7 @@ test "cli: parse run list flags" {
 ///|
 test "cli: parse workflow list flags" {
   let result = parse_workflow_read_args([
-    "action_runner", "workflow", "list", "--repo", "/repo", "--json",
+    "actrun", "workflow", "list", "--repo", "/repo", "--json",
   ])
   inspect(result.errors, content="[]")
   let options = match result.options {
@@ -140,10 +140,10 @@ test "cli: parse workflow list flags" {
 ///|
 test "cli: parse workflow run flags" {
   let result = parse_workflow_run_args([
-    "action_runner", "workflow", "run", ".github/workflows/ci.yml", "--repo", "/repo",
-    "--workspace", "/tmp/work", "--run-root", "/tmp/runs", "--workspace-mode", "tmp",
-    "--event", "push.json", "--repository", "mizchi/action_runner", "--ref", "main",
-    "--before", "def456", "--after", "abc123", "--changed", "src/lib.mbt",
+    "actrun", "workflow", "run", ".github/workflows/ci.yml", "--repo", "/repo", "--workspace",
+    "/tmp/work", "--run-root", "/tmp/runs", "--workspace-mode", "tmp", "--event",
+    "push.json", "--repository", "mizchi/action_runner", "--ref", "main", "--before",
+    "def456", "--after", "abc123", "--changed", "src/lib.mbt",
   ])
   inspect(result.errors, content="[]")
   let options = expect_cli_options(result)
@@ -163,7 +163,7 @@ test "cli: parse workflow run flags" {
 ///|
 test "cli: parse run view flags" {
   let result = parse_run_read_args([
-    "action_runner", "run", "view", "run-1", "--run-root", "/tmp/runs", "--json",
+    "actrun", "run", "view", "run-1", "--run-root", "/tmp/runs", "--json",
   ])
   inspect(result.errors, content="[]")
   let options = match result.options {
@@ -180,7 +180,7 @@ test "cli: parse run view flags" {
 ///|
 test "cli: parse run watch flags" {
   let result = parse_run_read_args([
-    "action_runner", "run", "watch", "run-1", "--run-root", "/tmp/runs", "--json",
+    "actrun", "run", "watch", "run-1", "--run-root", "/tmp/runs", "--json",
   ])
   inspect(result.errors, content="[]")
   let options = match result.options {
@@ -197,8 +197,8 @@ test "cli: parse run watch flags" {
 ///|
 test "cli: parse run logs flags" {
   let result = parse_run_read_args([
-    "action_runner", "run", "logs", "run-1", "--run-root", "/tmp/runs", "--task",
-    "build/record", "--json",
+    "actrun", "run", "logs", "run-1", "--run-root", "/tmp/runs", "--task", "build/record",
+    "--json",
   ])
   inspect(result.errors, content="[]")
   let options = match result.options {
@@ -215,7 +215,7 @@ test "cli: parse run logs flags" {
 ///|
 test "cli: parse run download flags" {
   let result = parse_run_read_args([
-    "action_runner", "run", "download", "run-1", "--run-root", "/tmp/runs", "--artifact-root",
+    "actrun", "run", "download", "run-1", "--run-root", "/tmp/runs", "--artifact-root",
     "/tmp/artifacts", "--dir", "/tmp/out", "--json",
   ])
   inspect(result.errors, content="[]")
@@ -234,7 +234,7 @@ test "cli: parse run download flags" {
 ///|
 test "cli: parse artifact list flags" {
   let result = parse_artifact_read_args([
-    "action_runner", "artifact", "list", "run-1", "--run-root", "/tmp/runs", "--json",
+    "actrun", "artifact", "list", "run-1", "--run-root", "/tmp/runs", "--json",
   ])
   inspect(result.errors, content="[]")
   let options = match result.options {
@@ -251,9 +251,8 @@ test "cli: parse artifact list flags" {
 ///|
 test "cli: parse artifact download flags" {
   let result = parse_artifact_read_args([
-    "action_runner", "artifact", "download", "run-1", "--run-root", "/tmp/runs",
-    "--artifact-root", "/tmp/artifacts", "--name", "report", "--dir", "/tmp/out",
-    "--json",
+    "actrun", "artifact", "download", "run-1", "--run-root", "/tmp/runs", "--artifact-root",
+    "/tmp/artifacts", "--name", "report", "--dir", "/tmp/out", "--json",
   ])
   inspect(result.errors, content="[]")
   let options = match result.options {
@@ -272,7 +271,7 @@ test "cli: parse artifact download flags" {
 ///|
 test "cli: parse cache list flags" {
   let result = parse_cache_read_args([
-    "action_runner", "cache", "list", "--cache-root", "/tmp/cache", "--json",
+    "actrun", "cache", "list", "--cache-root", "/tmp/cache", "--json",
   ])
   inspect(result.errors, content="[]")
   let options = match result.options {
@@ -289,7 +288,7 @@ test "cli: parse cache list flags" {
 ///|
 test "cli: parse cache prune flags" {
   let result = parse_cache_read_args([
-    "action_runner", "cache", "prune", "--cache-root", "/tmp/cache", "--key", "cache-key",
+    "actrun", "cache", "prune", "--cache-root", "/tmp/cache", "--key", "cache-key",
     "--workspace-key", "workspace-1", "--json",
   ])
   inspect(result.errors, content="[]")
@@ -315,9 +314,7 @@ test "cli: run state exit code mapping" {
 
 ///|
 test "cli: reject missing option value" {
-  let result = parse_cli_args([
-    "action_runner", ".github/workflows/ci.yml", "--repo",
-  ])
+  let result = parse_cli_args(["actrun", ".github/workflows/ci.yml", "--repo"])
 
   inspect(result.errors, content="[\"missing value for --repo\"]")
 }
@@ -325,7 +322,7 @@ test "cli: reject missing option value" {
 ///|
 test "cli: reject invalid workspace mode" {
   let result = parse_cli_args([
-    "action_runner", ".github/workflows/ci.yml", "--workspace-mode", "podman",
+    "actrun", ".github/workflows/ci.yml", "--workspace-mode", "podman",
   ])
 
   inspect(
@@ -337,12 +334,10 @@ test "cli: reject invalid workspace mode" {
 ///|
 test "cli: default workspace mode depends on repo mode" {
   let local_options = expect_cli_options(
-    parse_cli_args(["action_runner", ".github/workflows/ci.yml"]),
+    parse_cli_args(["actrun", ".github/workflows/ci.yml"]),
   )
   let repo = expect_cli_options(
-    parse_cli_args([
-      "action_runner", ".github/workflows/ci.yml", "--repo", "/repo",
-    ]),
+    parse_cli_args(["actrun", ".github/workflows/ci.yml", "--repo", "/repo"]),
   )
 
   inspect(resolved_workspace_mode(local_options), content="local")
@@ -353,55 +348,53 @@ test "cli: default workspace mode depends on repo mode" {
 test "cli: root override flags are exported to runner env" {
   let options = expect_cli_options(
     parse_cli_args([
-      "action_runner", ".github/workflows/ci.yml", "--artifact-root", "/tmp/artifacts",
+      "actrun", ".github/workflows/ci.yml", "--artifact-root", "/tmp/artifacts",
       "--cache-root", "/tmp/cache", "--github-action-cache-root", "/tmp/gha-cache",
       "--registry-root", "/tmp/registry", "--wasm-action-root", "/tmp/wasm",
     ]),
   )
   let prev_artifact = main_test_set_env_var(
-    "ACTION_RUNNER_ARTIFACT_ROOT", "/previous/artifacts",
+    "ACTRUN_ARTIFACT_ROOT", "/previous/artifacts",
   )
-  let prev_cache = main_test_set_env_var(
-    "ACTION_RUNNER_CACHE_ROOT", "/previous/cache",
-  )
+  let prev_cache = main_test_set_env_var("ACTRUN_CACHE_ROOT", "/previous/cache")
   let prev_gha = main_test_set_env_var(
-    "ACTION_RUNNER_GITHUB_ACTION_CACHE_ROOT", "/previous/gha",
+    "ACTRUN_GITHUB_ACTION_CACHE_ROOT", "/previous/gha",
   )
   let prev_registry = main_test_set_env_var(
-    "ACTION_RUNNER_ACTION_REGISTRY_ROOT", "/previous/registry",
+    "ACTRUN_ACTION_REGISTRY_ROOT", "/previous/registry",
   )
   let prev_wasm = main_test_set_env_var(
-    "ACTION_RUNNER_WASM_ACTION_ROOT", "/previous/wasm",
+    "ACTRUN_WASM_ACTION_ROOT", "/previous/wasm",
   )
 
   apply_cli_root_overrides(options)
 
   inspect(
-    @xsys.get_env_var("ACTION_RUNNER_ARTIFACT_ROOT").unwrap_or(""),
+    @xsys.get_env_var("ACTRUN_ARTIFACT_ROOT").unwrap_or(""),
     content="/tmp/artifacts",
   )
   inspect(
-    @xsys.get_env_var("ACTION_RUNNER_CACHE_ROOT").unwrap_or(""),
+    @xsys.get_env_var("ACTRUN_CACHE_ROOT").unwrap_or(""),
     content="/tmp/cache",
   )
   inspect(
-    @xsys.get_env_var("ACTION_RUNNER_GITHUB_ACTION_CACHE_ROOT").unwrap_or(""),
+    @xsys.get_env_var("ACTRUN_GITHUB_ACTION_CACHE_ROOT").unwrap_or(""),
     content="/tmp/gha-cache",
   )
   inspect(
-    @xsys.get_env_var("ACTION_RUNNER_ACTION_REGISTRY_ROOT").unwrap_or(""),
+    @xsys.get_env_var("ACTRUN_ACTION_REGISTRY_ROOT").unwrap_or(""),
     content="/tmp/registry",
   )
   inspect(
-    @xsys.get_env_var("ACTION_RUNNER_WASM_ACTION_ROOT").unwrap_or(""),
+    @xsys.get_env_var("ACTRUN_WASM_ACTION_ROOT").unwrap_or(""),
     content="/tmp/wasm",
   )
 
-  main_test_restore_env_var("ACTION_RUNNER_ARTIFACT_ROOT", prev_artifact)
-  main_test_restore_env_var("ACTION_RUNNER_CACHE_ROOT", prev_cache)
-  main_test_restore_env_var("ACTION_RUNNER_GITHUB_ACTION_CACHE_ROOT", prev_gha)
-  main_test_restore_env_var("ACTION_RUNNER_ACTION_REGISTRY_ROOT", prev_registry)
-  main_test_restore_env_var("ACTION_RUNNER_WASM_ACTION_ROOT", prev_wasm)
+  main_test_restore_env_var("ACTRUN_ARTIFACT_ROOT", prev_artifact)
+  main_test_restore_env_var("ACTRUN_CACHE_ROOT", prev_cache)
+  main_test_restore_env_var("ACTRUN_GITHUB_ACTION_CACHE_ROOT", prev_gha)
+  main_test_restore_env_var("ACTRUN_ACTION_REGISTRY_ROOT", prev_registry)
+  main_test_restore_env_var("ACTRUN_WASM_ACTION_ROOT", prev_wasm)
 }
 
 ///|
@@ -539,7 +532,7 @@ async test "cli: persist run record stores task logs and summaries" {
   remove_main_test_tree(cache_root)
   ensure_main_test_dir(workspace_rel)
   let previous_cache_root = main_test_set_env_var(
-    "ACTION_RUNNER_CACHE_ROOT", cache_root_abs,
+    "ACTRUN_CACHE_ROOT", cache_root_abs,
   )
   let workflow_src =
     #|name: ci
@@ -781,7 +774,7 @@ async test "cli: persist run record stores task logs and summaries" {
     collect_cache_list_records(cache_root_abs),
   )
   inspect(pruned_list_text, content="")
-  main_test_restore_env_var("ACTION_RUNNER_CACHE_ROOT", previous_cache_root)
+  main_test_restore_env_var("ACTRUN_CACHE_ROOT", previous_cache_root)
 }
 
 ///|
@@ -836,7 +829,7 @@ test "cli: explicit flags override values from event payload" {
   )
   let options = expect_cli_options(
     parse_cli_args([
-      "action_runner", ".github/workflows/ci.yml", "--event", "push.json", "--repository",
+      "actrun", ".github/workflows/ci.yml", "--event", "push.json", "--repository",
       "from/cli", "--after", "fff999", "--changed", "src/lib.mbt",
     ]),
   )
@@ -854,7 +847,7 @@ test "cli: explicit flags override values from event payload" {
 test "cli: event file enables trigger checks" {
   let options = expect_cli_options(
     parse_cli_args([
-      "action_runner", ".github/workflows/ci.yml", "--event", "push.json",
+      "actrun", ".github/workflows/ci.yml", "--event", "push.json",
     ]),
   )
 

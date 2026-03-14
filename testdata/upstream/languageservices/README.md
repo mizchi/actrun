@@ -34,9 +34,9 @@ known diff:
 
 - `errors-step-uses-missing.yml`
   - upstream は `with` 単独を `uses` 欠落として報告する
-  - `action_runner` は `run` / `uses` のどちらも無い step として lowering error にまとめる
+  - `actrun` は `run` / `uses` のどちらも無い step として lowering error にまとめる
 - `errors-step-uses-syntax.yml`
   - upstream は `$$docker://...` や `...docker://...` を syntax error にする
-  - `action_runner` は custom registry scheme を許すため unsupported action として扱う
+  - `actrun` は custom registry scheme を許すため unsupported action として扱う
   - upstream では有効な `actions/aws/ec2@main` と local action も、MVP では未対応として error に落ちる
-  - `docker://` 空 image も upstream の sample output には出ないが、`action_runner` では parse error にする
+  - `docker://` 空 image も upstream の sample output には出ないが、`actrun` では parse error にする
