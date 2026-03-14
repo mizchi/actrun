@@ -20,6 +20,8 @@ type CliOptions
 
 type CliParseResult
 
+type DotenvParseResult
+
 type LocalWorkspace
 
 type RunArtifactRecord
