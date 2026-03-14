@@ -395,9 +395,14 @@ async fn setup_local_workspace(
 async fn cleanup_local_workspace(workspace : LocalWorkspace) -> Unit {
   match workspace.cleanup_mode {
     "worktree" => {
+      // Remove the worktree directory directly (not via git worktree remove)
+      // because checkout actions may overwrite the .git pointer file,
+      // causing git worktree remove to corrupt the main working tree.
+      let _ = remove_tree(workspace.execution_root)
+      // Clean up stale worktree references in the main repo
       let _ = @process.collect_output(
         "git",
-        ["worktree", "remove", "--force", workspace.execution_root],
+        ["worktree", "prune"],
         cwd=workspace.source_root,
       )
     }
