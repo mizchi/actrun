@@ -1,0 +1,19 @@
+name: custom-actions
+'on': push
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      # Composite action
+      - id: composite
+        uses: ./examples/actions/hello-composite
+        with:
+          name: actrun
+
+      - run: echo "Composite output = ${{ steps.composite.outputs.greeting }}"
+
+      # Node.js action (requires node installed)
+      - id: node
+        uses: ./examples/actions/hello-node
+        with:
+          name: MoonBit

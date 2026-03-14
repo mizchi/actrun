@@ -1,0 +1,10 @@
+name: Hello Node
+description: A simple Node.js action example
+inputs:
+  name:
+    description: Who to greet
+    required: true
+    default: World
+runs:
+  using: node20
+  main: index.js

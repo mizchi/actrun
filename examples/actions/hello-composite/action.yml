@@ -1,0 +1,20 @@
+name: Hello Composite
+description: A simple composite action example
+inputs:
+  name:
+    description: Who to greet
+    required: true
+    default: World
+outputs:
+  greeting:
+    description: The greeting message
+    value: ${{ steps.greet.outputs.greeting }}
+runs:
+  using: composite
+  steps:
+    - id: greet
+      shell: bash
+      run: |
+        MSG="Hello, ${{ inputs.name }}!"
+        echo "$MSG"
+        echo "greeting=$MSG" >> "$GITHUB_OUTPUT"

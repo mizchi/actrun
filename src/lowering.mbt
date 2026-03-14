@@ -2344,9 +2344,10 @@ fn lower_local_action(
     )
     return previous_task_id
   }
-  let parsed = parse_local_action_yaml(manifest_text)
-  guard parsed.action is Some(action) else {
-    for err in parsed.errors {
+  // Parse as full manifest to support composite, node, and docker local actions
+  let parsed_manifest = parse_action_manifest_yaml(manifest_text)
+  guard parsed_manifest.action is Some(action_manifest) else {
+    for err in parsed_manifest.errors {
       errors.push(
         "step '\{job.id}/\{outer_step_id}' local action '\{manifest_path}' " +
         err,
@@ -2354,6 +2355,34 @@ fn lower_local_action(
     }
     return previous_task_id
   }
+  // For node/docker local actions, delegate to manifest-backed lowering
+  if action_manifest.runtime != "composite" {
+    let local_action_ref = LocalPath(action_path)
+    let action_path_root = normalize_local_action_path(action_path)
+    let abs_action_root = absolute_exec_path(
+      join_path(workspace_root, action_path_root),
+    )
+    return lower_manifest_backed_action(
+      workflow,
+      job,
+      job_env,
+      outer_step,
+      outer_step_id,
+      previous_task_id,
+      local_action_ref,
+      abs_action_root,
+      workspace_root,
+      tasks,
+      task_plans,
+      deferred_post_tasks,
+      errors,
+    )
+  }
+  let action = new_local_action(
+    action_manifest.steps,
+    name=action_manifest.name,
+    inputs=action_manifest.inputs,
+  )
 
   let mut local_previous_task_id = previous_task_id
   let resolved_inputs = merge_env(action.inputs, outer_step.with_values)
