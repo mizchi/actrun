@@ -8,13 +8,15 @@ A local GitHub Actions runner built with [MoonBit](https://docs.moonbitlang.com)
 # curl (Linux / macOS)
 curl -fsSL https://raw.githubusercontent.com/mizchi/actrun/main/install.sh | sh
 
+# Docker
+docker run --rm -v "$PWD":/workspace -w /workspace ghcr.io/mizchi/actrun workflow run .github/workflows/ci.yml
+
 # moon install
 moon install mizchi/actrun/cmd/actrun
 
 # Build from source
 git clone https://github.com/mizchi/actrun.git && cd actrun
 moon build src/cmd/actrun --target native
-# Binary at _build/native/debug/build/cmd/actrun/actrun.exe
 ```
 
 ## Quick Start
