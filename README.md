@@ -5,12 +5,14 @@ A local GitHub Actions runner built with [MoonBit](https://docs.moonbitlang.com)
 ## Install
 
 ```bash
-# Install via moon (recommended)
+# curl (Linux / macOS)
+curl -fsSL https://raw.githubusercontent.com/mizchi/actrun/main/install.sh | sh
+
+# moon install
 moon install mizchi/actrun/cmd/actrun
 
-# Or build from source
-git clone https://github.com/mizchi/actrun.git
-cd actrun
+# Build from source
+git clone https://github.com/mizchi/actrun.git && cd actrun
 moon build src/cmd/actrun --target native
 # Binary at _build/native/debug/build/cmd/actrun/actrun.exe
 ```

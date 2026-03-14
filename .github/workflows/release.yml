@@ -1,0 +1,71 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: linux-x64
+          - os: ubuntu-24.04-arm
+            target: linux-arm64
+          - os: macos-14
+            target: macos-arm64
+          - os: macos-13
+            target: macos-x64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+      - name: Checkout bit dependency
+        run: git clone --depth 1 https://github.com/bit-vcs/bit.git ../../bit-vcs/bit
+      - name: Install MoonBit CLI
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+      - name: Build
+        run: |
+          moon update
+          moon build --release --target native src/cmd/actrun
+      - name: Package
+        run: |
+          BIN="_build/native/release/build/cmd/actrun/actrun.exe"
+          OUT="actrun-${{ matrix.target }}.tar.gz"
+          mkdir -p dist
+          cp "$BIN" dist/actrun
+          chmod +x dist/actrun
+          tar -C dist -czf "$OUT" actrun
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: actrun-${{ matrix.target }}
+          path: "*.tar.gz"
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          REPO="${GITHUB_REPOSITORY}"
+          if gh release view "$TAG" -R "$REPO" >/dev/null 2>&1; then
+            gh release upload "$TAG" *.tar.gz --clobber -R "$REPO"
+          else
+            gh release create "$TAG" *.tar.gz --generate-notes -R "$REPO"
+          fi

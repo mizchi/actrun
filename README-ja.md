@@ -5,12 +5,14 @@
 ## インストール
 
 ```bash
-# moon install でインストール（推奨）
+# curl（Linux / macOS）
+curl -fsSL https://raw.githubusercontent.com/mizchi/actrun/main/install.sh | sh
+
+# moon install
 moon install mizchi/actrun/cmd/actrun
 
-# またはソースからビルド
-git clone https://github.com/mizchi/actrun.git
-cd actrun
+# ソースからビルド
+git clone https://github.com/mizchi/actrun.git && cd actrun
 moon build src/cmd/actrun --target native
 # バイナリ: _build/native/debug/build/cmd/actrun/actrun.exe
 ```
