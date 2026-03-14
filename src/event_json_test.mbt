@@ -13,7 +13,7 @@ test "push event json: parses minimal GitHub push payload" {
     #|  "ref": "refs/heads/main",
     #|  "before": "def456",
     #|  "after": "abc123",
-    #|  "repository": { "full_name": "mizchi/action_runner" },
+    #|  "repository": { "full_name": "mizchi/actrun" },
     #|  "sender": { "login": "octocat" },
     #|  "commits": [
     #|    {
@@ -35,7 +35,7 @@ test "push event json: parses minimal GitHub push payload" {
   inspect(event.ref_name, content="main")
   inspect(event.before_sha, content="def456")
   inspect(event.after_sha, content="abc123")
-  inspect(event.repository, content="mizchi/action_runner")
+  inspect(event.repository, content="mizchi/actrun")
   inspect(event.actor, content="octocat")
   inspect(
     event.changed_paths,

@@ -242,7 +242,7 @@ test "parser: parse job level if condition" {
     #|on: push
     #|jobs:
     #|  build:
-    #|    if: github.repository == 'mizchi/action_runner'
+    #|    if: github.repository == 'mizchi/actrun'
     #|    runs-on: ubuntu-latest
     #|    steps:
     #|      - run: echo ok
@@ -251,7 +251,7 @@ test "parser: parse job level if condition" {
 
   inspect(
     workflow.jobs[0].if_condition,
-    content="github.repository == 'mizchi/action_runner'",
+    content="github.repository == 'mizchi/actrun'",
   )
 }
 

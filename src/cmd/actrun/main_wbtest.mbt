@@ -79,7 +79,7 @@ test "cli: parse repo mode flags" {
     "/tmp/cache", "--github-action-cache-root", "/tmp/gha-cache", "--registry-root",
     "/tmp/registry", "--wasm-action-root", "/tmp/wasm", "--workspace-mode", "tmp",
     "--event", "push.json", "--ref", "feature/demo", "--before", "def456", "--after",
-    "abc123", "--repository", "mizchi/action_runner", "--changed", "src/lib.mbt",
+    "abc123", "--repository", "mizchi/actrun", "--changed", "src/lib.mbt",
     "--changed", "README.md",
   ])
   inspect(result.errors, content="[]")
@@ -101,7 +101,7 @@ test "cli: parse repo mode flags" {
   inspect(options.ref_name, content="feature/demo")
   inspect(options.before_sha, content="def456")
   inspect(options.after_sha, content="abc123")
-  inspect(options.repository, content="mizchi/action_runner")
+  inspect(options.repository, content="mizchi/actrun")
   inspect(options.changed_paths, content="[\"src/lib.mbt\", \"README.md\"]")
 }
 
@@ -142,7 +142,7 @@ test "cli: parse workflow run flags" {
   let result = parse_workflow_run_args([
     "actrun", "workflow", "run", ".github/workflows/ci.yml", "--repo", "/repo", "--workspace",
     "/tmp/work", "--run-root", "/tmp/runs", "--workspace-mode", "tmp", "--event",
-    "push.json", "--repository", "mizchi/action_runner", "--ref", "main", "--before",
+    "push.json", "--repository", "mizchi/actrun", "--ref", "main", "--before",
     "def456", "--after", "abc123", "--changed", "src/lib.mbt",
   ])
   inspect(result.errors, content="[]")
@@ -153,7 +153,7 @@ test "cli: parse workflow run flags" {
   inspect(options.run_root.unwrap_or(""), content="/tmp/runs")
   inspect(options.workspace_mode, content="tmp")
   inspect(options.event_path.unwrap_or(""), content="push.json")
-  inspect(options.repository, content="mizchi/action_runner")
+  inspect(options.repository, content="mizchi/actrun")
   inspect(options.ref_name, content="main")
   inspect(options.before_sha, content="def456")
   inspect(options.after_sha, content="abc123")
@@ -401,17 +401,17 @@ test "cli: root override flags are exported to runner env" {
 test "cli: parse GitHub repository from https remote url" {
   inspect(
     github_repository_from_remote_url(
-      "https://github.com/mizchi/action_runner.git",
+      "https://github.com/mizchi/actrun.git",
     ),
-    content="mizchi/action_runner",
+    content="mizchi/actrun",
   )
 }
 
 ///|
 test "cli: parse GitHub repository from ssh remote url" {
   inspect(
-    github_repository_from_remote_url("git@github.com:mizchi/action_runner.git"),
-    content="mizchi/action_runner",
+    github_repository_from_remote_url("git@github.com:mizchi/actrun.git"),
+    content="mizchi/actrun",
   )
 }
 
@@ -423,15 +423,15 @@ test "cli: extract origin remote url from git config text" {
     #|[remote "upstream"]
     #|  url = https://github.com/other/project.git
     #|[remote "origin"]
-    #|  url = git@github.com:mizchi/action_runner.git
+    #|  url = git@github.com:mizchi/actrun.git
     #|  fetch = +refs/heads/*:refs/remotes/origin/*
   inspect(
     origin_remote_url_from_git_config(config).unwrap_or(""),
-    content="git@github.com:mizchi/action_runner.git",
+    content="git@github.com:mizchi/actrun.git",
   )
   inspect(
     github_repository_from_git_config(config).unwrap_or(""),
-    content="mizchi/action_runner",
+    content="mizchi/actrun",
   )
 }
 
@@ -444,7 +444,7 @@ test "cli: infer GitHub repository from repo root origin config" {
   let git_dir = repo_root + "/.git"
   let config =
     #|[remote "origin"]
-    #|  url = https://github.com/mizchi/action_runner.git
+    #|  url = https://github.com/mizchi/actrun.git
     #|  fetch = +refs/heads/*:refs/remotes/origin/*
   ensure_main_test_dir(repo_root)
   ensure_main_test_dir(git_dir)
@@ -452,11 +452,11 @@ test "cli: infer GitHub repository from repo root origin config" {
 
   inspect(
     origin_remote_url_from_repo_root(repo_root).unwrap_or(""),
-    content="https://github.com/mizchi/action_runner.git",
+    content="https://github.com/mizchi/actrun.git",
   )
   inspect(
     github_repository_from_repo_root(repo_root).unwrap_or(""),
-    content="mizchi/action_runner",
+    content="mizchi/actrun",
   )
 }
 
@@ -478,7 +478,7 @@ test "cli: persist run record allocates sequential run ids" {
     state: "completed",
     ok: true,
     exit_code: 0,
-    repository: "mizchi/action_runner",
+    repository: "mizchi/actrun",
     ref_name: "main",
     before_sha: "def456",
     after_sha: "abc123",
@@ -574,7 +574,7 @@ async test "cli: persist run record stores task logs and summaries" {
       @ar.new_push_event(
         "main",
         ["README.md"],
-        repository="mizchi/action_runner",
+        repository="mizchi/actrun",
       ),
     ),
   )
@@ -591,7 +591,7 @@ async test "cli: persist run record stores task logs and summaries" {
       state: report.state,
       ok: report.ok,
       exit_code: 0,
-      repository: "mizchi/action_runner",
+      repository: "mizchi/actrun",
       ref_name: "main",
       before_sha: "",
       after_sha: "",

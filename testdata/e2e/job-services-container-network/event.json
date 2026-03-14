@@ -3,7 +3,7 @@
   "before": "before-sha",
   "after": "after-sha",
   "repository": {
-    "full_name": "mizchi/action_runner"
+    "full_name": "mizchi/actrun"
   },
   "sender": {
     "login": "mizchi"

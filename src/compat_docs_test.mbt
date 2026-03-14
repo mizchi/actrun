@@ -114,12 +114,12 @@ test "compat docs: lower jobs if fixture" {
   inspect(fixture.id, content="docs-jobs-if-repository")
   inspect(
     workflow.jobs[0].if_condition,
-    content="github.repository == 'mizchi/action_runner'",
+    content="github.repository == 'mizchi/actrun'",
   )
   inspect(lowered.errors, content="[]")
   inspect(
     lowered.plan.job_if_conditions.get("build").unwrap_or(""),
-    content="github.repository == 'mizchi/action_runner'",
+    content="github.repository == 'mizchi/actrun'",
   )
 }
 
@@ -1339,7 +1339,7 @@ async test "compat docs: json functions are available in step script and env" {
   inspect(fixture.id, content="docs-context-json-functions")
   inspect(report.ok, content="true")
   inspect(task.status, content="success")
-  inspect(task.stdout, content="<true|true|true|\"mizchi/action_runner\">")
+  inspect(task.stdout, content="<true|true|true|\"mizchi/actrun\">")
 }
 
 ///|
@@ -1462,7 +1462,7 @@ async test "compat docs: github repository context is available in push workflow
   inspect(fixture.id, content="docs-context-github-repository")
   inspect(report.ok, content="true")
   inspect(task.status, content="success")
-  inspect(task.stdout, content="<mizchi/action_runner|mizchi/action_runner>")
+  inspect(task.stdout, content="<mizchi/actrun|mizchi/actrun>")
 }
 
 ///|
@@ -1498,7 +1498,7 @@ async test "compat docs: step if status functions work in push workflow" {
   )
   inspect(
     @xfs.read_file_to_string(workspace + "/artifacts/result.txt"),
-    content="no|yes|no|mizchi/action_runner",
+    content="no|yes|no|mizchi/actrun",
   )
 }
 
@@ -1653,7 +1653,7 @@ async test "compat docs: continue-on-error lets later steps run" {
   )
   inspect(
     @xfs.read_file_to_string(workspace + "/artifacts/result.txt"),
-    content="mizchi/action_runner|yes",
+    content="mizchi/actrun|yes",
   )
 }
 

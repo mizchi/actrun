@@ -9,7 +9,7 @@
     "moonbitlang/quickcheck": "0.9.10"
   },
   "readme": "src/README.mbt.md",
-  "repository": "https://github.com/mizchi/action_runner",
+  "repository": "https://github.com/mizchi/actrun",
   "license": "Apache-2.0",
   "keywords": [
     "github-actions",

@@ -2,7 +2,7 @@ name: jobs-if-repository
 on: push
 jobs:
   build:
-    if: github.repository == 'mizchi/action_runner'
+    if: github.repository == 'mizchi/actrun'
     runs-on: ubuntu-latest
     steps:
       - id: print

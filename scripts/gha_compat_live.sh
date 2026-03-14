@@ -7,7 +7,7 @@ if [ "$#" -lt 1 ] || [ "$#" -gt 3 ]; then
 fi
 
 workflow_file="$1"
-repo="${2:-mizchi/action_runner}"
+repo="${2:-mizchi/actrun}"
 ref="${3:-main}"
 compat_key=""
 compat_node_version=""

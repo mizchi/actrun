@@ -9,8 +9,8 @@ A local GitHub Actions runner built with [MoonBit](https://docs.moonbitlang.com)
 moon install mizchi/actrun/cmd/actrun
 
 # Or build from source
-git clone https://github.com/mizchi/action_runner.git
-cd action_runner
+git clone https://github.com/mizchi/actrun.git
+cd actrun
 moon build src/cmd/actrun --target native
 # Binary at _build/native/debug/build/cmd/actrun/actrun.exe
 ```

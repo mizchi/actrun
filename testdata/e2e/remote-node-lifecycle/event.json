@@ -3,7 +3,7 @@
   "before": "1111111111111111111111111111111111111111",
   "after": "abc123def456",
   "repository": {
-    "full_name": "mizchi/action_runner"
+    "full_name": "mizchi/actrun"
   },
   "sender": {
     "login": "octocat"

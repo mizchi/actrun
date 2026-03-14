@@ -3,7 +3,7 @@
   "before": "1111111111111111111111111111111111111111",
   "after": "2222222222222222222222222222222222222222",
   "repository": {
-    "full_name": "mizchi/action_runner"
+    "full_name": "mizchi/actrun"
   },
   "sender": {
     "login": "compat-bot"

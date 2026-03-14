@@ -9,8 +9,8 @@
 moon install mizchi/actrun/cmd/actrun
 
 # またはソースからビルド
-git clone https://github.com/mizchi/action_runner.git
-cd action_runner
+git clone https://github.com/mizchi/actrun.git
+cd actrun
 moon build src/cmd/actrun --target native
 # バイナリ: _build/native/debug/build/cmd/actrun/actrun.exe
 ```

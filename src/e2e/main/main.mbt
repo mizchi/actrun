@@ -898,7 +898,7 @@ async fn run_local_push_basic() -> Unit {
   e2e_expect_contains(result.stdout, "build/consume: success", scenario)
   e2e_expect_eq(
     e2e_read_text(e2e_join_path(workspace, "artifacts/setup.txt")),
-    "push|blue|mizchi/action_runner",
+    "push|blue|mizchi/actrun",
     scenario + " setup artifact",
   )
   e2e_expect_eq(
@@ -1114,7 +1114,7 @@ async fn run_store_basic() -> Unit {
   )
   e2e_expect_eq(
     e2e_read_text(e2e_join_path(download_dir, "result.txt")),
-    "push|mizchi/action_runner",
+    "push|mizchi/actrun",
     scenario + " artifact download file",
   )
   let artifact_download_json_result = e2e_run_cli([
@@ -1145,7 +1145,7 @@ async fn run_store_basic() -> Unit {
   e2e_expect_contains(run_download_result.stdout, "artifacts=report", scenario)
   e2e_expect_eq(
     e2e_read_text(e2e_join_path(run_download_dir, "report/result.txt")),
-    "push|mizchi/action_runner",
+    "push|mizchi/actrun",
     scenario + " run download file",
   )
   let run_download_json_result = e2e_run_cli([
@@ -1193,7 +1193,7 @@ async fn run_store_basic() -> Unit {
     e2e_read_text(
       e2e_join_path(artifact_root, workspace_key + "/report/result.txt"),
     ),
-    "push|mizchi/action_runner",
+    "push|mizchi/actrun",
     scenario + " artifact root override",
   )
   e2e_expect_eq(
@@ -1203,7 +1203,7 @@ async fn run_store_basic() -> Unit {
         workspace_key + "/run-store-basic-key/artifacts/result.txt",
       ),
     ),
-    "push|mizchi/action_runner",
+    "push|mizchi/actrun",
     scenario + " cache root override",
   )
   let cache_prune_result = e2e_run_cli([
@@ -2447,7 +2447,7 @@ async fn run_expression_json_functions() -> Unit {
   e2e_expect_contains(result.stdout, "build/skip_false: skipped", scenario)
   e2e_expect_eq(
     e2e_read_text(e2e_join_path(workspace, "artifacts/script.txt")),
-    "true|true|true|\"mizchi/action_runner\"",
+    "true|true|true|\"mizchi/actrun\"",
     scenario + " script artifact",
   )
   e2e_expect_eq(
@@ -3269,7 +3269,7 @@ async fn run_event_cli_overrides() -> Unit {
     "--ref",
     "main",
     "--repository",
-    "mizchi/action_runner",
+    "mizchi/actrun",
     "--after",
     "override-sha",
     "--changed",
@@ -3281,7 +3281,7 @@ async fn run_event_cli_overrides() -> Unit {
   e2e_expect_contains(result.stdout, "build/write: success", scenario)
   e2e_expect_eq(
     e2e_read_text(e2e_join_path(workspace, "artifacts/context.txt")),
-    "main|mizchi/action_runner|override-sha|event-octocat|push",
+    "main|mizchi/actrun|override-sha|event-octocat|push",
     scenario + " context artifact",
   )
 }
@@ -3415,7 +3415,7 @@ async fn run_event_head_commit_fallback() -> Unit {
   e2e_expect_contains(result.stdout, "state=completed", scenario)
   e2e_expect_eq(
     e2e_read_text(e2e_join_path(workspace, "artifacts/context.txt")),
-    "head-octocat|mizchi/action_runner",
+    "head-octocat|mizchi/actrun",
     scenario + " context artifact",
   )
 }
@@ -4433,7 +4433,7 @@ async fn run_repo_needs_output() -> Unit {
   let result = e2e_run_cli([
     ".github/workflows/ci.yml", "--repo", repo_root, "--workspace", workspace_root,
     "--ref", "main", "--before", before_sha, "--after", after_sha, "--repository",
-    "mizchi/action_runner",
+    "mizchi/actrun",
   ])
   e2e_expect_ok(result, scenario)
   e2e_expect_contains(result.stdout, "workflow=e2e-repo-needs", scenario)
@@ -4442,7 +4442,7 @@ async fn run_repo_needs_output() -> Unit {
   e2e_expect_contains(result.stdout, "build/consume: success", scenario)
   e2e_expect_eq(
     e2e_read_text(e2e_join_path(workspace_root, "artifacts/result.txt")),
-    "green|success|after-needs\n|mizchi/action_runner",
+    "green|success|after-needs\n|mizchi/actrun",
     scenario + " result artifact",
   )
 }
@@ -4477,7 +4477,7 @@ async fn run_repo_job_file_commands() -> Unit {
   let result = e2e_run_cli([
     ".github/workflows/ci.yml", "--repo", repo_root, "--workspace", workspace_root,
     "--ref", "main", "--before", before_sha, "--after", after_sha, "--repository",
-    "mizchi/action_runner",
+    "mizchi/actrun",
   ])
   e2e_expect_ok(result, scenario)
   e2e_expect_contains(result.stdout, "workflow=e2e-repo-job-commands", scenario)
@@ -4486,7 +4486,7 @@ async fn run_repo_job_file_commands() -> Unit {
   e2e_expect_contains(result.stdout, "build/consume: success", scenario)
   e2e_expect_eq(
     e2e_read_text(e2e_join_path(workspace_root, "artifacts/result.txt")),
-    "amber|missing|missing|after-job-file|mizchi/action_runner",
+    "amber|missing|missing|after-job-file|mizchi/actrun",
     scenario + " result artifact",
   )
 }
@@ -4521,7 +4521,7 @@ async fn run_repo_multi_job_summary() -> Unit {
   let result = e2e_run_cli([
     ".github/workflows/ci.yml", "--repo", repo_root, "--workspace", workspace_root,
     "--ref", "main", "--before", before_sha, "--after", after_sha, "--repository",
-    "mizchi/action_runner",
+    "mizchi/actrun",
   ])
   e2e_expect_ok(result, scenario)
   e2e_expect_contains(result.stdout, "workflow=e2e-repo-summary", scenario)
@@ -4570,7 +4570,7 @@ async fn run_repo_needs_summary() -> Unit {
   let result = e2e_run_cli([
     ".github/workflows/ci.yml", "--repo", repo_root, "--workspace", workspace_root,
     "--ref", "main", "--before", before_sha, "--after", after_sha, "--repository",
-    "mizchi/action_runner",
+    "mizchi/actrun",
   ])
   e2e_expect_ok(result, scenario)
   e2e_expect_contains(
@@ -4593,7 +4593,7 @@ async fn run_repo_needs_summary() -> Unit {
   )
   e2e_expect_eq(
     e2e_read_text(e2e_join_path(workspace_root, "artifacts/result.txt")),
-    "violet|success|after-needs-summary|mizchi/action_runner",
+    "violet|success|after-needs-summary|mizchi/actrun",
     scenario + " result artifact",
   )
 }
@@ -4644,7 +4644,7 @@ async fn run_repo_remote_node_failure_cleanup() -> Unit {
     [
       ".github/workflows/ci.yml", "--repo", repo_root, "--workspace", workspace_root,
       "--ref", "main", "--before", before_sha, "--after", after_sha, "--repository",
-      "mizchi/action_runner",
+      "mizchi/actrun",
     ],
     env~,
   )
@@ -4726,7 +4726,7 @@ async fn run_repo_remote_node_failure_cache_hit() -> Unit {
     [
       ".github/workflows/ci.yml", "--repo", repo_root, "--workspace", workspace_root,
       "--ref", "main", "--before", before_sha, "--after", after_sha, "--repository",
-      "mizchi/action_runner",
+      "mizchi/actrun",
     ],
     env~,
   )
@@ -4798,7 +4798,7 @@ async fn run_repo_remote_docker_failure_cleanup() -> Unit {
     [
       ".github/workflows/ci.yml", "--repo", repo_root, "--workspace", workspace_root,
       "--ref", "main", "--before", before_sha, "--after", after_sha, "--repository",
-      "mizchi/action_runner",
+      "mizchi/actrun",
     ],
     env~,
   )
@@ -4881,7 +4881,7 @@ async fn run_repo_remote_docker_failure_cache_hit() -> Unit {
     [
       ".github/workflows/ci.yml", "--repo", repo_root, "--workspace", workspace_root,
       "--ref", "main", "--before", before_sha, "--after", after_sha, "--repository",
-      "mizchi/action_runner",
+      "mizchi/actrun",
     ],
     env~,
   )
@@ -4946,7 +4946,7 @@ async fn run_repo_event_json() -> Unit {
     after_sha +
     "\",\n" +
     "  \"repository\": {\n" +
-    "    \"full_name\": \"mizchi/action_runner\"\n" +
+    "    \"full_name\": \"mizchi/actrun\"\n" +
     "  },\n" +
     "  \"sender\": {\n" +
     "    \"login\": \"event-cat\"\n" +
@@ -4974,7 +4974,7 @@ async fn run_repo_event_json() -> Unit {
   )
   e2e_expect_eq(
     e2e_read_text(e2e_join_path(workspace_root, "artifacts/context.txt")),
-    "push|main|mizchi/action_runner|event-cat|" + after_sha,
+    "push|main|mizchi/actrun|event-cat|" + after_sha,
     scenario + " context artifact",
   )
 }
@@ -5017,7 +5017,7 @@ async fn run_repo_event_head_commit() -> Unit {
     after_sha +
     "\",\n" +
     "  \"repository\": {\n" +
-    "    \"full_name\": \"mizchi/action_runner\"\n" +
+    "    \"full_name\": \"mizchi/actrun\"\n" +
     "  },\n" +
     "  \"sender\": {\n" +
     "    \"login\": \"head-event-cat\"\n" +
@@ -5043,7 +5043,7 @@ async fn run_repo_event_head_commit() -> Unit {
   )
   e2e_expect_eq(
     e2e_read_text(e2e_join_path(workspace_root, "artifacts/context.txt")),
-    "head-event-cat|mizchi/action_runner|" + after_sha,
+    "head-event-cat|mizchi/actrun|" + after_sha,
     scenario + " context artifact",
   )
 }
@@ -5073,7 +5073,7 @@ async fn run_repo_auto_detect_repository() -> Unit {
   )
   let config_path = e2e_join_path(repo_root, ".git/config")
   let config_text = e2e_read_text(config_path) +
-    "\n[remote \"origin\"]\n  url = https://github.com/mizchi/action_runner.git\n"
+    "\n[remote \"origin\"]\n  url = https://github.com/mizchi/actrun.git\n"
   @xfs.write_string_to_file(config_path, config_text)
   let result = e2e_run_cli([
     ".github/workflows/ci.yml", "--repo", repo_root, "--workspace", workspace_root,
@@ -5084,7 +5084,7 @@ async fn run_repo_auto_detect_repository() -> Unit {
   e2e_expect_contains(result.stdout, "state=completed", scenario)
   e2e_expect_eq(
     e2e_read_text(e2e_join_path(workspace_root, "artifacts/repository.txt")),
-    "mizchi/action_runner",
+    "mizchi/actrun",
     scenario + " repository artifact",
   )
   e2e_expect_eq(
@@ -5125,7 +5125,7 @@ async fn run_repo_event_auto_detect_repository() -> Unit {
   )
   let config_path = e2e_join_path(repo_root, ".git/config")
   let config_text = e2e_read_text(config_path) +
-    "\n[remote \"origin\"]\n  url = git@github.com:mizchi/action_runner.git\n"
+    "\n[remote \"origin\"]\n  url = git@github.com:mizchi/actrun.git\n"
   @xfs.write_string_to_file(config_path, config_text)
   let event_path = e2e_join_path(workspace_root, "event.json")
   let event_json = "{\n" +
@@ -5162,7 +5162,7 @@ async fn run_repo_event_auto_detect_repository() -> Unit {
   )
   e2e_expect_eq(
     e2e_read_text(e2e_join_path(workspace_root, "artifacts/context.txt")),
-    "mizchi/action_runner|mizchi|detect-cat|" + after_sha,
+    "mizchi/actrun|mizchi|detect-cat|" + after_sha,
     scenario + " context artifact",
   )
 }
@@ -5198,7 +5198,7 @@ async fn run_repo_event_head_commit_auto_detect_repository() -> Unit {
   )
   let config_path = e2e_join_path(repo_root, ".git/config")
   let config_text = e2e_read_text(config_path) +
-    "\n[remote \"origin\"]\n  url = git@github.com:mizchi/action_runner.git\n"
+    "\n[remote \"origin\"]\n  url = git@github.com:mizchi/actrun.git\n"
   @xfs.write_string_to_file(config_path, config_text)
   let event_path = e2e_join_path(workspace_root, "event.json")
   let event_json = "{\n" +
@@ -5233,7 +5233,7 @@ async fn run_repo_event_head_commit_auto_detect_repository() -> Unit {
   )
   e2e_expect_eq(
     e2e_read_text(e2e_join_path(workspace_root, "artifacts/context.txt")),
-    "detect-head-cat|mizchi/action_runner|mizchi|" + after_sha,
+    "detect-head-cat|mizchi/actrun|mizchi|" + after_sha,
     scenario + " context artifact",
   )
 }
