@@ -1,0 +1,17 @@
+name: wasm-action
+'on': push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      # wasm:// actions are resolved from ACTRUN_WASM_ACTION_ROOT
+      # Default: _build/actrun/wasm_actions/<name>/<version>/main.wasm
+      - id: hello
+        uses: wasm://hello@v1
+
+      - run: echo "wasm action completed"
+
+# Setup:
+#   mkdir -p _build/actrun/wasm_actions/hello/v1
+#   cp examples/actions/hello-wasm/main.wat _build/actrun/wasm_actions/hello/v1/main.wasm
+#   actrun examples/14-wasm-action.yml
