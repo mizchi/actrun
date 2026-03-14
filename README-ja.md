@@ -5,10 +5,14 @@
 ## インストール
 
 ```bash
-# ソースからビルド（MoonBit CLI が必要）
-curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
-moon build src/main --target native
-# バイナリ: _build/native/debug/build/main/main.exe
+# moon install でインストール（推奨）
+moon install mizchi/actrun/cmd/actrun
+
+# またはソースからビルド
+git clone https://github.com/mizchi/action_runner.git
+cd action_runner
+moon build src/cmd/actrun --target native
+# バイナリ: _build/native/debug/build/cmd/actrun/actrun.exe
 ```
 
 ## クイックスタート

@@ -84,6 +84,6 @@ jobs:
       - name: Moon update
         run: moon update
       - name: Build CLI
-        run: moon build src/main --target native
+        run: moon build src/cmd/actrun --target native
       - name: Run E2E scenarios
         run: just e2e

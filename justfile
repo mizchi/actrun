@@ -28,11 +28,11 @@ test-update:
 
 # Run main
 run workflow:
-    moon run src/main --target native -- {{workflow}}
+    moon run src/cmd/actrun --target native -- {{workflow}}
 
 # Run black-box CLI E2E scenarios
 e2e:
-    moon build src/main --target native
+    moon build src/cmd/actrun --target native
     moon run src/e2e/main --target native
 
 # Dispatch a GitHub-hosted compat workflow
@@ -45,7 +45,7 @@ gha-compat-download run_id dest="_build/gha-compat/{{run_id}}":
 
 # Compare downloaded GitHub-hosted artifacts with local emulator output
 gha-compat-compare workflow downloaded_dir:
-    moon build src/main --target native
+    moon build src/cmd/actrun --target native
     bash scripts/gha_compat_compare.sh {{workflow}} {{downloaded_dir}}
 
 # Dispatch, wait, download, and compare in one shot

@@ -204,7 +204,7 @@ fn e2e_fixture_dir(name : String) -> String {
 
 ///|
 fn e2e_cli_executable() -> String {
-  e2e_absolute_path("_build/native/debug/build/main/main.exe")
+  e2e_absolute_path("_build/native/debug/build/cmd/actrun/actrun.exe")
 }
 
 ///|

@@ -140,9 +140,9 @@ rm -rf "$download_dir"
 mkdir -p "$download_dir"
 gh run download "$run_id" -R "$repo" --dir "$download_dir"
 
-cli_bin="_build/native/debug/build/main/main.exe"
+cli_bin="_build/native/debug/build/cmd/actrun/actrun.exe"
 if [ ! -x "$cli_bin" ]; then
-  moon build src/main --target native >/dev/null
+  moon build src/cmd/actrun --target native >/dev/null
 fi
 ACTRUN_COMPAT_CACHE_KEY="$compat_key" \
 ACTRUN_COMPAT_NODE_VERSION="$compat_node_version" \
