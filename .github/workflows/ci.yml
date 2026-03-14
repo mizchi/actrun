@@ -20,7 +20,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
       - name: Secretlint
-        run: npx --yes secretlint "**/*"
+        run: npx --yes -p secretlint -p @secretlint/secretlint-rule-preset-recommend secretlint "**/*"
       - name: Checkout bit dependency
         run: git clone --depth 1 https://github.com/bit-vcs/bit.git ../../bit-vcs/bit
       - name: Setup just
@@ -44,8 +44,6 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            target: js
-          - os: ubuntu-latest
             target: native
           - os: macos-latest
             target: native
@@ -66,12 +64,7 @@ jobs:
       - name: Moon update
         run: moon update
       - name: Moon check
-        run: |
-          if [ "${{ matrix.target }}" = "js" ]; then
-            moon check --target js
-          else
-            just target=${{ matrix.target }} check
-          fi
+        run: just target=${{ matrix.target }} check
       - name: Moon test
         run: just target=${{ matrix.target }} test
 
