@@ -63,3 +63,21 @@ jobs:
         run: just target=${{ matrix.target }} check
       - name: Moon test
         run: just target=${{ matrix.target }} test
+
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+      - name: Setup just
+        uses: extractions/setup-just@v3
+      - name: Install MoonBit CLI
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+      - name: Moon update
+        run: moon update
+      - name: Build CLI
+        run: moon build src/main --target native
+      - name: Run E2E scenarios
+        run: just e2e

@@ -1,0 +1,31 @@
+name: Compat Live
+
+on:
+  workflow_dispatch:
+    inputs:
+      workflow:
+        description: Compat workflow file to test (e.g. compat-checkout-artifact.yml)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install MoonBit CLI
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+      - run: moon update
+      - name: Build CLI
+        run: moon build src/main --target native
+      - name: Run live compat
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          bash scripts/gha_compat_live.sh "${{ inputs.workflow }}" "${{ github.repository }}" "${{ github.ref_name }}"
