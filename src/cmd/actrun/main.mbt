@@ -3248,11 +3248,7 @@ async fn main {
     return
   }
 
-  // Legacy positional form: actrun <workflow.yml> [flags...]
-  // Prefer: actrun workflow run <workflow.yml> [flags...]
-  println(
-    "warning: positional workflow path is deprecated, use 'workflow run' subcommand instead",
-  )
+  // Shorthand: actrun <workflow.yml> is equivalent to actrun workflow run <workflow.yml>
   let parsed_args = parse_cli_args(cli_args)
   if parsed_args.errors.length() > 0 {
     print_errors(parsed_args.errors)
