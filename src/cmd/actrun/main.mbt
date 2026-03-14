@@ -189,6 +189,7 @@ fn usage_text() -> String {
   "  --local                      Shorthand for --workspace-mode local\n" +
   "  --worktree                   Shorthand for --workspace-mode worktree\n" +
   "  --tmp                        Shorthand for --workspace-mode tmp\n" +
+  "  --env <file>                 Load environment variables from file\n" +
   "\n" +
   "Storage flags:\n" +
   "  --artifact-root <path>       Artifact storage root\n" +
@@ -1400,6 +1401,47 @@ fn persist_run_record(
 }
 
 ///|
+fn load_env_file(path : String) -> Array[String] {
+  let errors : Array[String] = []
+  let content = try @xfs.read_file_to_string(path) catch {
+    _ => {
+      errors.push("failed to read env file: " + path)
+      return errors
+    }
+  } noraise {
+    value => value
+  }
+  for line_view in content.split("\n") {
+    let line = line_view.trim(chars=" \t\r").to_string()
+    if line.length() == 0 || line.has_prefix("#") {
+      continue
+    }
+    match line.find("=") {
+      Some(idx) => {
+        let key = String::unsafe_substring(line, start=0, end=idx)
+          .trim(chars=" \t")
+          .to_string()
+        let mut value = String::unsafe_substring(line, start=idx + 1, end=line.length())
+          .trim(chars=" \t")
+          .to_string()
+        // Strip surrounding quotes
+        if value.length() >= 2 {
+          if (value.has_prefix("\"") && value.has_suffix("\"")) ||
+            (value.has_prefix("'") && value.has_suffix("'")) {
+            value = String::unsafe_substring(value, start=1, end=value.length() - 1)
+          }
+        }
+        if key.length() > 0 {
+          @xsys.set_env_var(key, value)
+        }
+      }
+      None => continue
+    }
+  }
+  errors
+}
+
+///|
 fn parse_cli_args(args : Array[String]) -> CliParseResult {
   let errors : Array[String] = []
   let mut workflow_path = ""
@@ -1459,7 +1501,8 @@ fn parse_cli_args(args : Array[String]) -> CliParseResult {
       arg == "--before" ||
       arg == "--after" ||
       arg == "--changed" ||
-      arg == "--skip-action" {
+      arg == "--skip-action" ||
+      arg == "--env" {
       if index + 1 >= args.length() {
         errors.push("missing value for " + arg)
         break
@@ -1495,6 +1538,10 @@ fn parse_cli_args(args : Array[String]) -> CliParseResult {
         after_sha = value
       } else if arg == "--skip-action" {
         skip_actions.push(value)
+      } else if arg == "--env" {
+        for err in load_env_file(value) {
+          errors.push(err)
+        }
       } else {
         changed_paths.push(value)
       }

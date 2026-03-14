@@ -68,9 +68,20 @@ ACTRUN_SECRET_TOKEN=xxx actrun workflow run ci.yml
 # Pass variables
 ACTRUN_VAR_ENV=staging actrun workflow run ci.yml
 
+# Load from .env file
+actrun workflow run ci.yml --env .env
+
 # Combine
 ACTRUN_SECRET_TOKEN=xxx ACTRUN_VAR_ENV=staging \
   actrun workflow run ci.yml
+```
+
+`.env` file format:
+```bash
+# comments are ignored
+ACTRUN_SECRET_TOKEN=your-token
+ACTRUN_VAR_ENV="staging"     # quotes are stripped
+ACTRUN_VAR_DEBUG='true'      # single quotes too
 ```
 
 ## Local/Remote Conditional Steps
