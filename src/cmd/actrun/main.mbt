@@ -2197,8 +2197,18 @@ struct DoctorCheck {
 async fn handle_doctor_command() -> Int {
   let checks : Array[DoctorCheck] = [
     { name: "git", bin: "git", env_override: "ACTRUN_GIT_BIN", required: true },
-    { name: "node", bin: "node", env_override: "ACTRUN_NODE_BIN", required: false },
-    { name: "docker", bin: "docker", env_override: "ACTRUN_DOCKER_BIN", required: false },
+    {
+      name: "node",
+      bin: "node",
+      env_override: "ACTRUN_NODE_BIN",
+      required: false,
+    },
+    {
+      name: "docker",
+      bin: "docker",
+      env_override: "ACTRUN_DOCKER_BIN",
+      required: false,
+    },
     { name: "bash", bin: "bash", env_override: "", required: true },
     { name: "sh", bin: "sh", env_override: "", required: true },
     {
@@ -2248,7 +2258,9 @@ async fn handle_doctor_command() -> Int {
         yml_count += 1
       }
     }
-    println("ok  workflows: " + yml_count.to_string() + " found in .github/workflows/")
+    println(
+      "ok  workflows: " + yml_count.to_string() + " found in .github/workflows/",
+    )
   } else {
     println("--  workflows: .github/workflows/ not found")
   }

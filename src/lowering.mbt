@@ -2363,19 +2363,8 @@ fn lower_local_action(
       join_path(workspace_root, action_path_root),
     )
     return lower_manifest_backed_action(
-      workflow,
-      job,
-      job_env,
-      outer_step,
-      outer_step_id,
-      previous_task_id,
-      local_action_ref,
-      abs_action_root,
-      workspace_root,
-      tasks,
-      task_plans,
-      deferred_post_tasks,
-      errors,
+      workflow, job, job_env, outer_step, outer_step_id, previous_task_id, local_action_ref,
+      abs_action_root, workspace_root, tasks, task_plans, deferred_post_tasks, errors,
     )
   }
   let action = new_local_action(
