@@ -5699,6 +5699,7 @@ fn default_runner_env(
     "RUNNER_ENVIRONMENT": runner_context.get("environment").unwrap_or(""),
     "RUNNER_OS": runner_context.get("os").unwrap_or(""),
     "RUNNER_TEMP": runner_context.get("temp").unwrap_or(""),
+    "ACTION_RUNNER_LOCAL": "true",
   }
   match github_context.get("action_path") {
     Some(value) if value.length() > 0 =>
@@ -6007,6 +6008,9 @@ pub async fn execute_lowered_native(
               )
               let vars_ctx = runner_vars_context()
               let runner_ctx = runner_context(plan, workspace_root)
+              let job_env : Map[String, String] = {
+                "ACTION_RUNNER_LOCAL": "true",
+              }
               let value = evaluate_if_condition(
                 lowered.plan.job_if_conditions
                 .get(plan.job_id)
@@ -6016,6 +6020,7 @@ pub async fn execute_lowered_native(
                   step_outcomes=current_state.step_outcomes,
                   step_conclusions=current_state.step_conclusions,
                   workspace_root~,
+                  env_context=job_env,
                   vars_context=vars_ctx,
                   github_context=github_ctx,
                   runner_context=runner_ctx,
@@ -6114,6 +6119,11 @@ pub async fn execute_lowered_native(
             )
             let vars_ctx = runner_vars_context()
             let runner_ctx = runner_context(plan, workspace_root)
+            let step_env = merge_runner_env(
+              plan.env,
+              current_state.env_updates,
+            )
+            step_env["ACTION_RUNNER_LOCAL"] = "true"
             evaluate_if_condition(
               plan.if_condition,
               new_if_condition_context(
@@ -6121,10 +6131,7 @@ pub async fn execute_lowered_native(
                 step_outcomes=current_state.step_outcomes,
                 step_conclusions=current_state.step_conclusions,
                 workspace_root~,
-                env_context=merge_runner_env(
-                  plan.env,
-                  current_state.env_updates,
-                ),
+                env_context=step_env,
                 job_context=job_ctx,
                 vars_context=vars_ctx,
                 github_context=github_ctx,

@@ -109,6 +109,23 @@ action_runner cache prune --key <key>                         # Delete cache ent
 - `docker://image` direct execution
 - `wasm://name@version` module execution
 
+## Local-Only Execution Flag
+
+action_runner sets `ACTION_RUNNER_LOCAL=true` in the execution environment. Use this in `if:` conditions to skip steps locally or run steps only locally:
+
+```yaml
+steps:
+  # Skipped when running locally (runs on GitHub Actions)
+  - uses: actions/checkout@v5
+    if: ${{ !env.ACTION_RUNNER_LOCAL }}
+
+  # Runs only locally (skipped on GitHub Actions)
+  - run: echo "local debug info"
+    if: ${{ env.ACTION_RUNNER_LOCAL }}
+```
+
+On GitHub Actions, `ACTION_RUNNER_LOCAL` is not set, so `!env.ACTION_RUNNER_LOCAL` evaluates to `true` and all steps run normally.
+
 ## Secrets & Variables
 
 ```bash
