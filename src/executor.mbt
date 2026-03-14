@@ -1640,32 +1640,67 @@ async fn sleep_for_service_poll_native() -> Unit {
 }
 
 ///|
+async fn container_inspect_health_status(
+  docker_bin : String,
+  container_name : String,
+  workspace_abs : String,
+) -> (Int, String) {
+  // Try docker --format first (docker/podman)
+  let (code, stdout, stderr) = @process.collect_output(
+    docker_bin,
+    [
+      "inspect", "--format",
+      "{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}",
+      container_name,
+    ],
+    cwd=workspace_abs,
+  )
+  if code == 0 {
+    return (0, trim_exec_output(stdout.text()))
+  }
+  // Fallback: JSON inspect (apple/container, etc.)
+  let (code2, stdout2, _) = @process.collect_output(
+    docker_bin,
+    ["inspect", container_name],
+    cwd=workspace_abs,
+  )
+  if code2 != 0 {
+    return (code, trim_exec_output(stderr.text()))
+  }
+  let json_text = stdout2.text()
+  // Parse JSON to extract status
+  if json_text.contains("\"running\"") || json_text.contains("\"Running\"") {
+    return (0, "running")
+  }
+  if json_text.contains("\"healthy\"") {
+    return (0, "healthy")
+  }
+  if json_text.contains("\"exited\"") || json_text.contains("\"Exited\"") {
+    return (0, "exited")
+  }
+  (0, "running")
+}
+
+///|
+#cfg(target="native")
 async fn wait_for_job_service_health_native(
   service_id : String,
   container_name : String,
   docker_bin : String,
   workspace_abs : String,
 ) -> String? {
-  let inspect_args = [
-    "inspect", "--format", "{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}",
-    container_name,
-  ]
   let mut attempt = 0
   let max_attempts = 20
   while attempt < max_attempts {
-    let (code, stdout, stderr) = @process.collect_output(
-      docker_bin,
-      inspect_args,
-      cwd=workspace_abs,
+    let (code, status) = container_inspect_health_status(
+      docker_bin, container_name, workspace_abs,
     )
     if code != 0 {
       return Some(
-        "service '\{service_id}' health inspect failed: " +
-        trim_exec_output(stderr.text()),
+        "service '\{service_id}' health inspect failed: " + status,
       )
     }
-    let status = trim_exec_output(stdout.text())
-    if status == "healthy" {
+    if status == "healthy" || status == "running" {
       return None
     }
     if status == "unhealthy" || status == "exited" || status == "dead" {

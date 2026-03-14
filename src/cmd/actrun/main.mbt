@@ -2217,6 +2217,18 @@ async fn handle_doctor_command() -> Int {
       env_override: "ACTRUN_WASM_BIN",
       required: false,
     },
+    {
+      name: "container (apple)",
+      bin: "container",
+      env_override: "",
+      required: false,
+    },
+    {
+      name: "podman",
+      bin: "podman",
+      env_override: "",
+      required: false,
+    },
   ]
   let mut has_error = false
   for check in checks {
