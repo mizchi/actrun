@@ -1,0 +1,29 @@
+name: Compat Step Summary
+
+on:
+  workflow_dispatch:
+  push:
+    tags-ignore:
+      - "**"
+    paths:
+      - .github/workflows/__compat_step_summary__.trigger
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - id: write
+        shell: bash
+        run: |
+          echo "## Test Report" >> "$GITHUB_STEP_SUMMARY"
+          echo "- passed: 42" >> "$GITHUB_STEP_SUMMARY"
+          echo "result=done" >> "$GITHUB_OUTPUT"
+      - id: collect
+        shell: bash
+        run: |
+          mkdir -p report
+          printf '%s' "${{ steps.write.outputs.result }}" > report/result.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: compat-step-summary-report
+          path: report/result.txt

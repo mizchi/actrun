@@ -1,0 +1,28 @@
+name: Compat Env Output
+
+on:
+  workflow_dispatch:
+  push:
+    tags-ignore:
+      - "**"
+    paths:
+      - .github/workflows/__compat_env_output__.trigger
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - id: set-env
+        shell: bash
+        run: |
+          echo "GREETING=hello" >> "$GITHUB_ENV"
+          echo "color=blue" >> "$GITHUB_OUTPUT"
+      - id: use-env
+        shell: bash
+        run: |
+          mkdir -p report
+          printf '%s|%s' "$GREETING" "${{ steps.set-env.outputs.color }}" > report/result.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: compat-env-output-report
+          path: report/result.txt

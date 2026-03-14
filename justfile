@@ -35,6 +35,16 @@ e2e:
     moon build src/cmd/actrun --target native
     moon run src/e2e/main --target native
 
+# Update local snapshots (run compat workflows and save golden files)
+snapshot-update:
+    moon build src/cmd/actrun --target native
+    bash scripts/snapshot_local.sh
+
+# Verify snapshots match (re-run and compare with golden files)
+snapshot-verify:
+    moon build src/cmd/actrun --target native
+    bash scripts/snapshot_verify.sh
+
 # Dispatch a GitHub-hosted compat workflow
 gha-compat-dispatch workflow ref="main":
     gh workflow run {{workflow}} --ref {{ref}}

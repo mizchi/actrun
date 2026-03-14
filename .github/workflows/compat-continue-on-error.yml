@@ -1,0 +1,27 @@
+name: Compat Continue On Error
+
+on:
+  workflow_dispatch:
+  push:
+    tags-ignore:
+      - "**"
+    paths:
+      - .github/workflows/__compat_continue_on_error__.trigger
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - id: fail
+        shell: bash
+        continue-on-error: true
+        run: exit 1
+      - id: report
+        shell: bash
+        run: |
+          mkdir -p report
+          printf '%s|%s' "${{ steps.fail.outcome }}" "${{ steps.fail.conclusion }}" > report/result.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: compat-continue-on-error-report
+          path: report/result.txt

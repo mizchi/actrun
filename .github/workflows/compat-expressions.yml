@@ -1,0 +1,27 @@
+name: Compat Expressions
+
+on:
+  workflow_dispatch:
+  push:
+    tags-ignore:
+      - "**"
+    paths:
+      - .github/workflows/__compat_expressions__.trigger
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - shell: bash
+        run: |
+          mkdir -p report
+          printf '%s|%s|%s|%s' \
+            "${{ contains('hello world', 'world') }}" \
+            "${{ startsWith('hello', 'hel') }}" \
+            "${{ endsWith('hello', 'llo') }}" \
+            "${{ toJSON(fromJSON('{"a":1}')) }}" \
+            > report/result.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: compat-expressions-report
+          path: report/result.txt

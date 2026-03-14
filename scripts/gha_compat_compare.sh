@@ -107,6 +107,24 @@ case "$workflow_file" in
     report_name="compat-workflow-call-secrets-inherit-report"
     extra_workflow_copy=".github/workflows/__compat_reusable_secrets_inherit.yml"
     ;;
+  compat-env-output.yml)
+    report_name="compat-env-output-report"
+    ;;
+  compat-matrix-basic.yml)
+    report_name="compat-matrix-basic-report"
+    ;;
+  compat-job-needs-output.yml)
+    report_name="compat-job-needs-output-report"
+    ;;
+  compat-continue-on-error.yml)
+    report_name="compat-continue-on-error-report"
+    ;;
+  compat-step-summary.yml)
+    report_name="compat-step-summary-report"
+    ;;
+  compat-expressions.yml)
+    report_name="compat-expressions-report"
+    ;;
   *)
     echo "unsupported compat workflow: $workflow_file" >&2
     exit 1

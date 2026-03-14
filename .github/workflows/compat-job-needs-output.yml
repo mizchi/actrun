@@ -1,0 +1,32 @@
+name: Compat Job Needs Output
+
+on:
+  workflow_dispatch:
+  push:
+    tags-ignore:
+      - "**"
+    paths:
+      - .github/workflows/__compat_job_needs_output__.trigger
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.compute.outputs.version }}
+    steps:
+      - id: compute
+        shell: bash
+        run: echo "version=1.2.3" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - shell: bash
+        run: |
+          mkdir -p report
+          printf '%s|%s' "${{ needs.build.outputs.version }}" "${{ needs.build.result }}" > report/result.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: compat-job-needs-output-report
+          path: report/result.txt

@@ -1,0 +1,35 @@
+name: Compat Matrix Basic
+
+on:
+  workflow_dispatch:
+  push:
+    tags-ignore:
+      - "**"
+    paths:
+      - .github/workflows/__compat_matrix_basic__.trigger
+
+jobs:
+  compute:
+    strategy:
+      matrix:
+        label: [alpha, beta]
+    runs-on: ubuntu-latest
+    outputs:
+      result: ${{ steps.run.outputs.result }}
+    steps:
+      - id: run
+        shell: bash
+        run: echo "result=${{ matrix.label }}-done" >> "$GITHUB_OUTPUT"
+
+  collect:
+    needs: compute
+    runs-on: ubuntu-latest
+    steps:
+      - shell: bash
+        run: |
+          mkdir -p report
+          printf '%s|%s' "${{ needs.compute.outputs.result }}" "${{ needs.compute.result }}" > report/result.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: compat-matrix-basic-report
+          path: report/result.txt

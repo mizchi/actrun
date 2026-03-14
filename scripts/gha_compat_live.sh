@@ -52,6 +52,18 @@ case "$workflow_file" in
     ;;
   compat-workflow-call-secrets-inherit.yml)
     ;;
+  compat-env-output.yml)
+    ;;
+  compat-matrix-basic.yml)
+    ;;
+  compat-job-needs-output.yml)
+    ;;
+  compat-continue-on-error.yml)
+    ;;
+  compat-step-summary.yml)
+    ;;
+  compat-expressions.yml)
+    ;;
 esac
 
 echo "dispatching $workflow_file on $repo@$ref"
