@@ -6,6 +6,8 @@ package "mizchi/actrun/cmd/actrun"
 // Errors
 
 // Types and methods
+type ActrunConfig
+
 type ArtifactReadOptions
 
 type ArtifactReadParseResult
@@ -39,6 +41,8 @@ type RunReadParseResult
 type RunRecord
 
 type RunTaskFiles
+
+type TomlParseResult
 
 type WorkflowListRecord
 

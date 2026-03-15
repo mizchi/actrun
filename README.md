@@ -37,10 +37,39 @@ actrun workflow run .github/workflows/ci.yml \
 actrun workflow run .github/workflows/ci.yml \
   --workspace-mode worktree
 
+# Generate config file
+actrun init
+
 # View results
 actrun run view run-1
 actrun run logs run-1 --task build/test
 ```
+
+## Configuration
+
+`actrun init` generates an `actrun.toml` in the current directory:
+
+```toml
+# Workspace mode: local, worktree, tmp, docker
+workspace_mode = "local"
+
+# Skip actions not needed locally
+skip_actions = ["actions/checkout"]
+
+# Trust all third-party actions without prompt
+trust_actions = true
+
+# Nix integration: "auto" (force), "off" (disable), or empty (auto-detect)
+nix_mode = ""
+
+# Additional nix packages
+nix_packages = ["python312", "jq"]
+
+# Container runtime: docker, podman, container, lima, nerdctl
+container_runtime = "docker"
+```
+
+CLI flags always override `actrun.toml` settings.
 
 ## CLI Reference
 
@@ -84,6 +113,10 @@ actrun cache prune --key <key>                         # Delete cache entry
 | `--repository <owner/repo>` | GitHub repository name |
 | `--ref <ref>` | Git ref name |
 | `--run-root <path>` | Run record storage root |
+| `--nix` | Force nix wrapping for run steps |
+| `--no-nix` | Disable nix wrapping even if flake.nix/shell.nix exists |
+| `--nix-packages <pkgs>` | Ad-hoc nix packages (space-separated) |
+| `--container-runtime <name>` | Container runtime: `docker`, `podman`, `container`, `lima`, `nerdctl` |
 | `--json` | JSON output for read commands |
 
 ## Workspace Modes
@@ -93,7 +126,30 @@ actrun cache prune --key <key>                         # Delete cache entry
 | `local` | Run in-place in the current directory (default) |
 | `worktree` | Create an isolated `git worktree` for execution |
 | `tmp` | Clone to a temp directory via `git clone` |
-| `docker` | Run in a Docker container (planned) |
+| `docker` | Run in a Docker container |
+
+## Container Runtime
+
+actrun supports multiple container runtimes for job `container:`, `services:`, and `docker://` actions.
+
+| Runtime | Binary | Notes |
+|---------|--------|-------|
+| `docker` | `docker` | Default |
+| `podman` | `podman` | Docker-compatible CLI |
+| `container` | `container` | Apple container runtime (macOS) |
+| `nerdctl` | `nerdctl` | containerd CLI |
+| `lima` | `lima nerdctl` | Lima VM with nerdctl (wrapper script auto-generated) |
+
+```bash
+# CLI flag
+actrun workflow run ci.yml --container-runtime podman
+
+# actrun.toml
+container_runtime = "podman"
+
+# Environment variable (also works)
+ACTRUN_CONTAINER_RUNTIME=podman actrun workflow run ci.yml
+```
 
 ## Supported GitHub Actions
 
@@ -162,6 +218,77 @@ Secrets are automatically masked in stdout, stderr, logs, and run store. The `::
 | `ACTRUN_GITHUB_ACTION_CACHE_ROOT` | Remote action cache root |
 | `ACTRUN_ACTION_REGISTRY_ROOT` | Custom registry root |
 | `ACTRUN_WASM_ACTION_ROOT` | Wasm action module root |
+| `ACTRUN_NIX` | Set to `false` to disable nix wrapping |
+
+## Nix Integration
+
+actrun automatically detects `flake.nix` or `shell.nix` in the workspace root and wraps `run:` steps in the corresponding nix environment. This lets workflows written for `ubuntu-latest` run locally with nix-managed toolchains.
+
+### Auto-detection
+
+| Condition | Wrapping |
+|-----------|----------|
+| `flake.nix` exists | `nix develop --command <shell> <script>` |
+| `shell.nix` exists | `nix-shell --run '<shell> <script>'` |
+| Neither exists | No wrapping (host environment) |
+
+Detection requires `nix` to be installed. If `nix` is not found, wrapping is silently skipped.
+
+### Examples
+
+```bash
+# Auto-detect flake.nix / shell.nix
+actrun workflow run .github/workflows/ci.yml
+
+# Disable nix wrapping
+actrun workflow run .github/workflows/ci.yml --no-nix
+
+# Ad-hoc packages without flake.nix
+actrun workflow run .github/workflows/ci.yml --nix-packages "python312 jq"
+
+# Disable via environment variable
+ACTRUN_NIX=false actrun workflow run .github/workflows/ci.yml
+```
+
+### Typical flake.nix for Rust
+
+```nix
+{
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.11";
+  outputs = { self, nixpkgs }:
+    let
+      systems = [ "x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin" ];
+      forAllSystems = nixpkgs.lib.genAttrs systems;
+    in {
+      devShells = forAllSystems (system:
+        let pkgs = nixpkgs.legacyPackages.${system};
+        in { default = pkgs.mkShell { packages = [ pkgs.rustc pkgs.cargo ]; }; });
+    };
+}
+```
+
+### Typical flake.nix for Python + uv
+
+```nix
+{
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.11";
+  outputs = { self, nixpkgs }:
+    let
+      systems = [ "x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin" ];
+      forAllSystems = nixpkgs.lib.genAttrs systems;
+    in {
+      devShells = forAllSystems (system:
+        let pkgs = nixpkgs.legacyPackages.${system};
+        in { default = pkgs.mkShell { packages = [ pkgs.python312 pkgs.uv ]; }; });
+    };
+}
+```
+
+### Notes
+
+- Only `run:` steps are wrapped. `uses:` action steps are not affected.
+- Job `container:` steps skip nix wrapping (container has its own environment).
+- `nix develop` / `nix-shell` is invoked per step, so the nix environment is consistent across steps.
 
 ## Workflow Features
 

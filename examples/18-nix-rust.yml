@@ -1,0 +1,16 @@
+name: nix-rust
+'on': push
+# Requires: flake.nix with rustc and cargo in devShells.default
+# Example flake.nix:
+#   devShells.default = pkgs.mkShell { packages = [ pkgs.rustc pkgs.cargo ]; };
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: rustc --version && cargo --version
+      - run: |
+          cargo init --name myapp myapp
+          cd myapp
+          cargo build
+          cargo test
+          cargo run

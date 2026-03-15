@@ -1,0 +1,11 @@
+name: nix-disabled
+'on': push
+# Even with flake.nix present, --no-nix skips nix wrapping.
+# Run with: actrun examples/20-nix-no-nix.yml --no-nix
+# Or set: ACTRUN_NIX=false
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Using host environment, not nix"
+      - run: which bash && bash --version | head -1

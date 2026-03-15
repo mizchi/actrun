@@ -1,0 +1,10 @@
+name: nix-shell
+'on': push
+# Requires: shell.nix in workspace root
+# actrun auto-detects shell.nix and wraps run steps with `nix-shell --run`
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Running inside nix-shell environment"
+      - run: which hello && hello

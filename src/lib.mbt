@@ -375,7 +375,10 @@ pub fn strip_unsupported_workflow_fields(
 }
 
 ///|
-fn step_matches_skip_pattern(step : StepSpec, patterns : Array[String]) -> Bool {
+pub fn step_matches_skip_pattern(
+  step : StepSpec,
+  patterns : Array[String],
+) -> Bool {
   match step.uses {
     Some(uses) => {
       let mut matched = false

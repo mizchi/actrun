@@ -17,7 +17,7 @@ pub fn compute_bit_changed_paths(&@types.RepoFileSystem, String, PushEvent) -> B
 
 pub fn compute_bit_changed_paths_native(String, PushEvent) -> BitChangedPathsResult
 
-pub async fn execute_lowered_native(LoweringResult, workspace_root? : String, push_event? : PushEvent?, dispatch_inputs? : Map[String, String]) -> WorkflowRunReport
+pub async fn execute_lowered_native(LoweringResult, workspace_root? : String, push_event? : PushEvent?, dispatch_inputs? : Map[String, String], nix_mode? : String, nix_packages? : Array[String]) -> WorkflowRunReport
 
 pub fn extract_add_mask_values(WorkflowRunReport) -> Array[String]
 
@@ -94,6 +94,8 @@ pub async fn prefetch_workflow_github_actions_native(WorkflowSpec, String, git_b
 pub fn resolve_action_ref(ActionRef) -> ActionResolutionResult
 
 pub fn resolve_action_uses(String) -> ActionResolutionResult
+
+pub fn step_matches_skip_pattern(StepSpec, Array[String]) -> Bool
 
 pub fn strip_unsupported_workflow_fields(WorkflowSpec) -> WorkflowSpec
 

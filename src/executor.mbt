@@ -1,4 +1,86 @@
 ///|
+priv enum NixMode {
+  Flake
+  Shell
+  Packages(Array[String])
+  NixNone
+}
+
+///|
+async fn detect_nix_config(
+  workspace_root : String,
+  nix_mode : String,
+  nix_packages : Array[String],
+) -> NixMode {
+  let env_nix = @xsys.get_env_var("ACTRUN_NIX").unwrap_or("")
+  if nix_mode == "off" || env_nix == "false" || env_nix == "0" {
+    return NixNone
+  }
+  let (nix_code, _, _) = @process.collect_output("nix", ["--version"], cwd=".")
+  if nix_code != 0 {
+    return NixNone
+  }
+  if nix_packages.length() > 0 {
+    return Packages(nix_packages)
+  }
+  if nix_mode == "flake" {
+    return Flake
+  }
+  if nix_mode == "shell" {
+    return Shell
+  }
+  if @xfs.path_exists(workspace_root + "/flake.nix") {
+    return Flake
+  }
+  if @xfs.path_exists(workspace_root + "/shell.nix") {
+    return Shell
+  }
+  NixNone
+}
+
+///|
+fn nix_wrap_command(
+  config : NixMode,
+  cmd : String,
+  args : Array[String],
+) -> (String, Array[String]) {
+  match config {
+    Flake => {
+      let nix_args : Array[String] = ["develop", "--command", cmd]
+      for arg in args {
+        nix_args.push(arg)
+      }
+      ("nix", nix_args)
+    }
+    Shell => {
+      let inner = shell_escape_joined(cmd, args)
+      ("nix-shell", ["--run", inner])
+    }
+    Packages(pkgs) => {
+      let nix_args : Array[String] = []
+      for pkg in pkgs {
+        nix_args.push("-p")
+        nix_args.push(pkg)
+      }
+      let inner = shell_escape_joined(cmd, args)
+      nix_args.push("--run")
+      nix_args.push(inner)
+      ("nix-shell", nix_args)
+    }
+    NixNone => (cmd, args)
+  }
+}
+
+///|
+fn shell_escape_joined(cmd : String, args : Array[String]) -> String {
+  let parts : Array[String] = [shell_escape_arg(cmd)]
+  for arg in args {
+    parts.push(shell_escape_arg(arg))
+  }
+  parts.join(" ")
+}
+
+///|
 fn lowered_issues(lowered : LoweringResult) -> Array[String] {
   let issues : Array[String] = []
   for err in lowered.errors {
@@ -3262,6 +3344,7 @@ async fn execute_task_plan_native(
   job_containers : Map[String, JobContainerSpec],
   job_services : Map[String, Map[String, JobContainerSpec]],
   dispatch_inputs~ : Map[String, String],
+  nix_config? : NixMode = NixNone,
 ) -> TaskExecutionResult {
   if plan.kind == "barrier" {
     return {
@@ -3369,7 +3452,11 @@ async fn execute_task_plan_native(
       )
     None => ()
   }
-  let (cmd, args) = shell_command(resolved_shell, file_commands.script_path)
+  let (raw_cmd, raw_args) = shell_command(
+    resolved_shell,
+    file_commands.script_path,
+  )
+  let (cmd, args) = nix_wrap_command(nix_config, raw_cmd, raw_args)
   let env = default_runner_env(
     workflow_name, plan, workspace_root, github_ctx, resolved_plan_env, file_commands,
     runner_ctx,
@@ -3407,12 +3494,15 @@ pub async fn execute_lowered_native(
   workspace_root? : String = ".",
   push_event? : PushEvent? = None,
   dispatch_inputs? : Map[String, String] = {},
+  nix_mode? : String = "",
+  nix_packages? : Array[String] = [],
 ) -> WorkflowRunReport {
   let issues = lowered_issues(lowered)
   if issues.length() > 0 {
     return make_invalid_report(issues)
   }
   ignore(exec_remove_tree(artifact_store_root(workspace_root)))
+  let nix_config = detect_nix_config(workspace_root, nix_mode, nix_packages)
 
   let ir = lowered.ir
   let selected = selected_task_set(ir)
@@ -3802,6 +3892,7 @@ pub async fn execute_lowered_native(
                 lowered.plan.job_containers,
                 lowered.plan.job_services,
                 dispatch_inputs~,
+                nix_config~,
               )
               let report = result.report
               reports.push(report)
@@ -4050,10 +4141,14 @@ pub async fn execute_lowered_native(
   workspace_root? : String = ".",
   push_event? : PushEvent? = None,
   dispatch_inputs? : Map[String, String] = {},
+  nix_mode? : String = "",
+  nix_packages? : Array[String] = [],
 ) -> WorkflowRunReport {
   ignore(lowered)
   ignore(workspace_root)
   ignore(push_event)
   ignore(dispatch_inputs)
+  ignore(nix_mode)
+  ignore(nix_packages)
   make_invalid_report(["native executor is only available on native target"])
 }

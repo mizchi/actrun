@@ -1,0 +1,11 @@
+name: nix-packages
+'on': push
+# No flake.nix or shell.nix needed
+# Use --nix-packages to provide ad-hoc packages:
+#   actrun examples/17-nix-packages.yml --nix-packages "python312 jq"
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: python3 --version
+      - run: jq --version

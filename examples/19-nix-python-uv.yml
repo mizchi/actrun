@@ -1,0 +1,15 @@
+name: nix-python-uv
+'on': push
+# Requires: flake.nix with python and uv in devShells.default
+# Example flake.nix:
+#   devShells.default = pkgs.mkShell { packages = [ pkgs.python312 pkgs.uv ]; };
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: python3 --version && uv --version
+      - run: |
+          uv init --no-workspace myapp
+          cd myapp
+          uv add requests
+          uv run python -c "import requests; print('requests', requests.__version__)"

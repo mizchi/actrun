@@ -1,0 +1,10 @@
+name: nix-flake
+'on': push
+# Requires: flake.nix in workspace root with devShells.default
+# actrun auto-detects flake.nix and wraps run steps with `nix develop --command`
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: nix build -L
+      - run: nix flake show
