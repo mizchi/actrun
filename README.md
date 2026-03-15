@@ -73,7 +73,7 @@ container_runtime = "docker"
 # patterns = ["src/**", "package.json"]
 ```
 
-CLI flags always override `actrun.toml` settings. See [Advanced Workflow](docs/advanced-workflow.md) for `--affected`, `--retry`, and `local_skip_actions`.
+CLI flags always override `actrun.toml` settings. See [Cheatsheet](docs/cheatsheet.md) for quick reference and [Advanced Workflow](docs/advanced-workflow.md) for details.
 
 ## CLI Reference
 
