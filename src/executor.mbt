@@ -16,8 +16,11 @@ async fn detect_nix_config(
   if nix_mode == "off" || env_nix == "false" || env_nix == "0" {
     return NixNone
   }
-  let (nix_code, _, _) = @process.collect_output("nix", ["--version"], cwd=".")
-  if nix_code != 0 {
+  // Check nix exists via `which` to avoid ENOENT abort from process.run
+  let (which_code, _, _) = @process.collect_output(
+    "which", ["nix"], cwd=".",
+  )
+  if which_code != 0 {
     return NixNone
   }
   if nix_packages.length() > 0 {
