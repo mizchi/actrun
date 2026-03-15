@@ -539,7 +539,48 @@ fn if_expression_function_supported(text : String) -> Bool {
     }
     None => ()
   }
+  match if_function_arguments_at_least(text, "case", 1) {
+    Some(args) => {
+      for arg in args {
+        if not(if_condition_supported(arg)) {
+          return false
+        }
+      }
+      return true
+    }
+    None => ()
+  }
   false
+}
+
+///|
+fn if_number_literal(text : String) -> Bool {
+  let trimmed = text.trim(chars=" \t\n\r").to_string()
+  if trimmed.length() == 0 {
+    return false
+  }
+  let mut i = 0
+  if trimmed.unsafe_get(i).to_int() == '-'.to_int() ||
+    trimmed.unsafe_get(i).to_int() == '+'.to_int() {
+    i += 1
+  }
+  if i >= trimmed.length() {
+    return false
+  }
+  let mut has_digit = false
+  let mut has_dot = false
+  while i < trimmed.length() {
+    let ch = trimmed.unsafe_get(i).to_int()
+    if ch >= '0'.to_int() && ch <= '9'.to_int() {
+      has_digit = true
+    } else if ch == '.'.to_int() && not(has_dot) {
+      has_dot = true
+    } else {
+      return false
+    }
+    i += 1
+  }
+  has_digit
 }
 
 ///|
@@ -548,6 +589,9 @@ fn if_condition_atom_supported(text : String) -> Bool {
     return true
   }
   if if_quoted_string(text) is Some(_) {
+    return true
+  }
+  if if_number_literal(text) {
     return true
   }
   if if_expression_function_supported(text) {
@@ -631,6 +675,38 @@ fn if_condition_supported(text : String) -> Bool {
       return if_condition_supported(if_text_slice(trimmed, 0, idx)) &&
         if_condition_supported(
           if_text_slice(trimmed, idx + 2, trimmed.length()),
+        )
+    None => ()
+  }
+  match find_top_level_if_operator(trimmed, ">=") {
+    Some(idx) =>
+      return if_condition_supported(if_text_slice(trimmed, 0, idx)) &&
+        if_condition_supported(
+          if_text_slice(trimmed, idx + 2, trimmed.length()),
+        )
+    None => ()
+  }
+  match find_top_level_if_operator(trimmed, "<=") {
+    Some(idx) =>
+      return if_condition_supported(if_text_slice(trimmed, 0, idx)) &&
+        if_condition_supported(
+          if_text_slice(trimmed, idx + 2, trimmed.length()),
+        )
+    None => ()
+  }
+  match find_top_level_if_operator(trimmed, ">") {
+    Some(idx) =>
+      return if_condition_supported(if_text_slice(trimmed, 0, idx)) &&
+        if_condition_supported(
+          if_text_slice(trimmed, idx + 1, trimmed.length()),
+        )
+    None => ()
+  }
+  match find_top_level_if_operator(trimmed, "<") {
+    Some(idx) =>
+      return if_condition_supported(if_text_slice(trimmed, 0, idx)) &&
+        if_condition_supported(
+          if_text_slice(trimmed, idx + 1, trimmed.length()),
         )
     None => ()
   }
@@ -859,6 +935,25 @@ fn if_expression_function_value(
     }
     None => ()
   }
+  match if_function_arguments_at_least(text, "case", 1) {
+    Some(args) => {
+      let has_default = args.length() % 2 == 1
+      let pair_count = args.length() / 2
+      let mut i = 0
+      while i < pair_count {
+        let pred = if_condition_atom_value(args[i * 2], ctx)
+        if if_condition_value_truthy(pred) {
+          return Some(if_condition_atom_value(args[i * 2 + 1], ctx))
+        }
+        i += 1
+      }
+      if has_default {
+        return Some(if_condition_atom_value(args[args.length() - 1], ctx))
+      }
+      return Some(if_condition_value_from_json(Json::string("")))
+    }
+    None => ()
+  }
   None
 }
 
@@ -874,6 +969,10 @@ fn if_condition_atom_value(
   match if_quoted_string(text) {
     Some(value) => return if_condition_value_from_json(Json::string(value))
     None => ()
+  }
+  if if_number_literal(text) {
+    let trimmed = text.trim(chars=" \t\n\r").to_string()
+    return if_condition_value_from_json(Json::string(trimmed))
   }
   match if_expression_function_value(text, ctx) {
     Some(value) => return value
@@ -1000,6 +1099,42 @@ fn evaluate_string_function_expression(
 }
 
 ///|
+fn try_parse_int64(s : String) -> Int64? {
+  let v = @strconv.parse_int64(s) catch { _ => return None }
+  Some(v)
+}
+
+///|
+fn try_parse_double(s : String) -> Double? {
+  let v = @strconv.parse_double(s) catch { _ => return None }
+  Some(v)
+}
+
+///|
+fn compare_condition_values(
+  left : ConditionValue,
+  right : ConditionValue,
+) -> Int {
+  let left_str = if_condition_value_to_string(left)
+  let right_str = if_condition_value_to_string(right)
+  match (try_parse_int64(left_str), try_parse_int64(right_str)) {
+    (Some(l), Some(r)) => if l < r { -1 } else if l > r { 1 } else { 0 }
+    _ =>
+      match (try_parse_double(left_str), try_parse_double(right_str)) {
+        (Some(l), Some(r)) => if l < r { -1 } else if l > r { 1 } else { 0 }
+        _ =>
+          if left_str < right_str {
+            -1
+          } else if left_str > right_str {
+            1
+          } else {
+            0
+          }
+      }
+  }
+}
+
+///|
 fn eval_if_condition_bool(text : String, ctx : IfConditionContext) -> Bool {
   let trimmed = strip_if_outer_parens(text)
   if trimmed.length() == 0 {
@@ -1045,6 +1180,50 @@ fn eval_if_condition_bool(text : String, ctx : IfConditionContext) -> Bool {
           ctx,
         ),
       )
+    None => ()
+  }
+  match find_top_level_if_operator(trimmed, ">=") {
+    Some(idx) => {
+      let left = if_condition_atom_value(if_text_slice(trimmed, 0, idx), ctx)
+      let right = if_condition_atom_value(
+        if_text_slice(trimmed, idx + 2, trimmed.length()),
+        ctx,
+      )
+      return compare_condition_values(left, right) >= 0
+    }
+    None => ()
+  }
+  match find_top_level_if_operator(trimmed, "<=") {
+    Some(idx) => {
+      let left = if_condition_atom_value(if_text_slice(trimmed, 0, idx), ctx)
+      let right = if_condition_atom_value(
+        if_text_slice(trimmed, idx + 2, trimmed.length()),
+        ctx,
+      )
+      return compare_condition_values(left, right) <= 0
+    }
+    None => ()
+  }
+  match find_top_level_if_operator(trimmed, ">") {
+    Some(idx) => {
+      let left = if_condition_atom_value(if_text_slice(trimmed, 0, idx), ctx)
+      let right = if_condition_atom_value(
+        if_text_slice(trimmed, idx + 1, trimmed.length()),
+        ctx,
+      )
+      return compare_condition_values(left, right) > 0
+    }
+    None => ()
+  }
+  match find_top_level_if_operator(trimmed, "<") {
+    Some(idx) => {
+      let left = if_condition_atom_value(if_text_slice(trimmed, 0, idx), ctx)
+      let right = if_condition_atom_value(
+        if_text_slice(trimmed, idx + 1, trimmed.length()),
+        ctx,
+      )
+      return compare_condition_values(left, right) < 0
+    }
     None => ()
   }
   if trimmed.has_prefix("!") {
