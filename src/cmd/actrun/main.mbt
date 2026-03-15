@@ -2402,22 +2402,120 @@ fn is_trusted_action_owner(uses : String) -> Bool {
 }
 
 ///|
-fn collect_third_party_actions(workflow : @ar.WorkflowSpec) -> Array[String] {
+fn collect_third_party_actions(
+  workflow : @ar.WorkflowSpec,
+  workspace_root? : String = ".",
+) -> Array[String] {
   let seen : Map[String, Bool] = {}
   let result : Array[String] = []
   for job in workflow.jobs {
+    // Scan reusable workflow files
+    match job.reusable_workflow {
+      Some(path) if path.has_prefix("./") => {
+        let full = join_path(workspace_root, path)
+        let callee_text = try @xfs.read_file_to_string(full) catch {
+          _ => ""
+        } noraise {
+          v => v
+        }
+        if callee_text.length() > 0 {
+          let parsed = @ar.parse_workflow_yaml(callee_text)
+          match parsed.workflow {
+            Some(callee) =>
+              for cj in callee.jobs {
+                scan_steps_for_third_party(cj.steps, seen, result, "")
+              }
+            None => ()
+          }
+        }
+      }
+      _ => ()
+    }
     for step in job.steps {
       match step.uses {
-        Some(uses) =>
+        Some(uses) => {
+          // Direct third-party check
           if not(is_trusted_action_owner(uses)) && not(seen.contains(uses)) {
             seen[uses] = true
             result.push(uses)
           }
+          // Scan local composite action internals
+          if uses.has_prefix("./") || uses.has_prefix("../") {
+            scan_local_action_manifest(
+              join_path(workspace_root, uses),
+              uses,
+              seen,
+              result,
+            )
+          }
+        }
         None => ()
       }
     }
   }
   result
+}
+
+///|
+fn scan_steps_for_third_party(
+  steps : Array[@ar.StepSpec],
+  seen : Map[String, Bool],
+  result : Array[String],
+  via : String,
+) -> Unit {
+  for step in steps {
+    match step.uses {
+      Some(uses) =>
+        if not(is_trusted_action_owner(uses)) && not(seen.contains(uses)) {
+          seen[uses] = true
+          if via.length() > 0 {
+            result.push(uses + " (via " + via + ")")
+          } else {
+            result.push(uses)
+          }
+        }
+      None => ()
+    }
+  }
+}
+
+///|
+fn scan_local_action_manifest(
+  action_dir : String,
+  via : String,
+  seen : Map[String, Bool],
+  result : Array[String],
+) -> Unit {
+  let yml = action_dir + "/action.yml"
+  let yaml = action_dir + "/action.yaml"
+  let text = try @xfs.read_file_to_string(yml) catch {
+    _ =>
+      try @xfs.read_file_to_string(yaml) catch {
+        _ => ""
+      } noraise {
+        v => v
+      }
+  } noraise {
+    v => v
+  }
+  if text.length() == 0 {
+    return
+  }
+  // Extract uses: lines from manifest text (simple grep approach)
+  for line_view in text.split("\n") {
+    let line = line_view.trim(chars=" \t\r").to_string()
+    if line.has_prefix("uses:") {
+      let uses = String::unsafe_substring(line, start=5, end=line.length())
+        .trim(chars=" \t'\"")
+        .to_string()
+      if uses.length() > 0 &&
+        not(is_trusted_action_owner(uses)) &&
+        not(seen.contains(uses)) {
+        seen[uses] = true
+        result.push(uses + " (via " + via + ")")
+      }
+    }
+  }
 }
 
 ///|
