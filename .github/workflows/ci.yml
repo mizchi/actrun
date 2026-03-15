@@ -34,9 +34,6 @@ jobs:
           echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
       - name: Moon version
         run: moon version --all
-      - name: Moon update
-        if: ${{ !env.ACTRUN_LOCAL }}
-        run: moon update
       - name: Verify format
         run: just fmt-check
       - name: Verify generated interfaces
@@ -67,9 +64,6 @@ jobs:
           echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
       - name: Moon version
         run: moon version --all
-      - name: Moon update
-        if: ${{ !env.ACTRUN_LOCAL }}
-        run: moon update
       - name: Moon check
         run: just target=${{ matrix.target }} check
       - name: Moon test
@@ -90,9 +84,6 @@ jobs:
         run: |
           curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
           echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
-      - name: Moon update
-        if: ${{ !env.ACTRUN_LOCAL }}
-        run: moon update
       - name: Build CLI
         run: moon build src/cmd/actrun --target native
       - name: Run E2E scenarios
