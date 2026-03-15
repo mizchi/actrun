@@ -2388,6 +2388,9 @@ fn print_dry_run_plan(
   lowered : @ar.LoweringResult,
 ) -> Unit {
   println("workflow=" + workflow.name)
+  if workflow.run_name.length() > 0 {
+    println("run-name=" + workflow.run_name)
+  }
   println("mode=dry-run")
   println("")
   let mut current_job = ""
@@ -3387,6 +3390,9 @@ fn print_report(
     println("run_id=\{run_id}")
   }
   println("workflow=\{workflow.name}")
+  if workflow.run_name.length() > 0 {
+    println("run-name=\{workflow.run_name}")
+  }
   println("state=\{report.state}")
   for step in report.steps {
     println("\{step.id}: \{step.status}")

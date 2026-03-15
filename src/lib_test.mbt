@@ -326,7 +326,7 @@ test "parser: parse local composite action yaml" {
 }
 
 ///|
-test "parser: reject non-push trigger" {
+test "parser: accept pull_request trigger" {
   let src =
     #|on: pull_request
     #|jobs:
@@ -335,7 +335,21 @@ test "parser: reject non-push trigger" {
     #|    steps:
     #|      - run: echo ok
   let parsed = parse_workflow_yaml(src)
+  inspect(parsed.errors, content="[]")
+  guard parsed.workflow is Some(workflow) else { fail("expected workflow") }
+  inspect(workflow.jobs.length(), content="1")
+}
 
+///|
+test "parser: reject unsupported trigger" {
+  let src =
+    #|on: schedule
+    #|jobs:
+    #|  test:
+    #|    runs-on: ubuntu-latest
+    #|    steps:
+    #|      - run: echo ok
+  let parsed = parse_workflow_yaml(src)
   inspect(
     parsed.errors,
     content="[\"only push and workflow_call triggers are supported in MVP\"]",

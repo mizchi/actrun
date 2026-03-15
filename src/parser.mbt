@@ -1110,6 +1110,16 @@ fn parse_push_trigger_value(
           errors,
           "on.push.paths-ignore",
         ),
+        tags=yaml_as_string_list(
+          yaml_obj_get(fields, "tags"),
+          errors,
+          "on.push.tags",
+        ),
+        tags_ignore=yaml_as_string_list(
+          yaml_obj_get(fields, "tags-ignore"),
+          errors,
+          "on.push.tags-ignore",
+        ),
       )
     _ => {
       errors.push("on.push must be a mapping")
@@ -1122,7 +1132,9 @@ fn parse_push_trigger_value(
 fn parse_trigger(value : YamlValue?, errors : Array[String]) -> ParsedTriggers {
   match value {
     Some(Str(event_name)) =>
-      if event_name == "push" {
+      if event_name == "push" ||
+        event_name == "pull_request" ||
+        event_name == "pull_request_target" {
         {
           push: new_push_trigger(),
           workflow_call: false,
@@ -1146,7 +1158,9 @@ fn parse_trigger(value : YamlValue?, errors : Array[String]) -> ParsedTriggers {
       let mut has_push = false
       let mut workflow_call = false
       for item in items {
-        if item is Str("push") {
+        if item is Str("push") ||
+          item is Str("pull_request") ||
+          item is Str("pull_request_target") {
           has_push = true
         }
         if item is Str("workflow_call") {
@@ -1191,13 +1205,24 @@ fn parse_trigger(value : YamlValue?, errors : Array[String]) -> ParsedTriggers {
     Some(Obj(fields)) => {
       let push = match yaml_obj_get(fields, "push") {
         Some(push_value) => parse_push_trigger_value(push_value, errors)
-        None => new_push_trigger()
+        None =>
+          match yaml_obj_get(fields, "pull_request") {
+            Some(pr_value) => parse_push_trigger_value(pr_value, errors)
+            None =>
+              match yaml_obj_get(fields, "pull_request_target") {
+                Some(prt_value) => parse_push_trigger_value(prt_value, errors)
+                None => new_push_trigger()
+              }
+          }
       }
       let workflow_call = parse_workflow_call_trigger(
         yaml_obj_get(fields, "workflow_call"),
         errors,
       )
-      if yaml_obj_get(fields, "push") is None && workflow_call is None {
+      let has_push_like = yaml_obj_get(fields, "push") is Some(_) ||
+        yaml_obj_get(fields, "pull_request") is Some(_) ||
+        yaml_obj_get(fields, "pull_request_target") is Some(_)
+      if not(has_push_like) && workflow_call is None {
         errors.push("only push and workflow_call triggers are supported in MVP")
       }
       {
@@ -1261,6 +1286,11 @@ fn parse_step(
       errors,
       ctx + ".continue-on-error",
     ).unwrap_or("false"),
+    timeout_minutes: yaml_as_optional_int(
+      yaml_obj_get(fields, "timeout-minutes"),
+      errors,
+      ctx + ".timeout-minutes",
+    ).unwrap_or(0),
   }
 }
 
@@ -1445,6 +1475,29 @@ fn parse_reusable_workflow_secrets(
 }
 
 ///|
+fn parse_environment(
+  value : YamlValue?,
+  errors : Array[String],
+  ctx : String,
+) -> String {
+  guard value is Some(actual) else { return "" }
+  match actual {
+    Str(name) => name
+    Obj(fields) =>
+      yaml_as_optional_string(
+        yaml_obj_get(fields, "name"),
+        errors,
+        ctx + ".name",
+      ).unwrap_or("")
+    Null => ""
+    _ => {
+      errors.push(ctx + " must be a string or mapping")
+      ""
+    }
+  }
+}
+
+///|
 fn parse_job(id : String, value : YamlValue, errors : Array[String]) -> JobSpec {
   let ctx = "jobs." + id
   let fields = yaml_as_obj(value, errors, ctx)
@@ -1531,6 +1584,16 @@ fn parse_job(id : String, value : YamlValue, errors : Array[String]) -> JobSpec 
       yaml_obj_get(fields, "services"),
       errors,
       ctx + ".services",
+    ),
+    timeout_minutes=yaml_as_optional_int(
+      yaml_obj_get(fields, "timeout-minutes"),
+      errors,
+      ctx + ".timeout-minutes",
+    ).unwrap_or(0),
+    environment=parse_environment(
+      yaml_obj_get(fields, "environment"),
+      errors,
+      ctx + ".environment",
     ),
   )
 }
@@ -1774,6 +1837,11 @@ pub fn parse_workflow_yaml(text : String) -> WorkflowParseResult {
       "",
     ),
     jobs,
+    run_name=yaml_as_optional_string(
+      yaml_obj_get(root_fields, "run-name"),
+      errors,
+      "run-name",
+    ).unwrap_or(""),
     trigger=parsed_trigger.push,
     workflow_call=parsed_trigger.workflow_call,
     workflow_call_spec=parsed_trigger.workflow_call_spec,

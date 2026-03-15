@@ -224,6 +224,7 @@ fn rewrite_reusable_step_local_uses(
             with_values: step.with_values,
             if_condition: step.if_condition,
             continue_on_error: step.continue_on_error,
+            timeout_minutes: step.timeout_minutes,
           }
         }
         _ => step
@@ -807,6 +808,7 @@ fn substitute_reusable_bindings_step(
       inputs,
       secrets,
     ),
+    timeout_minutes: step.timeout_minutes,
   }
 }
 
@@ -960,6 +962,7 @@ fn substitute_reusable_needs_step(
       step.continue_on_error,
       replacements,
     ),
+    timeout_minutes: step.timeout_minutes,
   }
 }
 
@@ -985,6 +988,7 @@ fn substitute_matrix_step(
       step.continue_on_error,
       matrix_values,
     ),
+    timeout_minutes: step.timeout_minutes,
   }
 }
 
@@ -1033,6 +1037,7 @@ fn substitute_matrix_job(
     reusable_workflow_inherit_secrets=job.reusable_workflow_inherit_secrets,
     services=job.services,
     container=job.container,
+    timeout_minutes=job.timeout_minutes,
   )
 }
 
@@ -1734,6 +1739,7 @@ fn append_run_task(
   continue_on_error : String,
   env : Map[String, String],
   action_scope? : String? = None,
+  timeout_minutes? : Int = 0,
 ) -> Unit {
   tasks.push(
     @wf.new_task(task_id, job.id, script, needs, env~, cwd=working_directory),
@@ -1753,6 +1759,7 @@ fn append_run_task(
       env,
       continue_on_error~,
       action_scope~,
+      timeout_minutes~,
     ),
   )
 }
@@ -1774,6 +1781,7 @@ fn append_action_task(
   action : ResolvedAction,
   action_scope? : String? = None,
   requires_action_started? : Bool = false,
+  timeout_minutes? : Int = 0,
 ) -> Unit {
   tasks.push(
     @wf.new_task(task_id, job.id, "__actrun_" + action.kind + "__", needs, env~),
@@ -1795,6 +1803,7 @@ fn append_action_task(
       action=Some(action),
       action_scope~,
       requires_action_started~,
+      timeout_minutes~,
     ),
   )
 }
@@ -2424,6 +2433,7 @@ fn lower_local_action(
         with_values: nested_with_values,
         if_condition: inner_step.if_condition,
         continue_on_error: inner_step.continue_on_error,
+        timeout_minutes: inner_step.timeout_minutes,
       }
       match action_ref {
         LocalPath(path) => {
@@ -2769,6 +2779,11 @@ pub fn lower_push_workflow_in_workspace(
       }
       let task_id = step_task_id(job.id, resolved_step_id)
       let needs = task_needs(job, previous_task_id)
+      let effective_timeout = if step.timeout_minutes > 0 {
+        step.timeout_minutes
+      } else {
+        job.timeout_minutes
+      }
       append_run_task(
         tasks,
         task_plans,
@@ -2783,6 +2798,7 @@ pub fn lower_push_workflow_in_workspace(
         step.if_condition,
         step.continue_on_error,
         step_env,
+        timeout_minutes=effective_timeout,
       )
       previous_task_id = task_id
       step_index += 1

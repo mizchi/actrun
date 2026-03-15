@@ -47,7 +47,7 @@ pub fn new_backend_capabilities(host? : Bool, docker? : Bool, wasm? : Bool) -> B
 
 pub fn new_concurrency_spec(String, cancel_in_progress? : String?) -> ConcurrencySpec
 
-pub fn new_job(String, Array[StepSpec], name? : String, if_condition? : String, needs? : Array[String], outputs? : Map[String, String], permissions? : PermissionsSpec?, concurrency? : ConcurrencySpec?, runs_on? : Array[String], env? : Map[String, String], defaults? : RunDefaults, matrix? : JobMatrixSpec?, reusable_workflow? : String?, reusable_workflow_with? : Map[String, String], reusable_workflow_secrets? : Map[String, String], reusable_workflow_inherit_secrets? : Bool, container? : JobContainerSpec?, container_image? : String?, services? : Map[String, JobContainerSpec]) -> JobSpec
+pub fn new_job(String, Array[StepSpec], name? : String, if_condition? : String, needs? : Array[String], outputs? : Map[String, String], permissions? : PermissionsSpec?, concurrency? : ConcurrencySpec?, runs_on? : Array[String], env? : Map[String, String], defaults? : RunDefaults, matrix? : JobMatrixSpec?, reusable_workflow? : String?, reusable_workflow_with? : Map[String, String], reusable_workflow_secrets? : Map[String, String], reusable_workflow_inherit_secrets? : Bool, container? : JobContainerSpec?, container_image? : String?, services? : Map[String, JobContainerSpec], timeout_minutes? : Int, environment? : String) -> JobSpec
 
 pub fn new_job_container_credentials_spec(String, String) -> JobContainerCredentialsSpec
 
@@ -61,17 +61,17 @@ pub fn new_permissions_spec(values? : Map[String, String]) -> PermissionsSpec
 
 pub fn new_push_event(String, Array[String], before_sha? : String, after_sha? : String, repository? : String, actor? : String) -> PushEvent
 
-pub fn new_push_trigger(branches? : Array[String], branches_ignore? : Array[String], paths? : Array[String], paths_ignore? : Array[String]) -> PushTrigger
+pub fn new_push_trigger(branches? : Array[String], branches_ignore? : Array[String], paths? : Array[String], paths_ignore? : Array[String], tags? : Array[String], tags_ignore? : Array[String]) -> PushTrigger
 
 pub fn new_run_defaults(shell? : String?, working_directory? : String?) -> RunDefaults
 
-pub fn new_run_step(String, String, name? : String, shell? : String?, working_directory? : String?, env? : Map[String, String], if_condition? : String, with_values? : Map[String, String], continue_on_error? : String) -> StepSpec
+pub fn new_run_step(String, String, name? : String, shell? : String?, working_directory? : String?, env? : Map[String, String], if_condition? : String, with_values? : Map[String, String], continue_on_error? : String, timeout_minutes? : Int) -> StepSpec
 
-pub fn new_task_plan(String, String, String, String, String, String, String, String, String, Array[String], Map[String, String], action? : ResolvedAction?, action_scope? : String?, requires_action_started? : Bool, continue_on_error? : String) -> TaskPlan
+pub fn new_task_plan(String, String, String, String, String, String, String, String, String, Array[String], Map[String, String], action? : ResolvedAction?, action_scope? : String?, requires_action_started? : Bool, continue_on_error? : String, timeout_minutes? : Int) -> TaskPlan
 
-pub fn new_uses_step(String, String, name? : String, env? : Map[String, String], if_condition? : String, with_values? : Map[String, String], continue_on_error? : String) -> StepSpec
+pub fn new_uses_step(String, String, name? : String, env? : Map[String, String], if_condition? : String, with_values? : Map[String, String], continue_on_error? : String, timeout_minutes? : Int) -> StepSpec
 
-pub fn new_workflow(String, Array[JobSpec], trigger? : PushTrigger, workflow_call? : Bool, workflow_call_spec? : WorkflowCallSpec?, permissions? : PermissionsSpec?, concurrency? : ConcurrencySpec?, env? : Map[String, String], defaults? : RunDefaults) -> WorkflowSpec
+pub fn new_workflow(String, Array[JobSpec], run_name? : String, trigger? : PushTrigger, workflow_call? : Bool, workflow_call_spec? : WorkflowCallSpec?, permissions? : PermissionsSpec?, concurrency? : ConcurrencySpec?, env? : Map[String, String], defaults? : RunDefaults) -> WorkflowSpec
 
 pub fn new_workflow_call_input_spec(description? : String, required? : Bool, default_value? : String?, input_type? : String) -> WorkflowCallInputSpec
 
@@ -208,6 +208,8 @@ pub struct JobSpec {
   services : Map[String, JobContainerSpec]
   container : JobContainerSpec?
   container_image : String?
+  timeout_minutes : Int
+  environment : String
 }
 
 pub struct LocalActionParseResult {
@@ -250,6 +252,8 @@ pub struct PushTrigger {
   branches_ignore : Array[String]
   paths : Array[String]
   paths_ignore : Array[String]
+  tags : Array[String]
+  tags_ignore : Array[String]
 }
 
 pub struct ResolvedAction {
@@ -280,6 +284,7 @@ pub struct StepSpec {
   with_values : Map[String, String]
   if_condition : String
   continue_on_error : String
+  timeout_minutes : Int
 }
 
 pub struct TaskPlan {
@@ -298,6 +303,7 @@ pub struct TaskPlan {
   action_scope : String?
   requires_action_started : Bool
   continue_on_error : String
+  timeout_minutes : Int
 }
 
 pub struct TaskRunReport {
@@ -351,6 +357,7 @@ pub struct WorkflowRunReport {
 
 pub struct WorkflowSpec {
   name : String
+  run_name : String
   trigger : PushTrigger
   workflow_call : Bool
   workflow_call_spec : WorkflowCallSpec?

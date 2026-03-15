@@ -201,6 +201,17 @@ The approach has two stages:
   - [x] Main branch live compat (compat-live.yml)
   - [x] CLI contract diff (JSON schema tests in main_wbtest.mbt)
 
+## P6: Remaining GitHub Actions Features
+
+- [x] `timeout-minutes` (step and job level, parsed and stored, not enforced)
+- [x] `on.push.tags` / `on.push.tags-ignore` filter
+- [x] `run-name` (workflow run display name)
+- [x] `pull_request` trigger (branches/paths filters, treated same as push locally)
+- [x] `environment` (deployment environments, parsed as metadata)
+- [ ] `concurrency` enforcement (group + cancel-in-progress)
+- [ ] `schedule` trigger (cron, local dry-run only)
+- [ ] Other event triggers (issues, release, deployment, etc. — low priority)
+
 ## Completion Criteria
 
 - [x] Can operate local run / logs / artifacts / cache via `gh`-compatible CLI

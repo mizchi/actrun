@@ -140,6 +140,8 @@ pub struct PushTrigger {
   branches_ignore : Array[String]
   paths : Array[String]
   paths_ignore : Array[String]
+  tags : Array[String]
+  tags_ignore : Array[String]
 }
 
 ///|
@@ -148,8 +150,10 @@ pub fn new_push_trigger(
   branches_ignore? : Array[String] = [],
   paths? : Array[String] = [],
   paths_ignore? : Array[String] = [],
+  tags? : Array[String] = [],
+  tags_ignore? : Array[String] = [],
 ) -> PushTrigger {
-  { branches, branches_ignore, paths, paths_ignore }
+  { branches, branches_ignore, paths, paths_ignore, tags, tags_ignore }
 }
 
 ///|
@@ -186,6 +190,7 @@ pub struct StepSpec {
   with_values : Map[String, String]
   if_condition : String
   continue_on_error : String
+  timeout_minutes : Int
 }
 
 ///|
@@ -199,6 +204,7 @@ pub fn new_run_step(
   if_condition? : String = "success()",
   with_values? : Map[String, String] = {},
   continue_on_error? : String = "false",
+  timeout_minutes? : Int = 0,
 ) -> StepSpec {
   {
     id,
@@ -211,6 +217,7 @@ pub fn new_run_step(
     with_values,
     if_condition,
     continue_on_error,
+    timeout_minutes,
   }
 }
 
@@ -223,6 +230,7 @@ pub fn new_uses_step(
   if_condition? : String = "success()",
   with_values? : Map[String, String] = {},
   continue_on_error? : String = "false",
+  timeout_minutes? : Int = 0,
 ) -> StepSpec {
   {
     id,
@@ -235,6 +243,7 @@ pub fn new_uses_step(
     with_values,
     if_condition,
     continue_on_error,
+    timeout_minutes,
   }
 }
 
@@ -259,6 +268,8 @@ pub struct JobSpec {
   services : Map[String, JobContainerSpec]
   container : JobContainerSpec?
   container_image : String?
+  timeout_minutes : Int
+  environment : String
 }
 
 ///|
@@ -298,6 +309,8 @@ pub fn new_job(
   container? : JobContainerSpec? = None,
   container_image? : String? = None,
   services? : Map[String, JobContainerSpec] = {},
+  timeout_minutes? : Int = 0,
+  environment? : String = "",
 ) -> JobSpec {
   let actual_container = match container {
     Some(spec) => Some(spec)
@@ -331,12 +344,15 @@ pub fn new_job(
     services,
     container: actual_container,
     container_image: actual_container_image,
+    timeout_minutes,
+    environment,
   }
 }
 
 ///|
 pub struct WorkflowSpec {
   name : String
+  run_name : String
   trigger : PushTrigger
   workflow_call : Bool
   workflow_call_spec : WorkflowCallSpec?
@@ -400,6 +416,7 @@ pub fn filter_workflow_steps(
 pub fn new_workflow(
   name : String,
   jobs : Array[JobSpec],
+  run_name? : String = "",
   trigger? : PushTrigger = new_push_trigger(),
   workflow_call? : Bool = false,
   workflow_call_spec? : WorkflowCallSpec? = None,
@@ -410,6 +427,7 @@ pub fn new_workflow(
 ) -> WorkflowSpec {
   {
     name,
+    run_name,
     trigger,
     workflow_call,
     workflow_call_spec,
@@ -438,6 +456,9 @@ pub struct TaskPlan {
   action_scope : String?
   requires_action_started : Bool
   continue_on_error : String
+  // Parsed from step or job timeout-minutes. 0 means no timeout.
+  // Currently parsed but not enforced at execution time.
+  timeout_minutes : Int
 }
 
 ///|
@@ -457,6 +478,7 @@ pub fn new_task_plan(
   action_scope? : String? = None,
   requires_action_started? : Bool = false,
   continue_on_error? : String = "false",
+  timeout_minutes? : Int = 0,
 ) -> TaskPlan {
   {
     id,
@@ -474,6 +496,7 @@ pub fn new_task_plan(
     action_scope,
     requires_action_started,
     continue_on_error,
+    timeout_minutes,
   }
 }
 
