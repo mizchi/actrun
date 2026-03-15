@@ -17,9 +17,7 @@ async fn detect_nix_config(
     return NixNone
   }
   // Check nix exists via `which` to avoid ENOENT abort from process.run
-  let (which_code, _, _) = @process.collect_output(
-    "which", ["nix"], cwd=".",
-  )
+  let (which_code, _, _) = @process.collect_output("which", ["nix"], cwd=".")
   if which_code != 0 {
     return NixNone
   }
