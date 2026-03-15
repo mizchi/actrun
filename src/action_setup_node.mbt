@@ -318,7 +318,11 @@ async fn execute_setup_node_native(
   workspace_root : String,
   resolved_plan_env : Map[String, String],
 ) -> TaskExecutionResult {
-  let cache_input = resolved_plan_env.get("INPUT_CACHE").unwrap_or("")
+  let cache_input = resolved_plan_env
+    .get("INPUT_CACHE")
+    .unwrap_or(
+      resolved_plan_env.get("INPUT_PACKAGE_MANAGER_CACHE").unwrap_or(""),
+    )
   let normalized_cache_input = cache_input.trim(chars=" \t\r\n").to_string()
   let requested_node_file = resolved_plan_env
     .get("INPUT_NODE_VERSION_FILE")
