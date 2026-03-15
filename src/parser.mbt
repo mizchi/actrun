@@ -97,7 +97,8 @@ fn yaml_parser_new(text : String) -> WorkflowYamlParser {
 ///|
 fn WorkflowYamlParser::skip_ignorable(self : WorkflowYamlParser) -> Unit {
   while self.idx < self.lines.length() {
-    if self.lines[self.idx].text.trim(chars=" ").to_string().length() == 0 {
+    let trimmed = self.lines[self.idx].text.trim(chars=" ").to_string()
+    if trimmed.length() == 0 || trimmed == "---" || trimmed == "..." {
       self.idx += 1
     } else {
       return
