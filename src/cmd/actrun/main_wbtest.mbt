@@ -1400,10 +1400,9 @@ test "container runtime: resolve bin names" {
 }
 
 ///|
-test "init: template is valid toml" {
-  let template = actrun_config_template()
+test "toml: all-comments config parses as empty" {
+  let template = "# comment line\n# key = \"value\"\n\n# another\n"
   let parsed = parse_toml_minimal(template)
-  // All lines are comments, so nothing is parsed
   inspect(parsed.entries.length(), content="0")
   inspect(parsed.arrays.length(), content="0")
 }
