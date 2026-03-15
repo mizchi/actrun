@@ -1860,6 +1860,13 @@ fn append_deferred_action_tasks(
 
 ///|
 fn action_input_env_name(name : String) -> String {
+  // @actions/core getInput replaces spaces with _ but keeps hyphens
+  "INPUT_" + name.replace_all(old=" ", new="_").to_upper()
+}
+
+///|
+fn action_input_env_name_underscore(name : String) -> String {
+  // Actrun builtin actions use underscore form (INPUT_FETCH_DEPTH)
   "INPUT_" +
   name.replace_all(old="-", new="_").replace_all(old=" ", new="_").to_upper()
 }
@@ -1871,7 +1878,28 @@ fn action_input_env(
 ) -> Map[String, String] {
   let env : Map[String, String] = {}
   for key, value in merge_env(defaults, overrides) {
-    env[action_input_env_name(key)] = value
+    // Resolve unresolved ${{ }} expressions in action.yml defaults
+    // github.token is resolved later in executor; keep it as-is
+    // Boolean-like expressions (== comparisons) default to "false"
+    // Other unresolved expressions default to empty string
+    let resolved_value = if value.contains("${{") {
+      if value.contains("github.token") {
+        value
+      } else if value.contains("==") {
+        "false"
+      } else {
+        ""
+      }
+    } else {
+      value
+    }
+    let hyphen_name = action_input_env_name(key)
+    env[hyphen_name] = resolved_value
+    // Also set underscore form for builtin action compatibility
+    let underscore_name = action_input_env_name_underscore(key)
+    if hyphen_name != underscore_name {
+      env[underscore_name] = resolved_value
+    }
   }
   env
 }

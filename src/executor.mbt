@@ -3228,7 +3228,25 @@ fn default_runner_env(
     Some(_) => runner_env["GITHUB_STATE"] = file_commands.state_path
     None => ()
   }
-  merge_runner_env(resolved_plan_env, runner_env)
+  let merged = merge_runner_env(resolved_plan_env, runner_env)
+  // Resolve INPUT_* values that contain unresolved ${{ ... }} defaults
+  let github_token = github_context.get("token").unwrap_or("")
+  let input_overrides : Map[String, String] = {}
+  for key, value in merged {
+    if key.has_prefix("INPUT_") && value.contains("${{") {
+      if value.contains("github.token") && github_token.length() > 0 {
+        input_overrides[key] = github_token
+      } else if value.contains("== '1'") || value.contains("== 1") {
+        input_overrides[key] = "false"
+      } else {
+        input_overrides[key] = ""
+      }
+    }
+  }
+  for key, value in input_overrides {
+    merged[key] = value
+  }
+  merged
 }
 
 ///|
