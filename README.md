@@ -54,7 +54,7 @@ actrun run logs run-1 --task build/test
 workspace_mode = "local"
 
 # Skip actions not needed locally
-skip_actions = ["actions/checkout"]
+local_skip_actions = ["actions/checkout"]
 
 # Trust all third-party actions without prompt
 trust_actions = true
@@ -67,9 +67,13 @@ nix_packages = ["python312", "jq"]
 
 # Container runtime: docker, podman, container, lima, nerdctl
 container_runtime = "docker"
+
+# Affected file patterns per workflow
+# [affected.ci.yml]
+# patterns = ["src/**", "package.json"]
 ```
 
-CLI flags always override `actrun.toml` settings.
+CLI flags always override `actrun.toml` settings. See [Advanced Workflow](docs/advanced-workflow.md) for `--affected`, `--retry`, and `local_skip_actions`.
 
 ## CLI Reference
 
@@ -117,6 +121,8 @@ actrun cache prune --key <key>                         # Delete cache entry
 | `--no-nix` | Disable nix wrapping even if flake.nix/shell.nix exists |
 | `--nix-packages <pkgs>` | Ad-hoc nix packages (space-separated) |
 | `--container-runtime <name>` | Container runtime: `docker`, `podman`, `container`, `lima`, `nerdctl` |
+| `--affected` | Only run if files matching `actrun.toml` patterns changed since last success |
+| `--retry` | Re-run only failed jobs from the latest run |
 | `--json` | JSON output for read commands |
 
 ## Workspace Modes

@@ -21,6 +21,8 @@ pub async fn execute_lowered_native(LoweringResult, workspace_root? : String, pu
 
 pub fn extract_add_mask_values(WorkflowRunReport) -> Array[String]
 
+pub fn filter_workflow_jobs(WorkflowSpec, Array[String]) -> WorkflowSpec
+
 pub fn filter_workflow_steps(WorkflowSpec, Array[String]) -> WorkflowSpec
 
 pub fn find_task_plan(ExecutionPlan, String) -> TaskPlan?

@@ -23,6 +23,8 @@ struct CliOptions {
   nix_mode : String
   nix_packages : Array[String]
   container_runtime : String
+  affected : Bool
+  retry : Bool
 }
 
 ///|
@@ -207,6 +209,8 @@ fn usage_text() -> String {
   "  --no-nix                     Disable nix wrapping even if flake.nix/shell.nix exists\n" +
   "  --nix-packages <pkgs>        Additional nix packages (space-separated)\n" +
   "  --container-runtime <name>   Container runtime: docker, podman, container, lima, nerdctl\n" +
+  "  --affected                   Only run if files matching actrun.toml patterns changed\n" +
+  "  --retry                      Re-run only failed jobs from the latest run\n" +
   "\n" +
   "Storage flags:\n" +
   "  --artifact-root <path>       Artifact storage root\n" +
@@ -1425,6 +1429,7 @@ struct ActrunConfig {
   nix_mode : String
   nix_packages : Array[String]
   container_runtime : String
+  affected : Map[String, Array[String]]
 }
 
 ///|
@@ -1436,6 +1441,7 @@ fn default_actrun_config() -> ActrunConfig {
     nix_mode: "",
     nix_packages: [],
     container_runtime: "",
+    affected: {},
   }
 }
 
@@ -1556,18 +1562,31 @@ struct TomlParseResult {
 fn parse_toml_minimal(content : String) -> TomlParseResult {
   let entries : Map[String, String] = {}
   let arrays : Map[String, Array[String]] = {}
+  let mut section = ""
   for part in content.split("\n") {
     let raw = part.to_string().trim(chars="\r").to_string()
     let line = raw.trim(chars=" \t").to_string()
-    if line.length() == 0 || line.has_prefix("#") || line.has_prefix("[") {
+    if line.length() == 0 || line.has_prefix("#") {
+      continue
+    }
+    // Parse section headers: [section] or [section."key"]
+    if line.has_prefix("[") && line.has_suffix("]") {
+      section = String::unsafe_substring(line, start=1, end=line.length() - 1)
+        .trim(chars=" \t")
+        .to_string()
       continue
     }
     match line.find("=") {
       None => continue
       Some(eq_idx) => {
-        let key = String::unsafe_substring(line, start=0, end=eq_idx)
+        let raw_key = String::unsafe_substring(line, start=0, end=eq_idx)
           .trim(chars=" \t")
           .to_string()
+        let key = if section.length() > 0 {
+          section + "." + raw_key
+        } else {
+          raw_key
+        }
         let val_raw = String::unsafe_substring(
             line,
             start=eq_idx + 1,
@@ -1611,16 +1630,16 @@ fn parse_toml_minimal(content : String) -> TomlParseResult {
 
 ///|
 let known_config_keys : Array[String] = [
-  "workspace_mode",
-  "local_skip_actions",
-  "trust_actions",
-  "nix_mode",
-  "nix_packages",
+  "workspace_mode", "local_skip_actions", "trust_actions", "nix_mode", "nix_packages",
   "container_runtime",
 ]
 
 ///|
 fn is_known_config_key(key : String) -> Bool {
+  // Allow any key under [affected.*] section
+  if key.has_prefix("affected.") {
+    return true
+  }
   for k in known_config_keys {
     if k == key {
       return true
@@ -1664,6 +1683,30 @@ fn load_actrun_config(dir : String) -> ActrunConfig {
     nix_mode: parsed.entries.get("nix_mode").unwrap_or(""),
     nix_packages: parsed.arrays.get("nix_packages").unwrap_or([]),
     container_runtime: parsed.entries.get("container_runtime").unwrap_or(""),
+    affected: {
+      let result : Map[String, Array[String]] = {}
+      // Parse affected.WORKFLOW.patterns from sectioned keys
+      for key, patterns in parsed.arrays {
+        if key.has_prefix("affected.") {
+          let rest = String::unsafe_substring(key, start=9, end=key.length())
+          // key is "affected.ci.yml.patterns" → workflow="ci.yml"
+          // Find last "." to split workflow name from field name
+          let mut last_dot = -1
+          for i in 0..<rest.length() {
+            if rest[i] == '.' {
+              last_dot = i
+            }
+          }
+          if last_dot > 0 {
+            let wf = String::unsafe_substring(rest, start=0, end=last_dot)
+              .trim(chars="\"'")
+              .to_string()
+            result[wf] = patterns
+          }
+        }
+      }
+      result
+    },
   }
 }
 
@@ -1720,7 +1763,232 @@ fn merge_config_into_options(
     } else {
       config.container_runtime
     },
+    affected: options.affected,
+    retry: options.retry,
   }
+}
+
+///|
+/// Find the latest run record for a workflow path from run store
+fn find_latest_run_for_workflow(
+  run_root : String,
+  workflow_path : String,
+  ok_only : Bool,
+) -> (Json, String)? {
+  if not(@xfs.path_exists(run_root)) {
+    return None
+  }
+  let entries = try @xfs.read_dir(run_root) catch {
+    _ => return None
+  } noraise {
+    value => value
+  }
+  // Sort descending by index
+  let sorted : Array[String] = []
+  for entry in entries {
+    if entry.has_prefix("run-") {
+      sorted.push(entry)
+    }
+  }
+  // Reverse iterate (highest index = latest)
+  for i in 0..<sorted.length() {
+    let entry = sorted[sorted.length() - 1 - i]
+    let run_json_path = join_path(join_path(run_root, entry), "run.json")
+    let text = match read_text(run_json_path) {
+      Some(t) => t
+      None => continue
+    }
+    let payload = @json.parse(text) catch { _ => continue }
+    let wf_path = run_json_string(payload, "workflow_path")
+    if wf_path != workflow_path {
+      continue
+    }
+    if ok_only {
+      let ok_str = match run_json_field(payload, "ok") {
+        Some(True) => "true"
+        _ => "false"
+      }
+      if ok_str != "true" {
+        continue
+      }
+    }
+    return Some((payload, entry))
+  }
+  None
+}
+
+///|
+/// Get changed files between two git refs
+async fn git_diff_files(base : String, head : String) -> Array[String] {
+  let (code, stdout, _) = @process.collect_output(
+    "git",
+    ["diff", "--name-only", base, head],
+    cwd=".",
+  )
+  if code != 0 {
+    return []
+  }
+  let files : Array[String] = []
+  for line_view in stdout.text().split("\n") {
+    let line = line_view.trim(chars=" \t\r\n").to_string()
+    if line.length() > 0 {
+      files.push(line)
+    }
+  }
+  files
+}
+
+///|
+/// Get uncommitted changes (staged + unstaged)
+async fn git_uncommitted_files() -> Array[String] {
+  let (code, stdout, _) = @process.collect_output(
+    "git",
+    ["diff", "--name-only", "HEAD"],
+    cwd=".",
+  )
+  let files : Array[String] = []
+  if code == 0 {
+    for line_view in stdout.text().split("\n") {
+      let line = line_view.trim(chars=" \t\r\n").to_string()
+      if line.length() > 0 {
+        files.push(line)
+      }
+    }
+  }
+  // Also include untracked files
+  let (code2, stdout2, _) = @process.collect_output(
+    "git",
+    ["ls-files", "--others", "--exclude-standard"],
+    cwd=".",
+  )
+  if code2 == 0 {
+    for line_view in stdout2.text().split("\n") {
+      let line = line_view.trim(chars=" \t\r\n").to_string()
+      if line.length() > 0 {
+        files.push(line)
+      }
+    }
+  }
+  files
+}
+
+///|
+/// Check if any changed file matches the glob patterns (simple prefix/suffix match)
+fn files_match_patterns(
+  files : Array[String],
+  patterns : Array[String],
+) -> Bool {
+  for file in files {
+    for pattern in patterns {
+      if glob_match(pattern, file) {
+        return true
+      }
+    }
+  }
+  false
+}
+
+///|
+/// Simple glob matching: supports * (any chars), ** (any path), prefix/suffix match
+fn glob_match(pattern : String, path : String) -> Bool {
+  if pattern == "*" || pattern == "**" || pattern == "**/*" {
+    return true
+  }
+  // "src/**" → path starts with "src/"
+  if pattern.has_suffix("/**") {
+    let prefix = String::unsafe_substring(
+      pattern,
+      start=0,
+      end=pattern.length() - 3,
+    )
+    return path.has_prefix(prefix + "/") || path == prefix
+  }
+  // "**/*.rs" → path ends with ".rs"
+  if pattern.has_prefix("**/") {
+    let suffix = String::unsafe_substring(
+      pattern,
+      start=3,
+      end=pattern.length(),
+    )
+    // suffix could be "*.rs"
+    if suffix.has_prefix("*") {
+      let ext = String::unsafe_substring(suffix, start=1, end=suffix.length())
+      return path.has_suffix(ext)
+    }
+    return path.has_suffix("/" + suffix) || path == suffix
+  }
+  // "*.rs" → path ends with ".rs"
+  if pattern.has_prefix("*") {
+    let ext = String::unsafe_substring(pattern, start=1, end=pattern.length())
+    return path.has_suffix(ext)
+  }
+  // Directory wildcard (non-recursive): src/* matches src/foo but not src/sub/foo
+  if pattern.has_suffix("/*") {
+    let prefix = String::unsafe_substring(
+        pattern,
+        start=0,
+        end=pattern.length() - 2,
+      ) +
+      "/"
+    if not(path.has_prefix(prefix)) {
+      return false
+    }
+    // Check no further "/" after prefix
+    let rest = String::unsafe_substring(
+      path,
+      start=prefix.length(),
+      end=path.length(),
+    )
+    return not(rest.contains("/"))
+  }
+  path == pattern || path.has_prefix(pattern + "/")
+}
+
+///|
+/// Extract failed job IDs from a run record JSON
+fn extract_failed_job_ids(run_json : Json) -> Array[String] {
+  let failed_jobs : Array[String] = []
+  match run_json {
+    Object(obj) =>
+      match obj.get("steps") {
+        Some(Array(steps)) =>
+          for step in steps {
+            match step {
+              Object(_) => {
+                let status = run_json_string(step, "status")
+                let id = run_json_string(step, "id")
+                if status == "failed" && id.length() > 0 {
+                  // id is "job_id/step_id" → extract job_id
+                  match id.find("/") {
+                    Some(slash) => {
+                      let job_id = String::unsafe_substring(
+                        id,
+                        start=0,
+                        end=slash,
+                      )
+                      let mut already = false
+                      for j in failed_jobs {
+                        if j == job_id {
+                          already = true
+                          break
+                        }
+                      }
+                      if not(already) {
+                        failed_jobs.push(job_id)
+                      }
+                    }
+                    None => ()
+                  }
+                }
+              }
+              _ => ()
+            }
+          }
+        _ => ()
+      }
+    _ => ()
+  }
+  failed_jobs
 }
 
 ///|
@@ -2120,6 +2388,8 @@ fn parse_cli_args(args : Array[String]) -> CliParseResult {
   let mut nix_mode = ""
   let nix_packages : Array[String] = []
   let mut container_runtime = ""
+  let mut affected = false
+  let mut retry = false
   let mut index = 1
 
   while index < args.length() {
@@ -2141,6 +2411,16 @@ fn parse_cli_args(args : Array[String]) -> CliParseResult {
     }
     if arg == "--no-nix" {
       nix_mode = "off"
+      index += 1
+      continue
+    }
+    if arg == "--affected" {
+      affected = true
+      index += 1
+      continue
+    }
+    if arg == "--retry" {
+      retry = true
       index += 1
       continue
     }
@@ -2300,6 +2580,8 @@ fn parse_cli_args(args : Array[String]) -> CliParseResult {
       nix_mode,
       nix_packages,
       container_runtime,
+      affected,
+      retry,
     }),
     errors,
   }
@@ -4267,8 +4549,161 @@ async fn handle_workflow_run_command(raw_options : CliOptions) -> Int {
     return 0
   }
 
+  // --affected: check if workflow is affected by changes since last successful run
+  if options.affected {
+    let wf_key = options.workflow_path
+    // Try full path first, then basename
+    let mut patterns = config.affected.get(wf_key).unwrap_or([])
+    if patterns.length() == 0 {
+      let mut last_slash = -1
+      for i in 0..<wf_key.length() {
+        if wf_key[i] == '/' {
+          last_slash = i
+        }
+      }
+      if last_slash >= 0 {
+        let basename = String::unsafe_substring(
+          wf_key,
+          start=last_slash + 1,
+          end=wf_key.length(),
+        )
+        patterns = config.affected.get(basename).unwrap_or([])
+      }
+    }
+    if patterns.length() > 0 {
+      match find_latest_run_for_workflow(run_root, workflow_path, true) {
+        Some((last_run, last_run_id)) => {
+          let last_sha = run_json_string(last_run, "after_sha")
+          let changed = if last_sha.length() > 0 {
+            let committed = git_diff_files(last_sha, "HEAD")
+            let uncommitted = git_uncommitted_files()
+            let all : Array[String] = []
+            for f in committed {
+              all.push(f)
+            }
+            for f in uncommitted {
+              all.push(f)
+            }
+            all
+          } else {
+            git_uncommitted_files()
+          }
+          if not(files_match_patterns(changed, patterns)) {
+            println(
+              "affected: no changes match patterns for " +
+              wf_key +
+              " (since " +
+              last_run_id +
+              ")",
+            )
+            return 0
+          }
+          println(
+            "affected: changes detected for " +
+            wf_key +
+            " (since " +
+            last_run_id +
+            ")",
+          )
+        }
+        None =>
+          // No previous successful run, always run
+          println("affected: no previous successful run found, running")
+      }
+    } else {
+      println(
+        "affected: no patterns configured for " +
+        wf_key +
+        " in actrun.toml, running",
+      )
+    }
+  }
+
+  // --retry: filter to only failed jobs from the latest run
+  let retry_skip_jobs : Array[String] = []
+  if options.retry {
+    match find_latest_run_for_workflow(run_root, workflow_path, false) {
+      Some((last_run, last_run_id)) => {
+        let last_ok = match run_json_field(last_run, "ok") {
+          Some(True) => true
+          _ => false
+        }
+        if last_ok {
+          println(
+            "retry: last run " +
+            last_run_id +
+            " was successful, nothing to retry",
+          )
+          return 0
+        }
+        let failed_jobs = extract_failed_job_ids(last_run)
+        if failed_jobs.length() == 0 {
+          println("retry: no failed jobs found in " + last_run_id)
+          return 0
+        }
+        // Collect successful job IDs to skip
+        match last_run {
+          Object(obj) =>
+            match obj.get("steps") {
+              Some(Array(steps)) =>
+                for step in steps {
+                  let id = run_json_string(step, "id")
+                  let status = run_json_string(step, "status")
+                  if status == "success" && id.contains("/") {
+                    match id.find("/") {
+                      Some(slash) => {
+                        let job_id = String::unsafe_substring(
+                          id,
+                          start=0,
+                          end=slash,
+                        )
+                        let mut is_failed = false
+                        for fj in failed_jobs {
+                          if fj == job_id {
+                            is_failed = true
+                            break
+                          }
+                        }
+                        if not(is_failed) {
+                          let mut already = false
+                          for j in retry_skip_jobs {
+                            if j == job_id {
+                              already = true
+                              break
+                            }
+                          }
+                          if not(already) {
+                            retry_skip_jobs.push(job_id)
+                          }
+                        }
+                      }
+                      None => ()
+                    }
+                  }
+                }
+              _ => ()
+            }
+          _ => ()
+        }
+        println("retry: re-running failed jobs from " + last_run_id + ":")
+        for job_id in failed_jobs {
+          println("  - " + job_id)
+        }
+        if retry_skip_jobs.length() > 0 {
+          println("retry: skipping successful jobs:")
+          for job_id in retry_skip_jobs {
+            println("  - " + job_id)
+          }
+        }
+      }
+      None => println("retry: no previous run found, running all jobs")
+    }
+  }
+
   // Strip unsupported fields and filter skipped actions
-  let should_strip = options.skip_actions.length() > 0 || options.dry_run
+  let should_strip = options.skip_actions.length() > 0 ||
+    options.dry_run ||
+    retry_skip_jobs.length() > 0
   let stripped_workflow = if should_strip {
     @ar.strip_unsupported_workflow_fields(workflow)
   } else {
@@ -4293,23 +4728,28 @@ async fn handle_workflow_run_command(raw_options : CliOptions) -> Int {
     stripped_workflow
   }
 
+  // --retry: filter out successful jobs from previous run
+  let retry_workflow = @ar.filter_workflow_jobs(
+    effective_workflow, retry_skip_jobs,
+  )
+
   if options.dry_run {
     let lowered = @ar.lower_push_workflow_in_workspace(
-      effective_workflow, execution_root,
+      retry_workflow, execution_root,
     )
     if lowered.errors.length() > 0 {
       for err in lowered.errors {
         println("warning: " + err)
       }
     }
-    print_dry_run_plan(effective_workflow, lowered)
+    print_dry_run_plan(retry_workflow, lowered)
     return 0
   }
 
   // Check for third-party actions and prompt for confirmation
   let trust_env = @xsys.get_env_var("ACTRUN_TRUST").unwrap_or("") == "true"
   if not(options.trust_actions) && not(trust_env) && not(options.dry_run) {
-    let third_party = collect_third_party_actions(effective_workflow)
+    let third_party = collect_third_party_actions(retry_workflow)
     if third_party.length() > 0 {
       println("The following third-party actions will be fetched and executed:")
       for action_ref in third_party {
@@ -4327,7 +4767,7 @@ async fn handle_workflow_run_command(raw_options : CliOptions) -> Int {
     }
   }
   let prefetch = @ar.prefetch_workflow_github_actions_native(
-    effective_workflow, execution_root,
+    retry_workflow, execution_root,
   )
   if prefetch.errors.length() > 0 {
     print_errors(prefetch.errors)
@@ -4335,7 +4775,7 @@ async fn handle_workflow_run_command(raw_options : CliOptions) -> Int {
   }
 
   let lowered = @ar.lower_push_workflow_in_workspace(
-    effective_workflow, execution_root,
+    retry_workflow, execution_root,
   )
   if lowered.errors.length() > 0 {
     print_errors(lowered.errors)
