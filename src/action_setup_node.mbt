@@ -137,7 +137,7 @@ fn setup_node_store_root(workspace_root : String) -> String {
 
 ///|
 async fn exec_make_executable(path : String) -> Bool {
-  let (code, _, _) = @process.collect_output("chmod", ["+x", path], cwd=".")
+  let (code, _, _) = run_command("chmod", ["+x", path], cwd=".")
   code == 0
 }
 
@@ -353,7 +353,7 @@ async fn execute_setup_node_native(
   let node_bin = resolve_exec_bin_for_workspace(
     configured_setup_node_bin, workspace_root,
   )
-  let (version_code, version_stdout, version_stderr) = @process.collect_output(
+  let (version_code, version_stdout, version_stderr) = run_command(
     node_bin,
     ["--version"],
     cwd=resolve_task_cwd(workspace_root, ""),
@@ -363,13 +363,13 @@ async fn execute_setup_node_native(
       plan,
       workspace_root,
       exec_command_message(
-        version_stdout.text(),
-        version_stderr.text(),
+        version_stdout,
+        version_stderr,
         "failed to inspect node version",
       ),
     )
   }
-  let actual_version = version_stdout.text().trim(chars=" \t\r\n").to_string()
+  let actual_version = version_stdout.trim(chars=" \t\r\n").to_string()
   let explicit_version = resolved_plan_env
     .get("INPUT_NODE_VERSION")
     .unwrap_or("")

@@ -17,7 +17,7 @@ async fn detect_nix_config(
     return NixNone
   }
   // Check nix exists via `which` to avoid ENOENT abort from process.run
-  let (which_code, _, _) = @process.collect_output("which", ["nix"], cwd=".")
+  let (which_code, _, _) = run_command("which", ["nix"], cwd=".")
   if which_code != 0 {
     return NixNone
   }
@@ -391,9 +391,9 @@ fn trim_exec_output(text : String) -> String {
 
 ///|
 async fn exec_capture_stdout(cmd : String, args : Array[String]) -> String? {
-  let (code, stdout, _) = @process.collect_output(cmd, args, cwd=".")
+  let (code, stdout, _) = run_command(cmd, args, cwd=".")
   if code == 0 {
-    let value = trim_exec_output(stdout.text())
+    let value = trim_exec_output(stdout)
     if value.length() > 0 {
       Some(value)
     } else {
@@ -1531,18 +1531,15 @@ async fn ensure_container_registry_login(
         Some(registry) => login_args.push(registry)
         None => ()
       }
-      let (stdin_input, stdin_writer) = @process.write_to_process()
-      stdin_writer.write(@utf8.encode(credentials.password))
-      stdin_writer.close()
-      let (login_code, _, login_stderr) = @process.collect_output(
+      let (login_code, _, login_stderr) = run_command_with_stdin(
         docker_bin,
         login_args,
-        stdin=stdin_input,
+        credentials.password,
         cwd=workspace_abs,
       )
       if login_code != 0 {
         // Avoid leaking credentials in error messages
-        let stderr_text = trim_exec_output(login_stderr.text())
+        let stderr_text = trim_exec_output(login_stderr)
         let safe_message = mask_secrets(stderr_text, [
           credentials.password,
           credentials.username,
@@ -1665,7 +1662,7 @@ async fn cleanup_job_services_native(
       _ => ()
     }
     ignore(
-      @process.collect_output(
+      run_command(
         service.docker_bin,
         ["rm", "-f", service.name],
         cwd=service.workspace_abs,
@@ -1675,7 +1672,7 @@ async fn cleanup_job_services_native(
   for network_name, service_network in service_networks {
     let (docker_bin, workspace_abs) = service_network
     ignore(
-      @process.collect_output(
+      run_command(
         docker_bin,
         ["network", "rm", network_name],
         cwd=workspace_abs,
@@ -1693,7 +1690,7 @@ async fn cleanup_job_service_network_native(
   match network_name {
     Some(name) if name.length() > 0 =>
       ignore(
-        @process.collect_output(
+        run_command(
           docker_bin,
           ["network", "rm", name],
           cwd=workspace_abs,
@@ -1711,7 +1708,7 @@ async fn create_job_service_network_native(
 ) -> String? {
   match network_name {
     Some(name) if name.length() > 0 => {
-      let (code, _, stderr) = @process.collect_output(
+      let (code, _, stderr) = run_command(
         docker_bin,
         ["network", "create", name],
         cwd=workspace_abs,
@@ -1719,7 +1716,7 @@ async fn create_job_service_network_native(
       if code == 0 {
         None
       } else {
-        Some(trim_exec_output(stderr.text()))
+        Some(trim_exec_output(stderr))
       }
     }
     _ => None
@@ -1736,7 +1733,7 @@ fn service_has_health_check(service : JobContainerSpec) -> Bool {
 
 ///|
 async fn sleep_for_service_poll_native() -> Unit {
-  ignore(@process.collect_output("sleep", ["0.1"], cwd="."))
+  ignore(run_command("sleep", ["0.1"], cwd="."))
 }
 
 ///|
@@ -1746,7 +1743,7 @@ async fn container_inspect_health_status(
   workspace_abs : String,
 ) -> (Int, String) {
   // Try docker --format first (docker/podman)
-  let (code, stdout, stderr) = @process.collect_output(
+  let (code, stdout, stderr) = run_command(
     docker_bin,
     [
       "inspect", "--format", "{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}",
@@ -1755,18 +1752,18 @@ async fn container_inspect_health_status(
     cwd=workspace_abs,
   )
   if code == 0 {
-    return (0, trim_exec_output(stdout.text()))
+    return (0, trim_exec_output(stdout))
   }
   // Fallback: JSON inspect (apple/container, etc.)
-  let (code2, stdout2, _) = @process.collect_output(
+  let (code2, stdout2, _) = run_command(
     docker_bin,
     ["inspect", container_name],
     cwd=workspace_abs,
   )
   if code2 != 0 {
-    return (code, trim_exec_output(stderr.text()))
+    return (code, trim_exec_output(stderr))
   }
-  let json_text = stdout2.text()
+  let json_text = stdout2
   // Parse JSON to extract status
   if json_text.contains("\"running\"") || json_text.contains("\"Running\"") {
     return (0, "running")
@@ -1812,6 +1809,7 @@ async fn wait_for_job_service_health_native(
 }
 
 ///|
+#cfg(target="native")
 async fn start_job_services_native(
   job_id : String,
   services : Map[String, JobContainerSpec],
@@ -1899,7 +1897,7 @@ async fn start_job_services_native(
       run_args.push(key + "=" + value)
     }
     run_args.push(resolved.image)
-    let (code, _, stderr) = @process.collect_output(
+    let (code, _, stderr) = run_command(
       docker_bin,
       run_args,
       cwd=workspace_abs,
@@ -1913,7 +1911,7 @@ async fn start_job_services_native(
         started: [],
         error: Some(
           "service '\{service_id}' failed to start: " +
-          trim_exec_output(stderr.text()),
+          trim_exec_output(stderr),
         ),
       }
     }
@@ -2697,7 +2695,7 @@ async fn execute_wasm_action_native(
   )
   let cwd = action.action_path.unwrap_or(resolve_task_cwd(workspace_root, ""))
   let env_args = env_command_args(cmd, [module_path], env)
-  let (code, stdout, stderr) = @process.collect_output("env", env_args, cwd~)
+  let (code, stdout, stderr) = run_command("env", env_args, cwd~)
   {
     report: {
       id: plan.id,
@@ -2711,8 +2709,8 @@ async fn execute_wasm_action_native(
       shell: plan.shell,
       script: plan.script,
       cwd,
-      stdout: stdout.text(),
-      stderr: stderr.text(),
+      stdout,
+      stderr,
       summary: parse_summary_text(file_commands.summary_path),
     },
     env_updates: parse_env_updates(file_commands.env_path),
@@ -2751,7 +2749,7 @@ async fn execute_node_action_native(
   let cmd = configured_exec_bin("ACTRUN_NODE_BIN", resolved_plan_env, "node")
   let cwd = action.action_path.unwrap_or(resolve_task_cwd(workspace_root, ""))
   let env_args = env_command_args(cmd, [entrypoint], env)
-  let (code, stdout, stderr) = @process.collect_output("env", env_args, cwd~)
+  let (code, stdout, stderr) = run_command("env", env_args, cwd~)
   {
     report: {
       id: plan.id,
@@ -2765,8 +2763,8 @@ async fn execute_node_action_native(
       shell: plan.shell,
       script: plan.script,
       cwd,
-      stdout: stdout.text(),
-      stderr: stderr.text(),
+      stdout,
+      stderr,
       summary: parse_summary_text(file_commands.summary_path),
     },
     env_updates: parse_env_updates(file_commands.env_path),
@@ -2815,7 +2813,7 @@ async fn execute_docker_action_native(
     let action_root = action.action_path.unwrap_or(workspace_abs)
     let built_tag = "action-runner-" + sanitize_task_id(plan.id).to_lower()
     let build_args = ["build", "-f", image_source, "-t", built_tag, action_root]
-    let (build_code, build_stdout, build_stderr) = @process.collect_output(
+    let (build_code, build_stdout, build_stderr) = run_command(
       docker_bin,
       build_args,
       cwd=action_root,
@@ -2830,8 +2828,8 @@ async fn execute_docker_action_native(
           shell: plan.shell,
           script: plan.script,
           cwd: action_root,
-          stdout: build_stdout.text(),
-          stderr: build_stderr.text(),
+          stdout: build_stdout,
+          stderr: build_stderr,
           summary: "",
         },
         env_updates: {},
@@ -2882,7 +2880,7 @@ async fn execute_docker_action_native(
   for arg in action.args {
     run_args.push(arg)
   }
-  let (code, stdout, stderr) = @process.collect_output(
+  let (code, stdout, stderr) = run_command(
     docker_bin,
     run_args,
     cwd=workspace_abs,
@@ -2900,8 +2898,8 @@ async fn execute_docker_action_native(
       shell: plan.shell,
       script: plan.script,
       cwd: container_cwd,
-      stdout: stdout.text(),
-      stderr: stderr.text(),
+      stdout,
+      stderr,
       summary: parse_summary_text(file_commands.summary_path),
     },
     env_updates: parse_env_updates(file_commands.env_path),
@@ -3000,7 +2998,7 @@ async fn execute_job_container_node_action_native(
   run_args.push(container.image)
   run_args.push(node_bin)
   run_args.push(entrypoint)
-  let (code, stdout, stderr) = @process.collect_output(
+  let (code, stdout, stderr) = run_command(
     docker_bin,
     run_args,
     cwd=workspace_abs,
@@ -3018,8 +3016,8 @@ async fn execute_job_container_node_action_native(
       shell: plan.shell,
       script: plan.script,
       cwd: container_cwd,
-      stdout: stdout.text(),
-      stderr: stderr.text(),
+      stdout,
+      stderr,
       summary: parse_summary_text(file_commands.summary_path),
     },
     env_updates: parse_env_updates(file_commands.env_path),
@@ -3114,7 +3112,7 @@ async fn execute_job_container_run_native(
   for arg in args {
     run_args.push(arg)
   }
-  let (code, stdout, stderr) = @process.collect_output(
+  let (code, stdout, stderr) = run_command(
     docker_bin,
     run_args,
     cwd=workspace_abs,
@@ -3132,8 +3130,8 @@ async fn execute_job_container_run_native(
       shell: cmd,
       script: resolved_script,
       cwd: container_cwd,
-      stdout: stdout.text(),
-      stderr: stderr.text(),
+      stdout,
+      stderr,
       summary: parse_summary_text(file_commands.summary_path),
     },
     env_updates: parse_env_updates(file_commands.env_path),
@@ -3495,7 +3493,7 @@ async fn execute_task_plan_native(
     runner_ctx,
   )
   let env_args = env_command_args(cmd, args, env)
-  let (code, stdout, stderr) = @process.collect_output("env", env_args, cwd~)
+  let (code, stdout, stderr) = run_command("env", env_args, cwd~)
   {
     report: {
       id: plan.id,
@@ -3509,8 +3507,8 @@ async fn execute_task_plan_native(
       shell: cmd,
       script: resolved_script,
       cwd,
-      stdout: stdout.text(),
-      stderr: stderr.text(),
+      stdout,
+      stderr,
       summary: parse_summary_text(file_commands.summary_path),
     },
     env_updates: parse_env_updates(file_commands.env_path),

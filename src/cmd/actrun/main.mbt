@@ -376,7 +376,7 @@ async fn setup_local_workspace(
   let timestamp = @env.now().to_string()
   let workspace_dir = join_path(abs_workspace_base, "ws-" + timestamp)
   if workspace_mode == "worktree" {
-    let (code, _, stderr) = @process.collect_output(
+    let (code, _, stderr) = run_command(
       "git",
       ["worktree", "add", "--detach", workspace_dir],
       cwd=abs_source,
@@ -386,7 +386,7 @@ async fn setup_local_workspace(
         None,
         [
           "git worktree add failed: " +
-          stderr.text().trim(chars=" \t\n\r").to_string(),
+          stderr.trim(chars=" \t\n\r").to_string(),
         ],
       )
     }
@@ -400,7 +400,7 @@ async fn setup_local_workspace(
     )
   }
   if workspace_mode == "tmp" {
-    let (code, _, stderr) = @process.collect_output(
+    let (code, _, stderr) = run_command(
       "git",
       ["clone", "--quiet", "--no-local", "file://" + abs_source, workspace_dir],
       cwd=".",
@@ -408,7 +408,7 @@ async fn setup_local_workspace(
     if code != 0 {
       return (
         None,
-        ["git clone failed: " + stderr.text().trim(chars=" \t\n\r").to_string()],
+        ["git clone failed: " + stderr.trim(chars=" \t\n\r").to_string()],
       )
     }
     return (
@@ -433,7 +433,7 @@ async fn cleanup_local_workspace(workspace : LocalWorkspace) -> Unit {
       // causing git worktree remove to corrupt the main working tree.
       let _ = remove_tree(workspace.execution_root)
       // Clean up stale worktree references in the main repo
-      let _ = @process.collect_output(
+      let _ = run_command(
         "git",
         ["worktree", "prune"],
         cwd=workspace.source_root,
@@ -1472,7 +1472,7 @@ async fn generate_actrun_config() -> String {
   let detected_tools : Array[String] = []
   for check in tool_checks {
     let (tool, flag, action) = check
-    let (code, _, _) = @process.collect_output(tool, [flag], cwd=".")
+    let (code, _, _) = run_command(tool, [flag], cwd=".")
     if code == 0 {
       skip.push(action)
       detected_tools.push(tool)
@@ -1516,7 +1516,7 @@ async fn generate_actrun_config() -> String {
   let runtimes = ["docker", "podman", "nerdctl"]
   let mut detected_runtime = ""
   for rt in runtimes {
-    let (code, _, _) = @process.collect_output(rt, ["--version"], cwd=".")
+    let (code, _, _) = run_command(rt, ["--version"], cwd=".")
     if code == 0 {
       detected_runtime = rt
       break
@@ -1811,7 +1811,7 @@ fn find_latest_run_for_workflow(
 ///|
 /// Get changed files between two git refs
 async fn git_diff_files(base : String, head : String) -> Array[String] {
-  let (code, stdout, _) = @process.collect_output(
+  let (code, stdout, _) = run_command(
     "git",
     ["diff", "--name-only", base, head],
     cwd=".",
@@ -1820,7 +1820,7 @@ async fn git_diff_files(base : String, head : String) -> Array[String] {
     return []
   }
   let files : Array[String] = []
-  for line_view in stdout.text().split("\n") {
+  for line_view in stdout.split("\n") {
     let line = line_view.trim(chars=" \t\r\n").to_string()
     if line.length() > 0 {
       files.push(line)
@@ -1832,14 +1832,14 @@ async fn git_diff_files(base : String, head : String) -> Array[String] {
 ///|
 /// Get uncommitted changes (staged + unstaged)
 async fn git_uncommitted_files() -> Array[String] {
-  let (code, stdout, _) = @process.collect_output(
+  let (code, stdout, _) = run_command(
     "git",
     ["diff", "--name-only", "HEAD"],
     cwd=".",
   )
   let files : Array[String] = []
   if code == 0 {
-    for line_view in stdout.text().split("\n") {
+    for line_view in stdout.split("\n") {
       let line = line_view.trim(chars=" \t\r\n").to_string()
       if line.length() > 0 {
         files.push(line)
@@ -1847,13 +1847,13 @@ async fn git_uncommitted_files() -> Array[String] {
     }
   }
   // Also include untracked files
-  let (code2, stdout2, _) = @process.collect_output(
+  let (code2, stdout2, _) = run_command(
     "git",
     ["ls-files", "--others", "--exclude-standard"],
     cwd=".",
   )
   if code2 == 0 {
-    for line_view in stdout2.text().split("\n") {
+    for line_view in stdout2.split("\n") {
       let line = line_view.trim(chars=" \t\r\n").to_string()
       if line.length() > 0 {
         files.push(line)
@@ -2059,7 +2059,7 @@ async fn apply_container_runtime(options : CliOptions) -> Unit {
     } noraise {
       _ => ()
     }
-    ignore(@process.collect_output("chmod", ["+x", wrapper_path], cwd="."))
+    ignore(run_command("chmod", ["+x", wrapper_path], cwd="."))
     @xsys.set_env_var("ACTRUN_CONTAINER_RUNTIME", wrapper_path)
   } else {
     @xsys.set_env_var("ACTRUN_CONTAINER_RUNTIME", bin)
@@ -2327,9 +2327,9 @@ async fn handle_cron_command(args : Array[String]) -> Int {
   } else if action == "install" {
     let lines : Array[String] = []
     // Read existing crontab
-    let (code, stdout, _) = @process.collect_output("crontab", ["-l"], cwd=".")
+    let (code, stdout, _) = run_command("crontab", ["-l"], cwd=".")
     if code == 0 {
-      for line_view in stdout.text().split("\n") {
+      for line_view in stdout.split("\n") {
         let line = line_view.to_string()
         if not(line.contains("# actrun:")) {
           lines.push(line)
@@ -2361,14 +2361,14 @@ async fn handle_cron_command(args : Array[String]) -> Int {
     } noraise {
       _ => ()
     }
-    let (install_code, _, install_err) = @process.collect_output(
+    let (install_code, _, install_err) = run_command(
       "crontab",
       [tmp_path],
       cwd=".",
     )
-    ignore(@process.collect_output("rm", ["-f", tmp_path], cwd="."))
+    ignore(run_command("rm", ["-f", tmp_path], cwd="."))
     if install_code != 0 {
-      print_errors([install_err.text().trim(chars=" \t\r\n").to_string()])
+      print_errors([install_err.trim(chars=" \t\r\n").to_string()])
       return 1
     }
     println("Installed " + cron_entries.length().to_string() + " cron entries")
@@ -2377,14 +2377,14 @@ async fn handle_cron_command(args : Array[String]) -> Int {
       println("  " + cron_expr + "  " + name + " (" + path + ")")
     }
   } else if action == "uninstall" {
-    let (code, stdout, _) = @process.collect_output("crontab", ["-l"], cwd=".")
+    let (code, stdout, _) = run_command("crontab", ["-l"], cwd=".")
     if code != 0 {
       println("No crontab found")
       return 0
     }
     let lines : Array[String] = []
     let mut removed = 0
-    for line_view in stdout.text().split("\n") {
+    for line_view in stdout.split("\n") {
       let line = line_view.to_string()
       if line.contains("# actrun:") {
         removed += 1
@@ -2406,14 +2406,14 @@ async fn handle_cron_command(args : Array[String]) -> Int {
     } noraise {
       _ => ()
     }
-    let (install_code, _, install_err) = @process.collect_output(
+    let (install_code, _, install_err) = run_command(
       "crontab",
       [tmp_path],
       cwd=".",
     )
-    ignore(@process.collect_output("rm", ["-f", tmp_path], cwd="."))
+    ignore(run_command("rm", ["-f", tmp_path], cwd="."))
     if install_code != 0 {
-      print_errors([install_err.text().trim(chars=" \t\r\n").to_string()])
+      print_errors([install_err.trim(chars=" \t\r\n").to_string()])
       return 1
     }
     println("Removed " + removed.to_string() + " actrun cron entries")
@@ -3355,9 +3355,9 @@ async fn handle_doctor_command() -> Int {
     } else {
       check.bin
     }
-    let (code, stdout, _) = @process.collect_output(bin, ["--version"], cwd=".")
+    let (code, stdout, _) = run_command(bin, ["--version"], cwd=".")
     if code == 0 {
-      let version = stdout.text().trim(chars=" \t\r\n").to_string()
+      let version = stdout.trim(chars=" \t\r\n").to_string()
       let short_version = match version.find("\n") {
         Some(idx) => String::unsafe_substring(version, start=0, end=idx)
         None => version
@@ -3433,13 +3433,13 @@ async fn handle_doctor_command() -> Int {
     // container_runtime
     if config.container_runtime.length() > 0 {
       let (bin, _) = resolve_container_runtime_bin(config.container_runtime)
-      let (rt_code, rt_stdout, _) = @process.collect_output(
+      let (rt_code, rt_stdout, _) = run_command(
         bin,
         ["--version"],
         cwd=".",
       )
       if rt_code == 0 {
-        let rt_ver = rt_stdout.text().trim(chars=" \t\r\n").to_string()
+        let rt_ver = rt_stdout.trim(chars=" \t\r\n").to_string()
         let short_ver = match rt_ver.find("\n") {
           Some(idx) => String::unsafe_substring(rt_ver, start=0, end=idx)
           None => rt_ver
@@ -3470,18 +3470,18 @@ async fn handle_doctor_command() -> Int {
       for check in skip_tool_checks {
         let (pattern, tool, flag) = check
         if action.contains(pattern) {
-          let (tool_code, tool_stdout, tool_stderr) = @process.collect_output(
+          let (tool_code, tool_stdout, tool_stderr) = run_command(
             tool,
             [flag],
             cwd=".",
           )
           if tool_code == 0 {
             // Some tools output to stderr (java -version)
-            let out = tool_stdout.text().trim(chars=" \t\r\n").to_string()
+            let out = tool_stdout.trim(chars=" \t\r\n").to_string()
             let raw = if out.length() > 0 {
               out
             } else {
-              tool_stderr.text().trim(chars=" \t\r\n").to_string()
+              tool_stderr.trim(chars=" \t\r\n").to_string()
             }
             let short_ver = match raw.find("\n") {
               Some(idx) => String::unsafe_substring(raw, start=0, end=idx)
@@ -3557,18 +3557,16 @@ async fn run_in_docker_container(options : CliOptions) -> Int {
   if options.dry_run {
     args.push("--dry-run")
   }
-  let (code, stdout, stderr) = @process.collect_output(
+  let (code, stdout, stderr) = run_command(
     docker_bin,
     args,
     cwd=".",
   )
-  let out = stdout.text()
-  if out.length() > 0 {
-    println(out.trim_end(chars="\n").to_string())
+  if stdout.length() > 0 {
+    println(stdout.trim_end(chars="\n").to_string())
   }
-  let err = stderr.text()
-  if err.length() > 0 {
-    print_errors([err.trim_end(chars="\n").to_string()])
+  if stderr.length() > 0 {
+    print_errors([stderr.trim_end(chars="\n").to_string()])
   }
   code
 }
@@ -3703,13 +3701,13 @@ fn scan_local_action_manifest(
 ///|
 #cfg(target="native")
 async fn read_stdin_line() -> String {
-  let (code, stdout, _) = @process.collect_output(
+  let (code, stdout, _) = run_command(
     "sh",
     ["-c", "read answer && echo \"$answer\""],
     cwd=".",
   )
   if code == 0 {
-    stdout.text().trim(chars=" \t\r\n").to_string()
+    stdout.trim(chars=" \t\r\n").to_string()
   } else {
     ""
   }
@@ -5457,7 +5455,221 @@ async fn main {
 }
 
 ///|
-#cfg(not(target="native"))
+#cfg(target="js")
+async fn main {
+  let cli_args = @xsys.get_cli_args()
+  if cli_args.length() <= 1 ||
+    (
+      cli_args.length() > 1 &&
+      (cli_args[1] == "--help" || cli_args[1] == "-h" || cli_args[1] == "help")
+    ) {
+    println(usage_text())
+    return
+  }
+  if cli_args.length() > 1 && cli_args[1] == "init" {
+    let exit_code = handle_init_command()
+    if exit_code != 0 {
+      @xsys.exit(exit_code)
+    }
+    return
+  }
+  if cli_args.length() > 1 && cli_args[1] == "list" {
+    let exit_code = handle_list_command(cli_args)
+    if exit_code != 0 {
+      @xsys.exit(exit_code)
+    }
+    return
+  }
+  if cli_args.length() > 1 && cli_args[1] == "workflow" {
+    if cli_args.length() < 3 {
+      print_errors(["workflow subcommand requires an action"])
+      @xsys.exit(1)
+    }
+    if cli_args[2] == "list" {
+      let parsed_workflow_args = parse_workflow_read_args(cli_args)
+      if parsed_workflow_args.errors.length() > 0 {
+        print_errors(parsed_workflow_args.errors)
+        @xsys.exit(1)
+      }
+      guard parsed_workflow_args.options is Some(workflow_options) else {
+        print_errors([usage_text()])
+        @xsys.exit(1)
+      }
+      let exit_code = handle_workflow_read_command(workflow_options)
+      if exit_code != 0 {
+        @xsys.exit(exit_code)
+      }
+      return
+    }
+    if cli_args[2] == "run" {
+      let parsed_workflow_run_args = parse_workflow_run_args(cli_args)
+      if parsed_workflow_run_args.errors.length() > 0 {
+        print_errors(parsed_workflow_run_args.errors)
+        @xsys.exit(1)
+      }
+      guard parsed_workflow_run_args.options is Some(workflow_run_options) else {
+        print_errors([usage_text()])
+        @xsys.exit(1)
+      }
+      let exit_code = handle_workflow_run_command_js(workflow_run_options)
+      if exit_code != 0 {
+        @xsys.exit(exit_code)
+      }
+      return
+    }
+    print_errors(["unknown workflow subcommand: " + cli_args[2]])
+    @xsys.exit(1)
+  }
+  if cli_args.length() > 1 && cli_args[1] == "run" {
+    let parsed_run_args = parse_run_read_args(cli_args)
+    if parsed_run_args.errors.length() > 0 {
+      print_errors(parsed_run_args.errors)
+      @xsys.exit(1)
+    }
+    guard parsed_run_args.options is Some(run_options) else {
+      print_errors([usage_text()])
+      @xsys.exit(1)
+    }
+    if run_options.action == "watch" {
+      let exit_code = handle_run_watch_command(run_options)
+      if exit_code != 0 {
+        @xsys.exit(exit_code)
+      }
+      return
+    }
+    let exit_code = handle_run_read_command(run_options)
+    if exit_code != 0 {
+      @xsys.exit(exit_code)
+    }
+    return
+  }
+  if cli_args.length() > 1 && cli_args[1] == "artifact" {
+    let parsed_artifact_args = parse_artifact_read_args(cli_args)
+    if parsed_artifact_args.errors.length() > 0 {
+      print_errors(parsed_artifact_args.errors)
+      @xsys.exit(1)
+    }
+    guard parsed_artifact_args.options is Some(artifact_options) else {
+      print_errors([usage_text()])
+      @xsys.exit(1)
+    }
+    let exit_code = handle_artifact_read_command(artifact_options)
+    if exit_code != 0 {
+      @xsys.exit(exit_code)
+    }
+    return
+  }
+  if cli_args.length() > 1 && cli_args[1] == "cache" {
+    let parsed_cache_args = parse_cache_read_args(cli_args)
+    if parsed_cache_args.errors.length() > 0 {
+      print_errors(parsed_cache_args.errors)
+      @xsys.exit(1)
+    }
+    guard parsed_cache_args.options is Some(cache_options) else {
+      print_errors([usage_text()])
+      @xsys.exit(1)
+    }
+    let exit_code = handle_cache_read_command(cache_options)
+    if exit_code != 0 {
+      @xsys.exit(exit_code)
+    }
+    return
+  }
+
+  // Shorthand: actrun <workflow.yml> is equivalent to actrun workflow run <workflow.yml>
+  let parsed_args = parse_cli_args(cli_args)
+  if parsed_args.errors.length() > 0 {
+    print_errors(parsed_args.errors)
+    @xsys.exit(1)
+  }
+  guard parsed_args.options is Some(options) else {
+    print_errors([usage_text()])
+    @xsys.exit(1)
+  }
+  let exit_code = handle_workflow_run_command_js(options)
+  if exit_code != 0 {
+    @xsys.exit(exit_code)
+  }
+}
+
+///|
+#cfg(target="js")
+async fn handle_workflow_run_command_js(raw_options : CliOptions) -> Int {
+  let config = load_actrun_config(".")
+  let options = merge_config_into_options(raw_options, config)
+  let workspace_mode = resolved_workspace_mode(options)
+  let workflow_path = options.workflow_path
+  let source_root = local_workspace_root(workflow_path)
+  let execution_root = source_root
+  let text = match read_text(workflow_path) {
+    Some(content) => content
+    None => {
+      print_errors(["failed to read " + workflow_path])
+      return 1
+    }
+  }
+  let parsed = @ar.parse_workflow_yaml(text)
+  if parsed.errors.length() > 0 {
+    print_errors(parsed.errors)
+    return 1
+  }
+  guard parsed.workflow is Some(workflow) else {
+    print_errors(["workflow parse failed"])
+    return 1
+  }
+  if options.dry_run {
+    let lowered = @ar.lower_push_workflow_in_workspace(workflow, execution_root)
+    if lowered.errors.length() > 0 {
+      for err in lowered.errors {
+        println("warning: " + err)
+      }
+    }
+    print_dry_run_plan(workflow, lowered)
+    return 0
+  }
+  // Full execution
+  let prefetch = @ar.prefetch_workflow_github_actions_native(
+    workflow, execution_root,
+  )
+  if prefetch.errors.length() > 0 {
+    print_errors(prefetch.errors)
+    return 1
+  }
+  let lowered = @ar.lower_push_workflow_in_workspace(workflow, execution_root)
+  if lowered.errors.length() > 0 {
+    print_errors(lowered.errors)
+    return 1
+  }
+  let trigger_event = @ar.new_push_event(
+    options.ref_name,
+    options.changed_paths,
+    before_sha=options.before_sha,
+    after_sha=options.after_sha,
+    repository=options.repository,
+  )
+  let raw_report = @ar.execute_lowered_native(
+    lowered,
+    workspace_root=execution_root,
+    push_event=Some(trigger_event),
+    dispatch_inputs=options.dispatch_inputs,
+    nix_mode=options.nix_mode,
+    nix_packages=options.nix_packages,
+  )
+  let report = @ar.mask_report_secrets(raw_report, @ar.collect_secret_values())
+  ignore(workspace_mode)
+  ignore(workflow_path)
+  print_report(workflow, report)
+  if report.ok { 0 } else { 1 }
+}
+
+///|
+#cfg(target="wasm")
 fn main {
-  println("actrun CLI execute is supported on native target only")
+  println("actrun CLI execute is supported on native and js targets only")
+}
+
+///|
+#cfg(target="wasm-gc")
+fn main {
+  println("actrun CLI execute is supported on native and js targets only")
 }

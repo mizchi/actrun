@@ -93,7 +93,7 @@ async fn prefetch_mkdir_p(path : String) -> Bool {
   if path.length() == 0 || path == "." {
     return true
   }
-  let (code, _, _) = @process.collect_output("mkdir", ["-p", path], cwd=".")
+  let (code, _, _) = run_command("mkdir", ["-p", path], cwd=".")
   code == 0
 }
 
@@ -124,7 +124,7 @@ async fn prefetch_ensure_cached_github_repo_root(
           layout.repo,
           github_base_url,
         )
-        let (code, stdout, stderr) = @process.collect_output(
+        let (code, stdout, stderr) = run_command(
           github_action_git_bin(git_bin),
           [
             "clone",
@@ -143,7 +143,7 @@ async fn prefetch_ensure_cached_github_repo_root(
             did_fetch: false,
             errors: [
               "action '\{layout.uses}' git clone failed: " +
-              prefetch_command_message(stdout.text(), stderr.text()),
+              prefetch_command_message(stdout, stderr),
             ],
           }
         }

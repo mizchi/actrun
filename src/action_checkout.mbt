@@ -219,8 +219,7 @@ async fn exec_git_command_text(
   args : Array[String],
   cwd : String,
 ) -> (Int, String, String) {
-  let (code, stdout, stderr) = @process.collect_output(git_bin, args, cwd~)
-  (code, stdout.text(), stderr.text())
+  run_command(git_bin, args, cwd~)
 }
 
 ///|
@@ -457,6 +456,7 @@ fn exec_copy_dir_contents_preserving_untracked(
 }
 
 ///|
+#cfg(target="native")
 async fn exec_git_clone_checkout(
   plan : TaskPlan,
   workspace_root : String,

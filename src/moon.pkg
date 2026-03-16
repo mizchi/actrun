@@ -19,3 +19,24 @@ import {
   "moonbitlang/async",
   "moonbitlang/quickcheck" @qc,
 } for "test"
+
+options(
+  targets: {
+    "process_native.mbt": ["native"],
+    "process_js.mbt": ["js"],
+    "action_ref_test.mbt": ["native"],
+    "compat_act_test.mbt": ["native"],
+    "compat_docs_test.mbt": ["native"],
+    "compat_fixture_test.mbt": ["native"],
+    "compat_languageservices_test.mbt": ["native"],
+    "compat_suite_helpers_test.mbt": ["native"],
+    "event_json_test.mbt": ["native"],
+    "executor_test.mbt": ["native"],
+    "executor_wbtest.mbt": ["native"],
+    "lib_test.mbt": ["native"],
+    "quickcheck_test.mbt": ["native"],
+    "runner_context_test.mbt": ["native"],
+    "runtime_test.mbt": ["native"],
+    "test_support_github_fetch_test.mbt": ["native"],
+  },
+)

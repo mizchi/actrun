@@ -1376,7 +1376,9 @@ fn expand_reusable_workflows_in_workspace(
                 let bound_secrets : Map[String, String] = {}
                 for secret_name, secret_spec in workflow_call.secrets {
                   if job.reusable_workflow_inherit_secrets {
-                    bound_secrets[secret_name] = "${{ secrets." +
+                    let dollar = "$"
+                    bound_secrets[secret_name] = dollar +
+                      "{{ secrets." +
                       secret_name +
                       " }}"
                   }
