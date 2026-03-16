@@ -2902,6 +2902,11 @@ fn parse_cli_args(args : Array[String]) -> CliParseResult {
       errors.push(usage_text())
       break
     }
+    if arg == "--json" {
+      // Accepted but handled at dry-run output level
+      index += 1
+      continue
+    }
     if arg.has_prefix("--") {
       errors.push("unknown option: " + arg)
       index += 1
@@ -3750,11 +3755,25 @@ fn print_dry_run_plan(
   for task in lowered.plan.tasks {
     if task.job_id != current_job {
       current_job = task.job_id
-      println("job: " + current_job)
+      let needs = lowered.plan.job_needs.get(current_job).unwrap_or([])
+      let needs_label = if needs.length() > 0 {
+        " [needs: " + needs.join(", ") + "]"
+      } else {
+        ""
+      }
+      println("job: " + current_job + needs_label)
+    }
+    if task.kind == "barrier" {
+      continue
     }
     let kind_label = match task.action {
       Some(action) => task.kind + " (" + action.uses + ")"
       None => task.kind
+    }
+    let name_label = if task.name.length() > 0 && task.name != task.step_id {
+      " \"" + task.name + "\""
+    } else {
+      ""
     }
     let if_label = if task.if_condition.length() > 0 &&
       task.if_condition != "success()" {
@@ -3762,8 +3781,84 @@ fn print_dry_run_plan(
     } else {
       ""
     }
-    println("  " + task.id + ": " + kind_label + if_label)
+    let shell_label = if task.shell.length() > 0 && task.kind == "run" {
+      " [" + task.shell + "]"
+    } else {
+      ""
+    }
+    println(
+      "  " + task.id + ": " + kind_label + name_label + shell_label +
+      if_label,
+    )
   }
+}
+
+///|
+fn print_dry_run_plan_json(
+  workflow : @ar.WorkflowSpec,
+  lowered : @ar.LoweringResult,
+) -> Unit {
+  let job_steps : Map[String, Array[String]] = {}
+  let job_order : Array[String] = []
+  for task in lowered.plan.tasks {
+    if task.kind == "barrier" {
+      continue
+    }
+    if job_steps.get(task.job_id) is None {
+      job_steps[task.job_id] = []
+      job_order.push(task.job_id)
+    }
+    let parts : Array[String] = []
+    parts.push("\"id\": " + json_string(task.id))
+    parts.push("\"kind\": " + json_string(task.kind))
+    if task.name.length() > 0 {
+      parts.push("\"name\": " + json_string(task.name))
+    }
+    if task.shell.length() > 0 {
+      parts.push("\"shell\": " + json_string(task.shell))
+    }
+    match task.action {
+      Some(action) => parts.push("\"uses\": " + json_string(action.uses))
+      None => ()
+    }
+    if task.if_condition.length() > 0 &&
+      task.if_condition != "success()" {
+      parts.push("\"if\": " + json_string(task.if_condition))
+    }
+    if task.working_directory.length() > 0 {
+      parts.push(
+        "\"working_directory\": " + json_string(task.working_directory),
+      )
+    }
+    if task.env.size() > 0 {
+      let env_items : Array[String] = []
+      for key, value in task.env {
+        env_items.push(json_string(key) + ": " + json_string(value))
+      }
+      parts.push("\"env\": { " + env_items.join(", ") + " }")
+    }
+    job_steps.get(task.job_id).unwrap().push("{ " + parts.join(", ") + " }")
+  }
+  let job_items : Array[String] = []
+  for job_id in job_order {
+    let parts : Array[String] = []
+    parts.push("\"id\": " + json_string(job_id))
+    let needs = lowered.plan.job_needs.get(job_id).unwrap_or([])
+    if needs.length() > 0 {
+      parts.push("\"needs\": " + json_string_array(needs))
+    }
+    parts.push(
+      "\"steps\": [" + job_steps.get(job_id).unwrap().join(", ") + "]",
+    )
+    job_items.push("{ " + parts.join(", ") + " }")
+  }
+  let root_parts : Array[String] = []
+  root_parts.push("\"workflow\": " + json_string(workflow.name))
+  root_parts.push("\"jobs\": [" + job_items.join(", ") + "]")
+  if lowered.errors.length() > 0 {
+    root_parts.push("\"warnings\": " + json_string_array(lowered.errors))
+  }
+  println("{ " + root_parts.join(", ") + " }")
 }
 
 ///|
@@ -5172,12 +5267,18 @@ async fn handle_workflow_run_command(raw_options : CliOptions) -> Int {
     let lowered = @ar.lower_push_workflow_in_workspace(
       filtered_workflow, execution_root,
     )
-    if lowered.errors.length() > 0 {
-      for err in lowered.errors {
-        println("warning: " + err)
+    let cli_args = @xsys.get_cli_args()
+    let json_mode = cli_args.contains("--json")
+    if json_mode {
+      print_dry_run_plan_json(filtered_workflow, lowered)
+    } else {
+      if lowered.errors.length() > 0 {
+        for err in lowered.errors {
+          println("warning: " + err)
+        }
       }
+      print_dry_run_plan(filtered_workflow, lowered)
     }
-    print_dry_run_plan(filtered_workflow, lowered)
     return 0
   }
 
