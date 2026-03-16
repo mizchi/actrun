@@ -391,8 +391,17 @@ async fn setup_local_workspace(
   }
   let abs_source = absolute_run_store_path(source_root)
   let abs_workspace_base = absolute_run_store_path(workspace_base)
-  let timestamp = @env.now().to_string()
-  let workspace_dir = join_path(abs_workspace_base, "ws-" + timestamp)
+  let base_timestamp = @env.now().to_string()
+  let mut workspace_dir = join_path(abs_workspace_base, "ws-" + base_timestamp)
+  // Avoid collisions when multiple runs happen in the same millisecond
+  let mut suffix = 0
+  while @xfs.path_exists(workspace_dir) {
+    suffix += 1
+    workspace_dir = join_path(
+      abs_workspace_base,
+      "ws-" + base_timestamp + "-" + suffix.to_string(),
+    )
+  }
   if workspace_mode == "worktree" {
     // Find the actual git repo root (abs_source may be a subdirectory)
     let (rev_code, rev_stdout, _) = run_command(
