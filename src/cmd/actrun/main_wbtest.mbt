@@ -1699,3 +1699,78 @@ test "files_match_patterns: realistic CI patterns" {
     content="false",
   )
 }
+
+// --- toml_normalize_section tests ---
+
+///|
+test "toml_normalize_section: bare key" {
+  inspect(toml_normalize_section("affected"), content="affected")
+  inspect(toml_normalize_section("workspace"), content="workspace")
+}
+
+///|
+test "toml_normalize_section: dotted bare keys" {
+  inspect(toml_normalize_section("affected.ci"), content="affected.ci")
+}
+
+///|
+test "toml_normalize_section: quoted key" {
+  inspect(
+    toml_normalize_section("affected.\"ci.yml\""),
+    content="affected.ci.yml",
+  )
+}
+
+///|
+test "toml_normalize_section: quoted path key" {
+  inspect(
+    toml_normalize_section("affected.\".github/workflows/ci.yml\""),
+    content="affected..github/workflows/ci.yml",
+  )
+}
+
+// --- affected config parsing tests ---
+
+///|
+test "parse_toml_minimal: affected with quoted key" {
+  let config = "[affected.\"ci.yml\"]\npatterns = [\"src/**\", \"*.toml\"]\n"
+  let parsed = parse_toml_minimal(config)
+  inspect(
+    parsed.arrays.get("affected.ci.yml.patterns").unwrap(),
+    content="[\"src/**\", \"*.toml\"]",
+  )
+}
+
+///|
+test "parse_toml_minimal: affected with path key" {
+  let config = "[affected.\".github/workflows/ci.yml\"]\npatterns = [\"src/**\"]\n"
+  let parsed = parse_toml_minimal(config)
+  inspect(
+    parsed.arrays.get("affected..github/workflows/ci.yml.patterns").unwrap(),
+    content="[\"src/**\"]",
+  )
+}
+
+///|
+test "load_actrun_config: affected patterns extraction" {
+  let config = "[affected.\"ci.yml\"]\npatterns = [\"src/**\", \"*.toml\"]\n[affected.\"lint.yml\"]\npatterns = [\"src/**\"]\n"
+  let parsed = parse_toml_minimal(config)
+  // Simulate the affected extraction logic
+  let result : Map[String, Array[String]] = {}
+  let prefix = "affected."
+  let suffix = ".patterns"
+  for key, patterns in parsed.arrays {
+    if key.has_prefix(prefix) && key.has_suffix(suffix) {
+      let wf = String::unsafe_substring(
+        key,
+        start=prefix.length(),
+        end=key.length() - suffix.length(),
+      )
+      if wf.length() > 0 {
+        result[wf] = patterns
+      }
+    }
+  }
+  inspect(result.get("ci.yml").unwrap(), content="[\"src/**\", \"*.toml\"]")
+  inspect(result.get("lint.yml").unwrap(), content="[\"src/**\"]")
+}

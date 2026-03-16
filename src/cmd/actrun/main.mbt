@@ -1549,6 +1549,11 @@ async fn generate_actrun_config() -> String {
   config = config + "\n# Additional workflow file patterns for `actrun list`\n"
   config = config +
     "# includes = [\".github/workflows/*.yml\", \"ci/**/*.yaml\"]\n"
+  config = config + "\n# Affected file patterns per workflow (optional)\n"
+  config = config +
+    "# If not set, on:push:paths from workflow is used as fallback\n"
+  config = config + "# [affected.\"ci.yml\"]\n"
+  config = config + "# patterns = [\"src/**\", \"package.json\"]\n"
   config
 }
 
@@ -1556,6 +1561,56 @@ async fn generate_actrun_config() -> String {
 struct TomlParseResult {
   entries : Map[String, String]
   arrays : Map[String, Array[String]]
+}
+
+///|
+/// Normalize TOML section key: strip quotes from dotted keys.
+/// "affected.\"ci.yml\"" → "affected.ci.yml"
+/// "affected.\".github/workflows/ci.yml\"" → "affected..github/workflows/ci.yml"
+fn toml_normalize_section(raw : String) -> String {
+  let parts : Array[String] = []
+  let mut idx = 0
+  let mut start = 0
+  while idx < raw.length() {
+    let ch = raw.unsafe_get(idx)
+    if ch == '"' {
+      // Read quoted segment
+      idx += 1
+      let qstart = idx
+      while idx < raw.length() && raw.unsafe_get(idx) != '"' {
+        idx += 1
+      }
+      parts.push(String::unsafe_substring(raw, start=qstart, end=idx))
+      if idx < raw.length() {
+        idx += 1 // skip closing quote
+      }
+      // skip dot after quote
+      if idx < raw.length() && raw.unsafe_get(idx) == '.' {
+        idx += 1
+      }
+      start = idx
+    } else if ch == '.' {
+      if idx > start {
+        parts.push(
+          String::unsafe_substring(raw, start~, end=idx)
+          .trim(chars=" \t")
+          .to_string(),
+        )
+      }
+      idx += 1
+      start = idx
+    } else {
+      idx += 1
+    }
+  }
+  if start < raw.length() {
+    parts.push(
+      String::unsafe_substring(raw, start~, end=raw.length())
+      .trim(chars=" \t")
+      .to_string(),
+    )
+  }
+  parts.join(".")
 }
 
 ///|
@@ -1569,11 +1624,17 @@ fn parse_toml_minimal(content : String) -> TomlParseResult {
     if line.length() == 0 || line.has_prefix("#") {
       continue
     }
-    // Parse section headers: [section] or [section."key"]
+    // Parse section headers: [section], [section."key"], [section."path/key"]
     if line.has_prefix("[") && line.has_suffix("]") {
-      section = String::unsafe_substring(line, start=1, end=line.length() - 1)
+      let raw_section = String::unsafe_substring(
+          line,
+          start=1,
+          end=line.length() - 1,
+        )
         .trim(chars=" \t")
         .to_string()
+      // Normalize quoted keys: [affected."ci.yml"] → affected.ci.yml
+      section = toml_normalize_section(raw_section)
       continue
     }
     match line.find("=") {
@@ -1685,22 +1746,20 @@ fn load_actrun_config(dir : String) -> ActrunConfig {
     container_runtime: parsed.entries.get("container_runtime").unwrap_or(""),
     affected: {
       let result : Map[String, Array[String]] = {}
-      // Parse affected.WORKFLOW.patterns from sectioned keys
+      // Parse affected keys: "affected.WORKFLOW.patterns" → workflow → patterns
+      // After section normalization, key is e.g.:
+      //   "affected.ci.yml.patterns" (from [affected."ci.yml"])
+      //   "affected..github/workflows/ci.yml.patterns"
+      let prefix = "affected."
+      let suffix = ".patterns"
       for key, patterns in parsed.arrays {
-        if key.has_prefix("affected.") {
-          let rest = String::unsafe_substring(key, start=9, end=key.length())
-          // key is "affected.ci.yml.patterns" → workflow="ci.yml"
-          // Find last "." to split workflow name from field name
-          let mut last_dot = -1
-          for i in 0..<rest.length() {
-            if rest[i] == '.' {
-              last_dot = i
-            }
-          }
-          if last_dot > 0 {
-            let wf = String::unsafe_substring(rest, start=0, end=last_dot)
-              .trim(chars="\"'")
-              .to_string()
+        if key.has_prefix(prefix) && key.has_suffix(suffix) {
+          let wf = String::unsafe_substring(
+            key,
+            start=prefix.length(),
+            end=key.length() - suffix.length(),
+          )
+          if wf.length() > 0 {
             result[wf] = patterns
           }
         }
