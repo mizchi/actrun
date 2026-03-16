@@ -1622,6 +1622,74 @@ test "parser/lowering: workflow and job permissions are silently ignored" {
 }
 
 ///|
+test "security: permissions do not leak into task plan env" {
+  let workflow = new_workflow(
+    "ci",
+    [
+      new_job(
+        "build",
+        [new_run_step("check", "echo test")],
+        permissions=Some(
+          new_permissions_spec(values={
+            "contents": "write",
+            "packages": "write",
+          }),
+        ),
+      ),
+    ],
+    permissions=Some(new_permissions_spec(values={ "_": "write-all" })),
+  )
+
+  let result = lower_push_workflow(workflow)
+  inspect(result.errors, content="[]")
+  // Permissions should not appear in task plan env
+  for task in result.plan.tasks {
+    inspect(task.env.get("PERMISSIONS_CONTENTS"), content="None")
+    inspect(task.env.get("GITHUB_TOKEN_PERMISSIONS"), content="None")
+  }
+}
+
+///|
+test "security: permissions do not affect execution plan structure" {
+  // Same workflow with and without permissions should produce identical plans
+  let with_perms = new_workflow(
+    "ci",
+    [
+      new_job(
+        "build",
+        [new_run_step("step1", "echo one"), new_run_step("step2", "echo two")],
+        permissions=Some(new_permissions_spec(values={ "contents": "write" })),
+      ),
+    ],
+    permissions=Some(new_permissions_spec(values={ "_": "read-all" })),
+  )
+  let without_perms = new_workflow("ci", [
+    new_job("build", [
+      new_run_step("step1", "echo one"),
+      new_run_step("step2", "echo two"),
+    ]),
+  ])
+
+  let result_with = lower_push_workflow(with_perms)
+  let result_without = lower_push_workflow(without_perms)
+
+  inspect(result_with.errors, content="[]")
+  inspect(result_without.errors, content="[]")
+  // Same number of tasks
+  inspect(
+    result_with.plan.tasks.length() == result_without.plan.tasks.length(),
+    content="true",
+  )
+  // Same task IDs
+  for i in 0..<result_with.plan.tasks.length() {
+    inspect(
+      result_with.plan.tasks[i].id == result_without.plan.tasks[i].id,
+      content="true",
+    )
+  }
+}
+
+///|
 test "parser/lowering: workflow and job concurrency are silently ignored" {
   let workflow = new_workflow(
     "ci",

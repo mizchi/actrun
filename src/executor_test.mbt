@@ -4401,3 +4401,68 @@ async test "security: step script files are not world-readable" {
   let report = execute_lowered_native(lowered, workspace_root=workspace)
   inspect(report.ok, content="true")
 }
+
+///|
+#cfg(target="native")
+async test "security: permissions workflow executes without GITHUB_TOKEN" {
+  let workspace = prepare_workspace("security-permissions-no-token")
+
+  let workflow = new_workflow(
+    "ci",
+    [
+      new_job(
+        "build",
+        [
+          new_run_step(
+            "check",
+            "printf '%s' \"${GITHUB_TOKEN:-unset}\"",
+            shell=Some("bash"),
+          ),
+        ],
+        permissions=Some(new_permissions_spec(values={ "contents": "write" })),
+        defaults=new_run_defaults(shell=Some("bash")),
+      ),
+    ],
+    permissions=Some(new_permissions_spec(values={ "_": "write-all" })),
+  )
+
+  let lowered = lower_push_workflow(workflow)
+  inspect(lowered.errors, content="[]")
+
+  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  inspect(report.ok, content="true")
+  // GITHUB_TOKEN should not be automatically set
+  inspect(
+    expect_task_report(report, "build/check").stdout
+    .trim(chars=" \n\r\t")
+    .to_string(),
+    content="unset",
+  )
+}
+
+///|
+#cfg(target="native")
+async test "security: secrets are masked in stdout" {
+  let workspace = prepare_workspace("security-secrets-masked")
+
+  let workflow = new_workflow("ci", [
+    new_job(
+      "build",
+      [
+        new_run_step(
+          "leak",
+          "echo 'token is super-secret-123'",
+          shell=Some("bash"),
+        ),
+      ],
+      defaults=new_run_defaults(shell=Some("bash")),
+    ),
+  ])
+
+  let lowered = lower_push_workflow(workflow)
+  let raw_report = execute_lowered_native(lowered, workspace_root=workspace)
+  let masked = mask_report_secrets(raw_report, ["super-secret-123"])
+  let stdout = expect_task_report(masked, "build/leak").stdout
+  inspect(stdout.contains("super-secret-123"), content="false")
+  inspect(stdout.contains("***"), content="true")
+}

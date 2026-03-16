@@ -1,0 +1,34 @@
+name: permissions
+'on': push
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  restricted:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - run: echo "job with restricted permissions runs fine locally"
+
+  default:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "job without explicit permissions runs fine"
+
+  write-all:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - run: echo "write permissions are ignored locally — no elevated access"
+      - name: GITHUB_TOKEN is not auto-provided
+        run: |
+          if [ -n "${GITHUB_TOKEN:-}" ]; then
+            echo "FAIL: GITHUB_TOKEN should not be set"
+            exit 1
+          fi
+          echo "OK: no GITHUB_TOKEN (as expected locally)"
