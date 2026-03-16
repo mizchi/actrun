@@ -5145,11 +5145,7 @@ async fn handle_workflow_run_command(raw_options : CliOptions) -> Int {
         )
       }
     } else {
-      println(
-        "affected: no patterns configured for " +
-        wf_key +
-        ", running",
-      )
+      println("affected: no patterns configured for " + wf_key + ", running")
     }
   }
 

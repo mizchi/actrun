@@ -1649,10 +1649,7 @@ test "files_match_patterns: basic matching" {
 ///|
 test "files_match_patterns: multiple patterns" {
   inspect(
-    files_match_patterns(
-      ["docs/intro.md"],
-      ["src/**", "docs/**", "*.toml"],
-    ),
+    files_match_patterns(["docs/intro.md"], ["src/**", "docs/**", "*.toml"]),
     content="true",
   )
   inspect(
@@ -1675,17 +1672,13 @@ test "files_match_patterns: empty inputs" {
 ///|
 test "files_match_patterns: exact file patterns" {
   inspect(
-    files_match_patterns(
-      ["package.json", "src/index.ts"],
-      ["package.json", "pnpm-lock.yaml"],
-    ),
+    files_match_patterns(["package.json", "src/index.ts"], [
+      "package.json", "pnpm-lock.yaml",
+    ]),
     content="true",
   )
   inspect(
-    files_match_patterns(
-      ["src/index.ts"],
-      ["package.json", "pnpm-lock.yaml"],
-    ),
+    files_match_patterns(["src/index.ts"], ["package.json", "pnpm-lock.yaml"]),
     content="false",
   )
 }
@@ -1694,24 +1687,15 @@ test "files_match_patterns: exact file patterns" {
 test "files_match_patterns: realistic CI patterns" {
   // Typical patterns from actrun.toml or on:push:paths
   let patterns = ["src/**", "package.json", "pnpm-lock.yaml"]
+  inspect(files_match_patterns(["src/lib/parser.ts"], patterns), content="true")
+  inspect(files_match_patterns(["package.json"], patterns), content="true")
+  inspect(files_match_patterns(["pnpm-lock.yaml"], patterns), content="true")
+  inspect(files_match_patterns(["README.md"], patterns), content="false")
   inspect(
-    files_match_patterns(["src/lib/parser.ts"], patterns),
-    content="true",
-  )
-  inspect(
-    files_match_patterns(["package.json"], patterns),
-    content="true",
-  )
-  inspect(
-    files_match_patterns(["pnpm-lock.yaml"], patterns),
-    content="true",
-  )
-  inspect(
-    files_match_patterns(["README.md"], patterns),
-    content="false",
-  )
-  inspect(
-    files_match_patterns(["docs/guide.md", ".github/workflows/ci.yml"], patterns),
+    files_match_patterns(
+      ["docs/guide.md", ".github/workflows/ci.yml"],
+      patterns,
+    ),
     content="false",
   )
 }
