@@ -5193,15 +5193,19 @@ async fn handle_workflow_run_command(raw_options : CliOptions) -> Int {
             base_label +
             ")",
           )
-          return 0
+          if not(options.dry_run) {
+            return 0
+          }
+          println("affected: would skip (dry-run continues)")
+        } else {
+          println(
+            "affected: changes detected for " +
+            wf_key +
+            " (since " +
+            base_label +
+            ")",
+          )
         }
-        println(
-          "affected: changes detected for " +
-          wf_key +
-          " (since " +
-          base_label +
-          ")",
-        )
       }
     } else {
       println("affected: no patterns configured for " + wf_key + ", running")
