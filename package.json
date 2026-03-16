@@ -1,6 +1,6 @@
 {
   "name": "@mizchi/actrun",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "description": "A local GitHub Actions runner",
   "bin": {
     "actrun": "./dist/actrun.js"
