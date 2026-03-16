@@ -26,5 +26,8 @@
   },
   "files": [
     "dist/actrun.js"
-  ]
+  ],
+  "devDependencies": {
+    "oxc-minify": "^0.120.0"
+  }
 }
