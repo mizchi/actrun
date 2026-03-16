@@ -17,7 +17,7 @@ pub fn compute_bit_changed_paths(&@types.RepoFileSystem, String, PushEvent) -> B
 
 pub fn compute_bit_changed_paths_native(String, PushEvent) -> BitChangedPathsResult
 
-pub async fn execute_lowered_native(LoweringResult, workspace_root? : String, push_event? : PushEvent?, dispatch_inputs? : Map[String, String], nix_mode? : String, nix_packages? : Array[String]) -> WorkflowRunReport
+pub async fn execute_lowered_native(LoweringResult, workspace_root? : String, push_event? : PushEvent?, event_name? : String, dispatch_inputs? : Map[String, String], nix_mode? : String, nix_packages? : Array[String]) -> WorkflowRunReport
 
 pub fn extract_add_mask_values(WorkflowRunReport) -> Array[String]
 
@@ -73,7 +73,7 @@ pub fn new_task_plan(String, String, String, String, String, String, String, Str
 
 pub fn new_uses_step(String, String, name? : String, env? : Map[String, String], if_condition? : String, with_values? : Map[String, String], continue_on_error? : String, timeout_minutes? : Int) -> StepSpec
 
-pub fn new_workflow(String, Array[JobSpec], run_name? : String, trigger? : PushTrigger, workflow_call? : Bool, workflow_call_spec? : WorkflowCallSpec?, permissions? : PermissionsSpec?, concurrency? : ConcurrencySpec?, env? : Map[String, String], defaults? : RunDefaults) -> WorkflowSpec
+pub fn new_workflow(String, Array[JobSpec], run_name? : String, trigger? : PushTrigger, pull_request_trigger? : PushTrigger?, workflow_call? : Bool, workflow_call_spec? : WorkflowCallSpec?, permissions? : PermissionsSpec?, concurrency? : ConcurrencySpec?, env? : Map[String, String], defaults? : RunDefaults) -> WorkflowSpec
 
 pub fn new_workflow_call_input_spec(description? : String, required? : Bool, default_value? : String?, input_type? : String) -> WorkflowCallInputSpec
 
@@ -82,6 +82,8 @@ pub fn new_workflow_call_output_spec(description? : String, value? : String) -> 
 pub fn new_workflow_call_secret_spec(required? : Bool) -> WorkflowCallSecretSpec
 
 pub fn new_workflow_call_spec(inputs? : Map[String, WorkflowCallInputSpec], outputs? : Map[String, WorkflowCallOutputSpec], secrets? : Map[String, WorkflowCallSecretSpec]) -> WorkflowCallSpec
+
+pub fn override_workflow_steps(WorkflowSpec, Map[String, String]) -> WorkflowSpec
 
 pub fn parse_action_ref(String) -> ActionRefParseResult
 
@@ -367,6 +369,7 @@ pub struct WorkflowSpec {
   name : String
   run_name : String
   trigger : PushTrigger
+  pull_request_trigger : PushTrigger?
   workflow_call : Bool
   workflow_call_spec : WorkflowCallSpec?
   permissions : PermissionsSpec?
