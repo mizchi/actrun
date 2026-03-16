@@ -210,6 +210,7 @@ fn usage_text() -> String {
   "  --tmp                        Shorthand for --workspace-mode tmp\n" +
   "  --docker                     Shorthand for --workspace-mode docker\n" +
   "  --apple-container             Shorthand for --docker --container-runtime container\n" +
+  "  --podman                     Shorthand for --docker --container-runtime podman\n" +
   "  --input <key=value>          Set workflow_dispatch input (repeatable)\n" +
   "  --trust                      Trust all third-party actions without prompt\n" +
   "  --env <file>                 Load environment variables from file\n" +
@@ -2924,6 +2925,12 @@ fn parse_cli_args(args : Array[String]) -> CliParseResult {
     if arg == "--apple-container" {
       workspace_mode = "docker"
       container_runtime = "container"
+      index += 1
+      continue
+    }
+    if arg == "--podman" {
+      workspace_mode = "docker"
+      container_runtime = "podman"
       index += 1
       continue
     }
