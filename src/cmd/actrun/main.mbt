@@ -190,6 +190,7 @@ fn usage_text() -> String {
   "Other commands:\n" +
   "  list [patterns...]           List workflows and their run commands\n" +
   "  clean [target]               Clean build artifacts (all, runs, cache, workspace, actions)\n" +
+  "  serve [--repo <owner/repo>]  Watch for queued runs and execute locally\n" +
   "  cron [show|install|uninstall] Manage cron schedules from workflows\n" +
   "  init                         Create actrun.toml config file\n" +
   "  doctor                       Check tool dependencies\n" +
@@ -2199,6 +2200,142 @@ async fn apply_container_runtime(options : CliOptions) -> Unit {
   } else {
     @xsys.set_env_var("ACTRUN_CONTAINER_RUNTIME", bin)
   }
+}
+
+///|
+async fn handle_serve_command(args : Array[String]) -> Int {
+  // Parse --repo flag
+  let mut repo = ""
+  let mut interval = 30
+  let mut index = 2
+  while index < args.length() {
+    let arg = args[index]
+    if arg == "--repo" && index + 1 < args.length() {
+      repo = args[index + 1]
+      index += 2
+      continue
+    }
+    if arg == "--interval" && index + 1 < args.length() {
+      interval = @strconv.parse_int64(args[index + 1]).to_int() catch {
+        _ => 30
+      }
+      index += 2
+      continue
+    }
+    index += 1
+  }
+  // Auto-detect repo from git remote
+  if repo.length() == 0 {
+    let (code, stdout, _) = run_command("gh", [
+      "repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner",
+    ])
+    if code == 0 {
+      repo = stdout.trim(chars=" \t\r\n").to_string()
+    } else {
+      print_errors([
+        "could not detect repository. Use --repo owner/repo or run from a git repo with gh configured.",
+      ])
+      return 1
+    }
+  }
+  println(
+    "actrun serve: watching " +
+    repo +
+    " (interval: " +
+    interval.to_string() +
+    "s)",
+  )
+  println("Press Ctrl+C to stop.\n")
+  // Track processed run IDs to avoid re-running
+  let processed : Map[String, Bool] = {}
+  while true {
+    // Poll for queued workflow runs
+    let (code, stdout, _) = run_command("gh", [
+      "run", "list", "--repo", repo, "--status", "queued", "--json", "databaseId,workflowName,headBranch,event",
+      "--limit", "10",
+    ])
+    if code != 0 {
+      println("serve: failed to poll runs, retrying...")
+      ignore(run_command("sleep", [interval.to_string()]))
+      continue
+    }
+    // Parse JSON array of runs
+    let runs = @json.parse(stdout) catch {
+      _ => {
+        ignore(run_command("sleep", [interval.to_string()]))
+        continue
+      }
+    }
+    match runs {
+      Array(items) =>
+        for item in items {
+          match item {
+            Object(fields) => {
+              let run_id = match fields.get("databaseId") {
+                Some(Number(n, ..)) => n.to_string()
+                _ => continue
+              }
+              if processed.get(run_id) is Some(_) {
+                continue
+              }
+              processed[run_id] = true
+              let wf_name = match fields.get("workflowName") {
+                Some(String(s)) => s
+                _ => "unknown"
+              }
+              let branch = match fields.get("headBranch") {
+                Some(String(s)) => s
+                _ => ""
+              }
+              println(
+                "serve: detected queued run #" +
+                run_id +
+                " (" +
+                wf_name +
+                " on " +
+                branch +
+                ")",
+              )
+              // Download workflow file via gh api
+              let (dl_code, dl_stdout, _) = run_command("gh", [
+                "api",
+                "repos/" + repo + "/actions/runs/" + run_id,
+                "--jq",
+                ".path",
+              ])
+              if dl_code != 0 || dl_stdout.trim(chars=" \t\r\n").length() == 0 {
+                println("serve: could not get workflow path for run #" + run_id)
+                continue
+              }
+              let wf_path = dl_stdout.trim(chars=" \t\r\n").to_string()
+              println("serve: running " + wf_path)
+              // Execute locally
+              let (run_code, run_stdout, run_stderr) = run_command("actrun", [
+                "workflow", "run", wf_path, "--trust", "--worktree",
+              ])
+              if run_stdout.length() > 0 {
+                println(run_stdout.trim_end(chars="\n").to_string())
+              }
+              if run_stderr.length() > 0 {
+                println(run_stderr.trim_end(chars="\n").to_string())
+              }
+              let status = if run_code == 0 { "success" } else { "failure" }
+              println(
+                "serve: run #" + run_id + " finished with " + status + "\n",
+              )
+              // Post status comment
+              ignore(
+                run_command("gh", ["run", "cancel", run_id, "--repo", repo]),
+              )
+            }
+            _ => ()
+          }
+        }
+      _ => ()
+    }
+    ignore(run_command("sleep", [interval.to_string()]))
+  }
+  0
 }
 
 ///|
@@ -5774,6 +5911,13 @@ async fn main {
   }
   if cli_args.length() > 1 && cli_args[1] == "list" {
     let exit_code = handle_list_command(cli_args)
+    if exit_code != 0 {
+      @xsys.exit(exit_code)
+    }
+    return
+  }
+  if cli_args.length() > 1 && cli_args[1] == "serve" {
+    let exit_code = handle_serve_command(cli_args)
     if exit_code != 0 {
       @xsys.exit(exit_code)
     }
