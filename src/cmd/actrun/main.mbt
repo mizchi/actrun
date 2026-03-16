@@ -24,6 +24,7 @@ struct CliOptions {
   nix_packages : Array[String]
   container_runtime : String
   affected : Bool
+  affected_base : String
   retry : Bool
   job_filter : String
   step_filter : String
@@ -214,7 +215,7 @@ fn usage_text() -> String {
   "  --no-nix                     Disable nix wrapping even if flake.nix/shell.nix exists\n" +
   "  --nix-packages <pkgs>        Additional nix packages (space-separated)\n" +
   "  --container-runtime <name>   Container runtime: docker, podman, container, lima, nerdctl\n" +
-  "  --affected                   Only run if files matching actrun.toml patterns changed\n" +
+  "  --affected [base]             Only run if files matching patterns changed (default: last success, or rev like HEAD~3)\n" +
   "  --retry                      Re-run only failed jobs from the latest run\n" +
   "  --job <id>                   Run only the specified job\n" +
   "  --step <id>                  Run only the specified step (use with --job)\n" +
@@ -1764,6 +1765,7 @@ fn merge_config_into_options(
       config.container_runtime
     },
     affected: options.affected,
+    affected_base: options.affected_base,
     retry: options.retry,
     job_filter: options.job_filter,
     step_filter: options.step_filter,
@@ -2763,6 +2765,7 @@ fn parse_cli_args(args : Array[String]) -> CliParseResult {
   let nix_packages : Array[String] = []
   let mut container_runtime = ""
   let mut affected = false
+  let mut affected_base = ""
   let mut retry = false
   let mut job_filter = ""
   let mut step_filter = ""
@@ -2794,6 +2797,11 @@ fn parse_cli_args(args : Array[String]) -> CliParseResult {
     if arg == "--affected" {
       affected = true
       index += 1
+      // Optional: --affected HEAD~3 or --affected abc123
+      if index < args.length() && not(args[index].has_prefix("-")) {
+        affected_base = args[index]
+        index += 1
+      }
       continue
     }
     if arg == "--retry" {
@@ -2972,6 +2980,7 @@ fn parse_cli_args(args : Array[String]) -> CliParseResult {
       nix_packages,
       container_runtime,
       affected,
+      affected_base,
       retry,
       job_filter,
       step_filter,
@@ -5050,10 +5059,10 @@ async fn handle_workflow_run_command(raw_options : CliOptions) -> Int {
     return 0
   }
 
-  // --affected: check if workflow is affected by changes since last successful run
+  // --affected: check if workflow is affected by changes
   if options.affected {
     let wf_key = options.workflow_path
-    // Try full path first, then basename
+    // Resolve patterns: actrun.toml > on.push.paths > skip
     let mut patterns = config.affected.get(wf_key).unwrap_or([])
     if patterns.length() == 0 {
       let mut last_slash = -1
@@ -5071,51 +5080,75 @@ async fn handle_workflow_run_command(raw_options : CliOptions) -> Int {
         patterns = config.affected.get(basename).unwrap_or([])
       }
     }
+    // Fallback to on:push:paths from the workflow trigger
+    if patterns.length() == 0 && workflow.trigger.paths.length() > 0 {
+      patterns = workflow.trigger.paths
+      println(
+        "affected: using on.push.paths from workflow (" +
+        patterns.join(", ") +
+        ")",
+      )
+    }
     if patterns.length() > 0 {
-      match find_latest_run_for_workflow(run_root, workflow_path, true) {
-        Some((last_run, last_run_id)) => {
-          let last_sha = run_json_string(last_run, "after_sha")
-          let changed = if last_sha.length() > 0 {
-            let committed = git_diff_files(last_sha, "HEAD")
-            let uncommitted = git_uncommitted_files()
-            let all : Array[String] = []
-            for f in committed {
-              all.push(f)
+      // Determine base ref for diff
+      let (base_ref, base_label) = if options.affected_base.length() > 0 {
+        // Explicit base: --affected HEAD~3
+        (options.affected_base, options.affected_base)
+      } else {
+        // Default: last successful run's after_sha
+        match find_latest_run_for_workflow(run_root, workflow_path, true) {
+          Some((last_run, last_run_id)) => {
+            let sha = run_json_string(last_run, "after_sha")
+            if sha.length() > 0 {
+              (sha, last_run_id)
+            } else {
+              ("", last_run_id)
             }
-            for f in uncommitted {
-              all.push(f)
-            }
-            all
-          } else {
-            git_uncommitted_files()
           }
-          if not(files_match_patterns(changed, patterns)) {
-            println(
-              "affected: no changes match patterns for " +
-              wf_key +
-              " (since " +
-              last_run_id +
-              ")",
-            )
-            return 0
+          None => {
+            println("affected: no previous successful run found, running")
+            ("", "")
           }
+        }
+      }
+      if base_label.length() > 0 {
+        let changed = if base_ref.length() > 0 {
+          let committed = git_diff_files(base_ref, "HEAD")
+          let uncommitted = git_uncommitted_files()
+          let all : Array[String] = []
+          for f in committed {
+            all.push(f)
+          }
+          for f in uncommitted {
+            all.push(f)
+          }
+          all
+        } else {
+          git_uncommitted_files()
+        }
+        if not(files_match_patterns(changed, patterns)) {
           println(
-            "affected: changes detected for " +
+            "affected: no changes match patterns for " +
             wf_key +
             " (since " +
-            last_run_id +
+            base_label +
             ")",
           )
+          return 0
         }
-        None =>
-          // No previous successful run, always run
-          println("affected: no previous successful run found, running")
+        println(
+          "affected: changes detected for " +
+          wf_key +
+          " (since " +
+          base_label +
+          ")",
+        )
       }
     } else {
       println(
         "affected: no patterns configured for " +
         wf_key +
-        " in actrun.toml, running",
+        ", running",
       )
     }
   }
