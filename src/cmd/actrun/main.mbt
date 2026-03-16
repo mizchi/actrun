@@ -195,7 +195,7 @@ fn usage_text() -> String {
   "Workflow run flags:\n" +
   "  --repo <path>                Run from a git repository\n" +
   "  --workspace <path>           Workspace root for isolated execution\n" +
-  "  --workspace-mode <mode>      Execution mode: local, worktree, tmp, docker\n" +
+  "  --workspace-mode <mode>      Execution mode: tmp (default), local, worktree, docker\n" +
   "  --run-root <path>            Run record storage root\n" +
   "  --event <path>               Push event JSON file\n" +
   "  --repository <owner/repo>    GitHub repository name\n" +
@@ -290,7 +290,7 @@ fn default_workspace_mode(repo_root : String?) -> String {
   if repo_root is Some(_) {
     "tmp"
   } else {
-    "local"
+    "tmp"
   }
 }
 

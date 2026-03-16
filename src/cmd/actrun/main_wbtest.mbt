@@ -340,7 +340,7 @@ test "cli: default workspace mode depends on repo mode" {
     parse_cli_args(["actrun", ".github/workflows/ci.yml", "--repo", "/repo"]),
   )
 
-  inspect(resolved_workspace_mode(local_options), content="local")
+  inspect(resolved_workspace_mode(local_options), content="tmp")
   inspect(resolved_workspace_mode(repo), content="tmp")
 }
 

@@ -117,7 +117,7 @@ actrun cache prune --key <key>                         # Delete cache entry
 |------|-------------|
 | `--dry-run` | Show execution plan without running |
 | `--skip-action <pattern>` | Skip actions matching pattern (repeatable) |
-| `--workspace-mode <mode>` | `local` (default), `worktree`, `tmp`, `docker` |
+| `--workspace-mode <mode>` | `tmp` (default), `local`, `worktree`, `docker` |
 | `--repo <path>` | Run from a git repository |
 | `--event <path>` | Push event JSON file |
 | `--repository <owner/repo>` | GitHub repository name |
@@ -172,9 +172,9 @@ on:
 
 | Mode | Description |
 |------|-------------|
-| `local` | Run in-place in the current directory (default) |
+| `local` | Run in-place in the current directory |
 | `worktree` | Create an isolated `git worktree` for execution |
-| `tmp` | Clone to a temp directory via `git clone` |
+| `tmp` | Clone to a temp directory via `git clone` (default) |
 | `docker` | Run in a Docker container |
 
 ## Container Runtime
