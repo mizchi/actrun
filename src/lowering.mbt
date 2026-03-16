@@ -1220,23 +1220,6 @@ fn remote_reusable_workflow_ref(path : String) -> ActionRef? {
 }
 
 ///|
-fn lowering_parent_dir(path : String) -> String {
-  let mut last_slash = -1
-  let mut idx = 0
-  while idx < path.length() {
-    if path.unsafe_get(idx) == '/' {
-      last_slash = idx
-    }
-    idx += 1
-  }
-  if last_slash <= 0 {
-    ""
-  } else {
-    exec_text_slice(path, 0, last_slash)
-  }
-}
-
-///|
 fn lowering_leaf_name(path : String) -> String {
   let mut last_slash = -1
   let mut idx = 0
@@ -1263,10 +1246,7 @@ fn reusable_workflow_source(
     let resolved_path = join_path(workspace_root, normalized)
     // Primary: workspace_root + path (GitHub Actions spec)
     if @xfs.path_exists(resolved_path) {
-      return Some({
-        workflow_path: resolved_path,
-        source_root: workspace_root,
-      })
+      return Some({ workflow_path: resolved_path, source_root: workspace_root })
     }
     // Fallback: try just the filename in workspace_root
     // Handles cases where workflow is outside .github/workflows/
@@ -1276,16 +1256,10 @@ fn reusable_workflow_source(
       lowering_leaf_name(normalized),
     )
     if @xfs.path_exists(fallback_path) {
-      return Some({
-        workflow_path: fallback_path,
-        source_root: workspace_root,
-      })
+      return Some({ workflow_path: fallback_path, source_root: workspace_root })
     }
     // Return primary path (will fail at read_text with clear error)
-    return Some({
-      workflow_path: resolved_path,
-      source_root: workspace_root,
-    })
+    return Some({ workflow_path: resolved_path, source_root: workspace_root })
   }
   guard remote_reusable_workflow_ref(path) is Some(action_ref) else {
     return None

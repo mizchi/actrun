@@ -705,19 +705,17 @@ async fn exec_git_clone_checkout(
           ),
         )
       }
-    } else {
       // clean: false — only remove tracked files missing from new checkout
-      if not(
-          exec_copy_dir_contents_preserving_untracked(
-            temp_root, checkout_root, current_tracked, next_tracked,
-          ),
-        ) {
-        return Some(
-          task_report_failure(
-            plan, workspace_root, "failed to materialize checkout contents",
-          ),
-        )
-      }
+    } else if not(
+        exec_copy_dir_contents_preserving_untracked(
+          temp_root, checkout_root, current_tracked, next_tracked,
+        ),
+      ) {
+      return Some(
+        task_report_failure(
+          plan, workspace_root, "failed to materialize checkout contents",
+        ),
+      )
     }
     return None
   }

@@ -369,9 +369,7 @@ async fn execute_setup_node_native(
       plan,
       workspace_root,
       exec_command_message(
-        version_stdout,
-        version_stderr,
-        "failed to inspect node version",
+        version_stdout, version_stderr, "failed to inspect node version",
       ),
     )
   }

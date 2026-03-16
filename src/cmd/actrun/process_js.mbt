@@ -38,7 +38,7 @@ extern "js" fn js_cmd_get_stderr() -> String =
 async fn run_command(
   cmd : String,
   args : Array[String],
-  cwd~ : String = ".",
+  cwd? : String = ".",
 ) -> (Int, String, String) {
   let code = js_cmd_spawn_sync_ffi(cmd, args, cwd)
   let stdout = js_cmd_get_stdout()

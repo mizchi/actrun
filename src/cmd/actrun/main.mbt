@@ -361,7 +361,9 @@ fn workflow_parent_dir(path : String) -> String {
       last_slash = i
     }
   }
-  if last_slash <= 0 { "." } else {
+  if last_slash <= 0 {
+    "."
+  } else {
     String::unsafe_substring(path, start=0, end=last_slash)
   }
 }
@@ -398,10 +400,7 @@ async fn setup_local_workspace(
     if code != 0 {
       return (
         None,
-        [
-          "git worktree add failed: " +
-          stderr.trim(chars=" \t\n\r").to_string(),
-        ],
+        ["git worktree add failed: " + stderr.trim(chars=" \t\n\r").to_string()],
       )
     }
     return (
@@ -3450,11 +3449,7 @@ async fn handle_doctor_command() -> Int {
     // container_runtime
     if config.container_runtime.length() > 0 {
       let (bin, _) = resolve_container_runtime_bin(config.container_runtime)
-      let (rt_code, rt_stdout, _) = run_command(
-        bin,
-        ["--version"],
-        cwd=".",
-      )
+      let (rt_code, rt_stdout, _) = run_command(bin, ["--version"], cwd=".")
       if rt_code == 0 {
         let rt_ver = rt_stdout.trim(chars=" \t\r\n").to_string()
         let short_ver = match rt_ver.find("\n") {
@@ -3573,11 +3568,7 @@ async fn run_in_docker_container(options : CliOptions) -> Int {
   if options.dry_run {
     args.push("--dry-run")
   }
-  let (code, stdout, stderr) = run_command(
-    docker_bin,
-    args,
-    cwd=".",
-  )
+  let (code, stdout, stderr) = run_command(docker_bin, args, cwd=".")
   if stdout.length() > 0 {
     println(stdout.trim_end(chars="\n").to_string())
   }
@@ -3732,7 +3723,10 @@ async fn read_stdin_line() -> String {
 fn is_workspace_modifying_action(uses : String) -> Bool {
   uses.has_prefix("actions/checkout") ||
   uses.has_prefix("actions/cache/restore") ||
-  (uses.has_prefix("actions/cache") && not(uses.has_prefix("actions/cache/save")))
+  (
+    uses.has_prefix("actions/cache") &&
+    not(uses.has_prefix("actions/cache/save"))
+  )
 }
 
 ///|
@@ -3802,8 +3796,7 @@ fn print_dry_run_plan(
       ""
     }
     println(
-      "  " + task.id + ": " + kind_label + name_label + shell_label +
-      if_label,
+      "  " + task.id + ": " + kind_label + name_label + shell_label + if_label,
     )
   }
 }
@@ -3836,8 +3829,7 @@ fn print_dry_run_plan_json(
       Some(action) => parts.push("\"uses\": " + json_string(action.uses))
       None => ()
     }
-    if task.if_condition.length() > 0 &&
-      task.if_condition != "success()" {
+    if task.if_condition.length() > 0 && task.if_condition != "success()" {
       parts.push("\"if\": " + json_string(task.if_condition))
     }
     if task.working_directory.length() > 0 {
@@ -3845,7 +3837,7 @@ fn print_dry_run_plan_json(
         "\"working_directory\": " + json_string(task.working_directory),
       )
     }
-    if task.env.size() > 0 {
+    if task.env.length() > 0 {
       let env_items : Array[String] = []
       for key, value in task.env {
         env_items.push(json_string(key) + ": " + json_string(value))
@@ -3862,9 +3854,7 @@ fn print_dry_run_plan_json(
     if needs.length() > 0 {
       parts.push("\"needs\": " + json_string_array(needs))
     }
-    parts.push(
-      "\"steps\": [" + job_steps.get(job_id).unwrap().join(", ") + "]",
-    )
+    parts.push("\"steps\": [" + job_steps.get(job_id).unwrap().join(", ") + "]")
     job_items.push("{ " + parts.join(", ") + " }")
   }
   let root_parts : Array[String] = []

@@ -65,7 +65,7 @@ extern "js" fn js_get_proc_stderr() -> String =
 async fn run_command(
   cmd : String,
   args : Array[String],
-  cwd~ : String = ".",
+  cwd? : String = ".",
 ) -> (Int, String, String) {
   let code = js_spawn_sync_ffi(cmd, args, cwd)
   let stdout = js_get_proc_stdout()
@@ -79,7 +79,7 @@ async fn run_command_with_stdin(
   cmd : String,
   args : Array[String],
   stdin_text : String,
-  cwd~ : String = ".",
+  cwd? : String = ".",
 ) -> (Int, String, String) {
   let code = js_spawn_sync_stdin_ffi(cmd, args, stdin_text, cwd)
   let stdout = js_get_proc_stdout()

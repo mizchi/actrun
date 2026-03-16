@@ -1690,11 +1690,7 @@ async fn cleanup_job_service_network_native(
   match network_name {
     Some(name) if name.length() > 0 =>
       ignore(
-        run_command(
-          docker_bin,
-          ["network", "rm", name],
-          cwd=workspace_abs,
-        ),
+        run_command(docker_bin, ["network", "rm", name], cwd=workspace_abs),
       )
     _ => ()
   }
@@ -1895,11 +1891,7 @@ async fn start_job_services_native(
       run_args.push(key + "=" + value)
     }
     run_args.push(resolved.image)
-    let (code, _, stderr) = run_command(
-      docker_bin,
-      run_args,
-      cwd=workspace_abs,
-    )
+    let (code, _, stderr) = run_command(docker_bin, run_args, cwd=workspace_abs)
     if code != 0 {
       cleanup_job_services_native(started)
       cleanup_job_service_network_native(
@@ -1908,8 +1900,7 @@ async fn start_job_services_native(
       return {
         started: [],
         error: Some(
-          "service '\{service_id}' failed to start: " +
-          trim_exec_output(stderr),
+          "service '\{service_id}' failed to start: " + trim_exec_output(stderr),
         ),
       }
     }
@@ -2512,9 +2503,7 @@ fn validate_workspace_path(
 ) -> String? {
   let resolved = resolve_task_cwd(workspace_root, user_path)
   let resolved_abs = absolute_exec_path(resolved)
-  let workspace_abs = absolute_exec_path(
-    resolve_task_cwd(workspace_root, ""),
-  )
+  let workspace_abs = absolute_exec_path(resolve_task_cwd(workspace_root, ""))
   if resolved_abs == workspace_abs ||
     resolved_abs.has_prefix(workspace_abs + "/") {
     Some(resolved_abs)
