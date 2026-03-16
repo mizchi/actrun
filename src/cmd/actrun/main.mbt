@@ -290,7 +290,7 @@ fn default_workspace_mode(repo_root : String?) -> String {
   if repo_root is Some(_) {
     "tmp"
   } else {
-    "tmp"
+    "worktree"
   }
 }
 
@@ -393,10 +393,21 @@ async fn setup_local_workspace(
   let timestamp = @env.now().to_string()
   let workspace_dir = join_path(abs_workspace_base, "ws-" + timestamp)
   if workspace_mode == "worktree" {
+    // Find the actual git repo root (abs_source may be a subdirectory)
+    let (rev_code, rev_stdout, _) = run_command(
+      "git",
+      ["rev-parse", "--show-toplevel"],
+      cwd=abs_source,
+    )
+    let git_root = if rev_code == 0 {
+      rev_stdout.trim(chars=" \t\n\r").to_string()
+    } else {
+      abs_source
+    }
     let (code, _, stderr) = run_command(
       "git",
       ["worktree", "add", "--detach", workspace_dir],
-      cwd=abs_source,
+      cwd=git_root,
     )
     if code != 0 {
       return (
@@ -408,15 +419,26 @@ async fn setup_local_workspace(
       Some({
         execution_root: workspace_dir,
         cleanup_mode: "worktree",
-        source_root: abs_source,
+        source_root: git_root,
       }),
       [],
     )
   }
   if workspace_mode == "tmp" {
+    // Find the actual git repo root (abs_source may be a subdirectory)
+    let (rev_code, rev_stdout, _) = run_command(
+      "git",
+      ["rev-parse", "--show-toplevel"],
+      cwd=abs_source,
+    )
+    let clone_root = if rev_code == 0 {
+      rev_stdout.trim(chars=" \t\n\r").to_string()
+    } else {
+      abs_source
+    }
     let (code, _, stderr) = run_command(
       "git",
-      ["clone", "--quiet", "--no-local", "file://" + abs_source, workspace_dir],
+      ["clone", "--quiet", "--no-local", "file://" + clone_root, workspace_dir],
       cwd=".",
     )
     if code != 0 {
@@ -429,7 +451,7 @@ async fn setup_local_workspace(
       Some({
         execution_root: workspace_dir,
         cleanup_mode: "tmp",
-        source_root: abs_source,
+        source_root: clone_root,
       }),
       [],
     )
