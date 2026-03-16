@@ -5,11 +5,17 @@ A local GitHub Actions runner built with [MoonBit](https://docs.moonbitlang.com)
 ## Install
 
 ```bash
+# npx (no install required)
+npx @mizchi/actrun workflow run .github/workflows/ci.yml
+
 # curl (Linux / macOS)
 curl -fsSL https://raw.githubusercontent.com/mizchi/actrun/main/install.sh | sh
 
 # Docker
 docker run --rm -v "$PWD":/workspace -w /workspace ghcr.io/mizchi/actrun workflow run .github/workflows/ci.yml
+
+# npm global install
+npm install -g @mizchi/actrun
 
 # moon install
 moon install mizchi/actrun/cmd/actrun
