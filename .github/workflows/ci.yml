@@ -113,6 +113,15 @@ jobs:
           - examples/07-artifacts.yml
           - examples/09-conditional.yml
           - examples/21-schedule.yml
+          - examples/22-working-directory.yml
+          - examples/23-shell-types.yml
+          - examples/24-multiline-run.yml
+          - examples/25-continue-on-error.yml
+          - examples/26-step-outputs.yml
+          - examples/27-github-env.yml
+          - examples/28-job-outputs.yml
+          - examples/29-expressions.yml
+          - examples/30-step-if.yml
         mode:
           - --worktree
           - --local
