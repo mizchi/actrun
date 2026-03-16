@@ -345,9 +345,24 @@ fn local_workspace_root(workflow_path : String) -> String {
       if workflow_path.has_prefix(".github/workflows/") {
         "."
       } else {
-        // For workflows outside .github/workflows/, use current directory
-        "."
+        // For workflows outside .github/workflows/, use the workflow's
+        // parent directory as workspace root so that relative references
+        // (e.g. reusable workflows) resolve correctly
+        workflow_parent_dir(workflow_path)
       }
+  }
+}
+
+///|
+fn workflow_parent_dir(path : String) -> String {
+  let mut last_slash = -1
+  for i = 0; i < path.length(); i = i + 1 {
+    if path.unsafe_get(i) == '/' {
+      last_slash = i
+    }
+  }
+  if last_slash <= 0 { "." } else {
+    String::unsafe_substring(path, start=0, end=last_slash)
   }
 }
 
