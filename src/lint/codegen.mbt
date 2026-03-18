@@ -3,7 +3,7 @@
 pub fn workflow_to_shell(workflow : @ar.WorkflowSpec) -> String {
   let out : Array[String] = []
   out.push("#!/usr/bin/env bash")
-  out.push("set -euo pipefail")
+  out.push("set -eo pipefail")
   out.push("")
   out.push("# Generated from workflow: " + workflow.name)
   out.push("# This is an experimental approximation — review before running")
@@ -50,7 +50,7 @@ pub fn workflow_to_shell(workflow : @ar.WorkflowSpec) -> String {
 pub fn job_to_shell(job : @ar.JobSpec, workflow : @ar.WorkflowSpec) -> String {
   let out : Array[String] = []
   out.push("#!/usr/bin/env bash")
-  out.push("set -euo pipefail")
+  out.push("set -eo pipefail")
   out.push("")
   out.push("# Job: " + job.id)
   if workflow.env.length() > 0 {
@@ -91,6 +91,21 @@ fn emit_job_function(job : @ar.JobSpec, out : Array[String]) -> Unit {
   // Needs as comment
   if job.needs.length() > 0 {
     out.push("  # depends on: " + job.needs.join(", "))
+  }
+  // Matrix variables: set defaults from first row
+  match job.matrix {
+    Option::Some(m) =>
+      if m.rows.length() > 0 {
+        out.push("  # matrix — defaulting to first combination:")
+        let first_row = m.rows[0]
+        for key, value in first_row {
+          out.push(
+            "  : \"$\u007bMATRIX_" + to_shell_var(key) + ":=" +
+            value + "}\"",
+          )
+        }
+      }
+    Option::None => ()
   }
   out.push("")
   // Job-level env
@@ -185,6 +200,7 @@ fn emit_step(
   if step.if_condition.length() > 0 && step.if_condition != "success()" {
     let cond = translate_if_condition(step.if_condition)
     if cond.length() > 0 {
+      out.push(indent + "# if: " + step.if_condition)
       out.push(indent + "if " + cond + "; then")
       in_if = true
     }
@@ -853,12 +869,7 @@ fn translate_if_condition(cond : String) -> String {
   if expr == "success()" || expr == "success" {
     return ""
   }
-  let resolved = resolve_expr(cond)
-  if resolved != cond {
-    "true # " + resolved + "  # \u2190 " + cond
-  } else {
-    "true # if: " + cond
-  }
+  "true"
 }
 
 ///|
