@@ -80,3 +80,37 @@ test "is_commit_sha: too short hex string is not a SHA" {
 test "is_commit_sha: empty string is not a SHA" {
   assert_eq(is_commit_sha(""), false)
 }
+
+///|
+test "canonicalize_abs_path: resolves parent segments" {
+  inspect(canonicalize_abs_path("/a/b/../c"), content="/a/c")
+  inspect(canonicalize_abs_path("/a/b/../../c"), content="/c")
+  inspect(canonicalize_abs_path("/a/./b/./c"), content="/a/b/c")
+  inspect(canonicalize_abs_path("/a/b/c/../../d"), content="/a/d")
+}
+
+///|
+test "canonicalize_abs_path: stops at root" {
+  inspect(canonicalize_abs_path("/a/../../../.."), content="/")
+}
+
+///|
+test "validate_workspace_path: rejects traversal with leading dotdot" {
+  assert_eq(validate_workspace_path("/home/user/workspace", "../../etc"), None)
+}
+
+///|
+test "validate_workspace_path: rejects traversal with intermediate dotdot" {
+  assert_eq(
+    validate_workspace_path("/home/user/workspace", "sub/../../.."),
+    None,
+  )
+}
+
+///|
+test "validate_workspace_path: accepts legitimate subpath" {
+  assert_ne(
+    validate_workspace_path("/home/user/workspace", "subdir/file.txt"),
+    None,
+  )
+}
