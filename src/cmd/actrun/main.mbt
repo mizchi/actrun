@@ -3671,9 +3671,94 @@ fn handle_export_command(cli_args : Array[String]) -> Int {
       return 1
     }
   } else {
-    println(@lint.workflow_to_shell(workflow))
+    // Resolve reusable workflow callees
+    let reusable : Map[String, @ar.WorkflowSpec] = {}
+    let workflow_dir = path_dir(path)
+    for job in workflow.jobs {
+      match job.reusable_workflow {
+        Some(callee_ref) => {
+          // Resolve path relative to workflow file
+          // Try multiple resolution strategies
+          let callee_candidates : Array[String] = []
+          if callee_ref.has_prefix("./") {
+            let rel = String::unsafe_substring(
+              callee_ref, start=2, end=callee_ref.length(),
+            )
+            // 1. Relative to workflow file directory
+            if workflow_dir.length() > 0 {
+              callee_candidates.push(workflow_dir + "/" + rel)
+            }
+            // 2. Relative to cwd (repo root)
+            callee_candidates.push(rel)
+            // 3. Same directory as workflow, basename only
+            let basename = path_basename(rel)
+            if workflow_dir.length() > 0 {
+              callee_candidates.push(workflow_dir + "/" + basename)
+            }
+          } else {
+            callee_candidates.push(callee_ref)
+          }
+          let mut callee_text_opt : String? = None
+          for candidate in callee_candidates {
+            match read_text(candidate) {
+              Some(t) => {
+                callee_text_opt = Some(t)
+                break
+              }
+              None => continue
+            }
+          }
+          match callee_text_opt {
+            Some(callee_text) => {
+              let callee_parsed = @ar.parse_workflow_yaml(callee_text)
+              match callee_parsed.workflow {
+                Some(callee_wf) => reusable[callee_ref] = callee_wf
+                None => ()
+              }
+            }
+            None => ()
+          }
+        }
+        None => ()
+      }
+    }
+    println(@lint.workflow_to_shell(workflow, reusable_workflows=reusable))
   }
   0
+}
+
+///|
+fn path_dir(path : String) -> String {
+  let mut last_sep = -1
+  let mut i = 0
+  while i < path.length() {
+    if path.unsafe_get(i) == '/' {
+      last_sep = i
+    }
+    i += 1
+  }
+  if last_sep >= 0 {
+    String::unsafe_substring(path, start=0, end=last_sep)
+  } else {
+    ""
+  }
+}
+
+///|
+fn path_basename(path : String) -> String {
+  let mut last_sep = -1
+  let mut i = 0
+  while i < path.length() {
+    if path.unsafe_get(i) == '/' {
+      last_sep = i
+    }
+    i += 1
+  }
+  if last_sep >= 0 {
+    String::unsafe_substring(path, start=last_sep + 1, end=path.length())
+  } else {
+    path
+  }
 }
 
 ///|

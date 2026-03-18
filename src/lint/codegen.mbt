@@ -1,6 +1,9 @@
 ///|
 /// Convert a workflow to a shell script (experimental)
-pub fn workflow_to_shell(workflow : @ar.WorkflowSpec) -> String {
+pub fn workflow_to_shell(
+  workflow : @ar.WorkflowSpec,
+  reusable_workflows? : Map[String, @ar.WorkflowSpec] = {},
+) -> String {
   let out : Array[String] = []
   out.push("#!/usr/bin/env bash")
   out.push("set -eo pipefail")
@@ -22,7 +25,11 @@ pub fn workflow_to_shell(workflow : @ar.WorkflowSpec) -> String {
   // Sort jobs by dependency order and emit as functions
   let ordered = topo_sort_jobs(workflow.jobs)
   for job in ordered {
-    emit_job_function(job, out)
+    match job.reusable_workflow {
+      Option::Some(callee_path) =>
+        emit_reusable_job(job, callee_path, reusable_workflows, out)
+      Option::None => emit_job_function(job, out)
+    }
   }
   // Main: call job functions in order
   out.push("# " + "=".repeat(60))
@@ -141,6 +148,64 @@ fn emit_job_function(job : @ar.JobSpec, out : Array[String]) -> Unit {
       )
     }
     out.push("")
+  }
+  out.push("}")
+  out.push("")
+}
+
+///|
+fn emit_reusable_job(
+  job : @ar.JobSpec,
+  callee_path : String,
+  reusable_workflows : Map[String, @ar.WorkflowSpec],
+  out : Array[String],
+) -> Unit {
+  let fn_name = "job_" + to_shell_var(job.id)
+  let label = if job.name.length() > 0 { job.name } else { job.id }
+  out.push("# " + "=".repeat(60))
+  out.push("# Job: " + label + " (reusable: " + callee_path + ")")
+  out.push("# " + "=".repeat(60))
+  out.push(fn_name + "() {")
+  if job.needs.length() > 0 {
+    out.push("  # depends on: " + job.needs.join(", "))
+  }
+  out.push("")
+  // Set inputs from reusable_workflow_with as variables
+  if job.reusable_workflow_with.length() > 0 {
+    out.push("  # inputs from caller")
+    for key, value in job.reusable_workflow_with {
+      let resolved = resolve_expr(value)
+      out.push(
+        "  local INPUT_" + to_shell_var(key) + "=" + shell_quote(resolved) +
+        comment_origin(value),
+      )
+    }
+    out.push("")
+  }
+  // Try to resolve callee and inline its jobs
+  let callee_opt : @ar.WorkflowSpec? = reusable_workflows.get(callee_path)
+  match callee_opt {
+    Option::Some(callee) => {
+      // Inline callee jobs' steps
+      for callee_job in callee.jobs {
+        out.push("  # --- callee job: " + callee_job.id + " ---")
+        // Callee env
+        if callee_job.env.length() > 0 {
+          for key, value in callee_job.env {
+            out.push(
+              "  export " + key + "=" + shell_quote(resolve_expr(value)),
+            )
+          }
+        }
+        for i, step in callee_job.steps {
+          emit_step(step, i, callee_job.id, out, indent="  ")
+        }
+      }
+    }
+    Option::None => {
+      out.push("  # callee not resolved: " + callee_path)
+      out.push("  echo \"[skip] reusable workflow: " + callee_path + "\"")
+    }
   }
   out.push("}")
   out.push("")
@@ -586,6 +651,10 @@ fn expr_to_shell_var(expr : String) -> String {
   if expr.has_prefix("matrix.") {
     let var_name = String::unsafe_substring(expr, start=7, end=expr.length())
     return "$MATRIX_" + to_shell_var(var_name)
+  }
+  if expr.has_prefix("inputs.") {
+    let var_name = String::unsafe_substring(expr, start=7, end=expr.length())
+    return "$INPUT_" + to_shell_var(var_name)
   }
   if expr.has_prefix("runner.") {
     let field = String::unsafe_substring(expr, start=7, end=expr.length())
