@@ -21,6 +21,10 @@ import {
   "moonbitlang/quickcheck" @qc,
 } for "test"
 
+import {
+  "moonbitlang/async",
+} for "wbtest"
+
 options(
   targets: {
     "action_ref_test.mbt": [ "native" ],

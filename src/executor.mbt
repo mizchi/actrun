@@ -2522,8 +2522,33 @@ fn canonicalize_abs_path(path : String) -> String {
 }
 
 ///|
+/// Resolve a path to its real (symlink-resolved) path.
+/// Uses Python for portable symlink resolution across macOS and Linux.
+/// Returns the original path if resolution fails (e.g., path doesn't exist yet).
+async fn resolve_real_path(path : String) -> String {
+  // Try readlink -f first (works on Linux, may work on macOS with coreutils)
+  let (code, stdout, _) = run_command("readlink", ["-f", path])
+  if code == 0 {
+    let resolved = trim_exec_output(stdout)
+    if resolved.length() > 0 {
+      return resolved
+    }
+  }
+  // Fallback: realpath without flags (macOS built-in, requires path to exist)
+  let (code2, stdout2, _) = run_command("realpath", [path])
+  if code2 == 0 {
+    let resolved = trim_exec_output(stdout2)
+    if resolved.length() > 0 {
+      return resolved
+    }
+  }
+  path
+}
+
+///|
 /// Validate that a user-provided path stays within the workspace.
 /// Returns the resolved absolute path, or None if it escapes.
+/// Note: This performs string-only validation without symlink resolution.
 fn validate_workspace_path(
   workspace_root : String,
   user_path : String,
@@ -2536,6 +2561,32 @@ fn validate_workspace_path(
   if resolved_abs == workspace_abs ||
     resolved_abs.has_prefix(workspace_abs + "/") {
     Some(resolved_abs)
+  } else {
+    None
+  }
+}
+
+///|
+/// Validate that a user-provided path stays within the workspace,
+/// resolving symlinks to prevent symlink-based traversal attacks.
+/// Returns the resolved real path, or None if it escapes.
+async fn validate_workspace_path_real(
+  workspace_root : String,
+  user_path : String,
+) -> String? {
+  // First do string-based validation
+  guard validate_workspace_path(workspace_root, user_path) is Some(validated) else {
+    return None
+  }
+  // Then resolve symlinks and re-validate
+  let real_path = resolve_real_path(validated)
+  let workspace_abs = resolve_real_path(
+    canonicalize_abs_path(
+      absolute_exec_path(resolve_task_cwd(workspace_root, "")),
+    ),
+  )
+  if real_path == workspace_abs || real_path.has_prefix(workspace_abs + "/") {
+    Some(real_path)
   } else {
     None
   }

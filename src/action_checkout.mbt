@@ -638,7 +638,7 @@ async fn execute_builtin_checkout_native(
   }
   let source_root = resolve_task_cwd(workspace_root, "")
   let checkout_root = if path_input.length() > 0 {
-    match validate_workspace_path(workspace_root, path_input) {
+    match validate_workspace_path_real(workspace_root, path_input) {
       Some(validated) => validated
       None =>
         return task_report_failure(
