@@ -68,18 +68,18 @@ fn emit_sequential_run(
     out.push(fn_name + " && _rc=0 || _rc=$?")
     let jvar = to_shell_var(job.id)
     out.push(
-      "if [ \"$_rc\" -eq 0 ]; then _NEEDS_" + jvar +
-      "_RESULT=success; else _NEEDS_" + jvar + "_RESULT=failure; fi",
+      "if [ \"$_rc\" -eq 0 ]; then _NEEDS_" +
+      jvar +
+      "_RESULT=success; else _NEEDS_" +
+      jvar +
+      "_RESULT=failure; fi",
     )
     out.push("")
   }
 }
 
 ///|
-fn emit_parallel_run(
-  jobs : Array[@ar.JobSpec],
-  out : Array[String],
-) -> Unit {
+fn emit_parallel_run(jobs : Array[@ar.JobSpec], out : Array[String]) -> Unit {
   // Compute layers: each layer is a set of jobs whose deps are all in previous layers
   let layers = compute_layers(jobs)
   for layer_idx, layer in layers {
@@ -94,19 +94,33 @@ fn emit_parallel_run(
       let jvar = to_shell_var(job.id)
       out.push(fn_name + " && _rc=0 || _rc=$?")
       out.push(
-        "if [ \"$_rc\" -eq 0 ]; then _NEEDS_" + jvar +
-        "_RESULT=success; else _NEEDS_" + jvar + "_RESULT=failure; fi",
+        "if [ \"$_rc\" -eq 0 ]; then _NEEDS_" +
+        jvar +
+        "_RESULT=success; else _NEEDS_" +
+        jvar +
+        "_RESULT=failure; fi",
       )
       // Load outputs from temp file
-      out.push("[ -f \"$_TMPDIR/" + job.id + ".env\" ] && source \"$_TMPDIR/" + job.id + ".env\" || true")
+      out.push(
+        "[ -f \"$_TMPDIR/" +
+        job.id +
+        ".env\" ] && source \"$_TMPDIR/" +
+        job.id +
+        ".env\" || true",
+      )
     } else {
       // Multiple jobs — run in parallel with &
       for job in layer {
         let fn_name = "job_" + to_shell_var(job.id)
         out.push(
-          "( " + fn_name +
-          " && echo success > \"$_TMPDIR/" + job.id + ".result\"" +
-          " || echo failure > \"$_TMPDIR/" + job.id + ".result\" ) &",
+          "( " +
+          fn_name +
+          " && echo success > \"$_TMPDIR/" +
+          job.id +
+          ".result\"" +
+          " || echo failure > \"$_TMPDIR/" +
+          job.id +
+          ".result\" ) &",
         )
       }
       out.push("wait")
@@ -118,7 +132,11 @@ fn emit_parallel_run(
           "_NEEDS_" + jvar + "_RESULT=$(cat \"$_TMPDIR/" + job.id + ".result\")",
         )
         out.push(
-          "[ -f \"$_TMPDIR/" + job.id + ".env\" ] && source \"$_TMPDIR/" + job.id + ".env\"",
+          "[ -f \"$_TMPDIR/" +
+          job.id +
+          ".env\" ] && source \"$_TMPDIR/" +
+          job.id +
+          ".env\"",
         )
       }
     }
@@ -157,7 +175,11 @@ fn emit_job_function_parallel(job : @ar.JobSpec, out : Array[String]) -> Unit {
       let resolved = resolve_expr(value)
       if resolved != value {
         out.push(
-          "  export " + key + "=" + shell_quote(resolved) + comment_origin(value),
+          "  export " +
+          key +
+          "=" +
+          shell_quote(resolved) +
+          comment_origin(value),
         )
       } else {
         out.push("  export " + key + "=" + shell_quote(value))
@@ -173,10 +195,17 @@ fn emit_job_function_parallel(job : @ar.JobSpec, out : Array[String]) -> Unit {
     out.push("  # Export outputs to temp file for cross-job access")
     out.push("  {")
     for key, value in job.outputs {
-      let var_name = "_NEEDS_" + to_shell_var(job.id) + "_OUT_" + to_shell_var(key)
+      let var_name = "_NEEDS_" +
+        to_shell_var(job.id) +
+        "_OUT_" +
+        to_shell_var(key)
       let resolved = resolve_expr(value)
       out.push(
-        "    echo " + var_name + "=" + shell_quote(resolved) + comment_origin(value),
+        "    echo " +
+        var_name +
+        "=" +
+        shell_quote(resolved) +
+        comment_origin(value),
       )
     }
     out.push("  } > \"$_TMPDIR/" + job.id + ".env\"")
@@ -211,11 +240,7 @@ fn compute_layers(jobs : Array[@ar.JobSpec]) -> Array[Array[@ar.JobSpec]] {
         let mut max_dep_layer = 0
         for need_id in job.needs {
           match assigned.get(need_id) {
-            Some(layer) => {
-              if layer > max_dep_layer {
-                max_dep_layer = layer
-              }
-            }
+            Some(layer) => if layer > max_dep_layer { max_dep_layer = layer }
             None => {
               all_assigned = false
               break
@@ -276,11 +301,19 @@ fn emit_helpers(out : Array[String]) -> Unit {
   out.push("gha_endsWith() { [[ \"$1\" == *\"$2\" ]]; }")
   out.push("gha_format() { local fmt=\"$1\"; shift; printf \"$fmt\" \"$@\"; }")
   out.push("gha_join() { local IFS=\"$\u007b2:-,}\"; echo \"$\u007b1[*]}\"; }")
-  out.push("gha_toJSON() { jq -n --argjson v \"$(printenv | jq -Rs 'split(\"\\n\") | map(select(length > 0) | split(\"=\") | {(.[0]): (.[1:] | join(\"=\"))}) | add // {}')\" '$v'; }")
+  out.push(
+    "gha_toJSON() { jq -n --argjson v \"$(printenv | jq -Rs 'split(\"\\n\") | map(select(length > 0) | split(\"=\") | {(.[0]): (.[1:] | join(\"=\"))}) | add // {}')\" '$v'; }",
+  )
   out.push("gha_fromJSON() { echo \"$1\" | jq -r '.'; }")
-  out.push("gha_hashFiles() { cat \"$@\" 2>/dev/null | sha256sum | cut -d' ' -f1; }")
-  out.push("gha_success() { [ \"$\u007b_NEEDS_LAST_RESULT:-success}\" = \"success\" ]; }")
-  out.push("gha_failure() { [ \"$\u007b_NEEDS_LAST_RESULT:-success}\" = \"failure\" ]; }")
+  out.push(
+    "gha_hashFiles() { cat \"$@\" 2>/dev/null | sha256sum | cut -d' ' -f1; }",
+  )
+  out.push(
+    "gha_success() { [ \"$\u007b_NEEDS_LAST_RESULT:-success}\" = \"success\" ]; }",
+  )
+  out.push(
+    "gha_failure() { [ \"$\u007b_NEEDS_LAST_RESULT:-success}\" = \"failure\" ]; }",
+  )
   out.push("gha_always() { true; }")
   out.push("gha_cancelled() { false; }")
 }
@@ -305,8 +338,7 @@ fn emit_job_function(job : @ar.JobSpec, out : Array[String]) -> Unit {
         let first_row = m.rows[0]
         for key, value in first_row {
           out.push(
-            "  : \"$\u007bMATRIX_" + to_shell_var(key) + ":=" +
-            value + "}\"",
+            "  : \"$\u007bMATRIX_" + to_shell_var(key) + ":=" + value + "}\"",
           )
         }
       }
@@ -339,7 +371,10 @@ fn emit_job_function(job : @ar.JobSpec, out : Array[String]) -> Unit {
   if job.outputs.length() > 0 {
     out.push("  # Job outputs")
     for key, value in job.outputs {
-      let var_name = "_NEEDS_" + to_shell_var(job.id) + "_OUT_" + to_shell_var(key)
+      let var_name = "_NEEDS_" +
+        to_shell_var(job.id) +
+        "_OUT_" +
+        to_shell_var(key)
       let resolved = resolve_expr(value)
       out.push(
         "  " + var_name + "=" + shell_quote(resolved) + comment_origin(value),
@@ -374,7 +409,10 @@ fn emit_reusable_job(
     for key, value in job.reusable_workflow_with {
       let resolved = resolve_expr(value)
       out.push(
-        "  local INPUT_" + to_shell_var(key) + "=" + shell_quote(resolved) +
+        "  local INPUT_" +
+        to_shell_var(key) +
+        "=" +
+        shell_quote(resolved) +
         comment_origin(value),
       )
     }
@@ -383,23 +421,20 @@ fn emit_reusable_job(
   // Try to resolve callee and inline its jobs
   let callee_opt : @ar.WorkflowSpec? = reusable_workflows.get(callee_path)
   match callee_opt {
-    Option::Some(callee) => {
+    Option::Some(callee) =>
       // Inline callee jobs' steps
       for callee_job in callee.jobs {
         out.push("  # --- callee job: " + callee_job.id + " ---")
         // Callee env
         if callee_job.env.length() > 0 {
           for key, value in callee_job.env {
-            out.push(
-              "  export " + key + "=" + shell_quote(resolve_expr(value)),
-            )
+            out.push("  export " + key + "=" + shell_quote(resolve_expr(value)))
           }
         }
         for i, step in callee_job.steps {
           emit_step(step, i, callee_job.id, out, indent="  ")
         }
       }
-    }
     Option::None => {
       out.push("  # callee not resolved: " + callee_path)
       out.push("  echo \"[skip] reusable workflow: " + callee_path + "\"")
@@ -434,7 +469,10 @@ fn emit_job_body(job : @ar.JobSpec, out : Array[String]) -> Unit {
   if job.outputs.length() > 0 {
     out.push("# Job outputs")
     for key, value in job.outputs {
-      let var_name = "_NEEDS_" + to_shell_var(job.id) + "_OUT_" + to_shell_var(key)
+      let var_name = "_NEEDS_" +
+        to_shell_var(job.id) +
+        "_OUT_" +
+        to_shell_var(key)
       let resolved = resolve_expr(value)
       out.push(var_name + "=" + shell_quote(resolved) + comment_origin(value))
     }

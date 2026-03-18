@@ -3686,7 +3686,9 @@ fn handle_export_command(cli_args : Array[String]) -> Int {
           let callee_candidates : Array[String] = []
           if callee_ref.has_prefix("./") {
             let rel = String::unsafe_substring(
-              callee_ref, start=2, end=callee_ref.length(),
+              callee_ref,
+              start=2,
+              end=callee_ref.length(),
             )
             // 1. Relative to workflow file directory
             if workflow_dir.length() > 0 {
@@ -3727,9 +3729,7 @@ fn handle_export_command(cli_args : Array[String]) -> Int {
       }
     }
     println(
-      @lint.workflow_to_shell(
-        workflow, reusable_workflows=reusable, parallel~,
-      ),
+      @lint.workflow_to_shell(workflow, reusable_workflows=reusable, parallel~),
     )
   }
   0
