@@ -1,0 +1,6 @@
+ok=true state=completed
+check/test:success
+check/step_2:success
+check/step_3:success
+check/step_4:skipped
+check:failure

@@ -1,0 +1,173 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "mizchi/actrun/lint"
+
+import {
+  "mizchi/actrun",
+}
+
+// Values
+pub fn apply_preset(String) -> (Bool, Bool)
+
+pub fn build_job_lint_context(@actrun.JobSpec, Array[@actrun.JobSpec]) -> LintContext
+
+pub fn build_lint_context(@actrun.JobSpec, Int, Array[@actrun.JobSpec]) -> LintContext
+
+pub fn check_dead_code(@actrun.WorkflowSpec) -> Array[LintDiagnostic]
+
+pub fn check_expression(String, LintContext, String, Int, String) -> Array[LintDiagnostic]
+
+pub fn check_security(@actrun.WorkflowSpec, yaml_text? : String) -> Array[LintDiagnostic]
+
+pub fn check_semantics(@actrun.WorkflowSpec) -> Array[LintDiagnostic]
+
+pub fn check_structure(@actrun.WorkflowSpec, strict? : Bool) -> Array[LintDiagnostic]
+
+pub fn check_version_consistency(Array[(String, Array[ActionRefToResolve])]) -> Array[LintDiagnostic]
+
+pub fn collect_action_refs(@actrun.WorkflowSpec) -> Array[ActionRefToResolve]
+
+pub let default_ignore_rules : Array[String]
+
+pub fn default_lint_options() -> LintOptions
+
+pub fn diagnostics_from_resolutions(Array[ActionRefToResolve], Array[ActionResolution]) -> Array[LintDiagnostic]
+
+pub fn filter_diagnostics(Array[LintDiagnostic], Array[String]) -> Array[LintDiagnostic]
+
+pub fn format_diagnostics(Array[LintDiagnostic]) -> String
+
+pub fn has_errors(Array[LintDiagnostic]) -> Bool
+
+pub fn lint_workflow(@actrun.WorkflowSpec, yaml_text? : String, options? : LintOptions) -> Array[LintDiagnostic]
+
+pub fn new_action_resolution(String, sha? : String, exists? : Bool, error? : String) -> ActionResolution
+
+pub fn new_lint_options(strict? : Bool, online? : Bool, yaml_text? : String) -> LintOptions
+
+pub fn parse_expression(String) -> (Expr, Array[String])
+
+pub fn render_workflow_ascii(@actrun.WorkflowSpec) -> String
+
+pub fn render_workflow_svg(@actrun.WorkflowSpec, theme? : String) -> String
+
+pub fn workflow_to_mermaid(@actrun.WorkflowSpec) -> String
+
+pub fn workflow_to_mermaid_detail(@actrun.WorkflowSpec) -> String
+
+// Errors
+
+// Types and methods
+pub struct ActionRefToResolve {
+  uses : String
+  owner : String
+  repo : String
+  ref_str : String
+  subpath : String
+  job_id : String
+  step_index : Int
+  is_sha_pinned : Bool
+}
+pub impl Show for ActionRefToResolve
+
+pub struct ActionResolution {
+  uses : String
+  sha : String
+  exists : Bool
+  error : String
+}
+pub impl Show for ActionResolution
+
+pub enum BinaryOp {
+  OpAnd
+  OpOr
+  OpEq
+  OpNeq
+  OpLt
+  OpLe
+  OpGt
+  OpGe
+}
+pub impl Eq for BinaryOp
+pub impl Show for BinaryOp
+
+pub enum Expr {
+  Literal(ExprLiteral)
+  Ident(String)
+  PropertyAccess(Expr, String)
+  IndexAccess(Expr, Expr)
+  UnaryOp(UnaryOp, Expr)
+  BinaryOp(BinaryOp, Expr, Expr)
+  FunctionCall(String, Array[Expr])
+}
+pub impl Eq for Expr
+pub impl Show for Expr
+
+pub enum ExprLiteral {
+  LitString(String)
+  LitNumber(String)
+  LitBool(Bool)
+  LitNull
+}
+pub impl Eq for ExprLiteral
+pub impl Show for ExprLiteral
+
+pub enum ExprType {
+  TyAny
+  TyNull
+  TyNumber
+  TyBool
+  TyString
+  TyArray(ExprType)
+  TyObject(ObjectKind)
+}
+pub impl Eq for ExprType
+pub impl Show for ExprType
+
+pub struct LintContext {
+  contexts : Map[String, ExprType]
+}
+
+pub struct LintDiagnostic {
+  severity : Severity
+  code : String
+  message : String
+  job_id : String
+  step_index : Int
+  field : String
+}
+pub fn LintDiagnostic::format(Self) -> String
+pub impl Eq for LintDiagnostic
+pub impl Show for LintDiagnostic
+
+pub struct LintOptions {
+  strict : Bool
+  online : Bool
+  yaml_text : String
+}
+pub impl Show for LintOptions
+
+pub enum ObjectKind {
+  Strict(Map[String, ExprType])
+  Loose(Map[String, ExprType], ExprType)
+  MapObj(ExprType)
+}
+pub impl Eq for ObjectKind
+pub impl Show for ObjectKind
+
+pub enum Severity {
+  Error
+  Warning
+}
+pub impl Eq for Severity
+pub impl Show for Severity
+
+pub enum UnaryOp {
+  OpNot
+}
+pub impl Eq for UnaryOp
+pub impl Show for UnaryOp
+
+// Type aliases
+
+// Traits
+

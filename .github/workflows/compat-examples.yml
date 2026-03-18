@@ -1,0 +1,147 @@
+name: Compat Examples
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: compat-examples-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        example:
+          - examples/01-hello.yml
+          - examples/02-env-and-outputs.yml
+          - examples/03-matrix.yml
+          - examples/04-multi-job.yml
+          - examples/05-secrets.yml
+          - examples/09-conditional.yml
+          - examples/22-working-directory.yml
+          - examples/24-multiline-run.yml
+          - examples/25-continue-on-error.yml
+          - examples/26-step-outputs.yml
+          - examples/27-github-env.yml
+          - examples/28-job-outputs.yml
+          - examples/29-expressions.yml
+          - examples/30-step-if.yml
+          - examples/33-deep-dependencies.yml
+          - examples/35-matrix-fan-in.yml
+    steps:
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+      - name: Checkout bit dependency
+        run: git clone --depth 1 https://github.com/bit-vcs/bit.git ../../bit-vcs/bit
+      - name: Install MoonBit CLI
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+      - name: Moon update
+        run: moon update
+      - name: Build CLI
+        run: moon build src/cmd/actrun --target native
+      - name: Run example and capture snapshot
+        shell: bash
+        run: |
+          ACTRUN=$(find _build/native -name "actrun.exe" -type f | head -1)
+          SLUG=$(basename "${{ matrix.example }}" .yml)
+
+          $ACTRUN ${{ matrix.example }} --local --trust --trigger push
+          RUN_ID=$(ls -t _build/actrun/runs/ | head -1)
+
+          RUN_JSON=$($ACTRUN run view "$RUN_ID" --json)
+          OK=$(echo "$RUN_JSON" | grep -o '"ok": *[a-z]*' | head -1 | awk '{print $2}')
+          STATE=$(echo "$RUN_JSON" | grep -o '"state": *"[^"]*"' | head -1 | sed 's/.*"state": *"//;s/"//')
+          STEPS=$(echo "$RUN_JSON" | grep -o '"id": "[^"]*", "status": "[^"]*"' | sed 's/"id": "//;s/", "status": "/:/;s/"//g' | grep -v '__finish' || true)
+
+          mkdir -p report
+          printf 'ok=%s state=%s\n%s\n' "$OK" "$STATE" "$STEPS" > "report/$SLUG.txt"
+          echo "Snapshot for $SLUG:"
+          cat "report/$SLUG.txt"
+      - name: Upload snapshot
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: example-snapshot-${{ strategy.job-index }}
+          path: report/
+
+  collect:
+    needs: snapshot
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Download all snapshots
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: example-snapshot-*
+          merge-multiple: true
+          path: snapshots/
+      - name: Upload merged snapshots
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: example-snapshots
+          path: snapshots/
+
+  examples-remote:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        example:
+          - examples/12-remote-actions.yml
+          - examples/13-remote-docker-action.yml
+    steps:
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+      - name: Checkout bit dependency
+        run: git clone --depth 1 https://github.com/bit-vcs/bit.git ../../bit-vcs/bit
+      - name: Install MoonBit CLI
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+      - name: Moon update
+        run: moon update
+      - name: Build CLI
+        run: moon build src/cmd/actrun --target native
+      - name: Run example
+        run: |
+          ACTRUN=$(find _build/native -name "actrun.exe" -type f | head -1)
+          $ACTRUN ${{ matrix.example }} --local --trust --trigger push
+
+  examples-nix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        example:
+          - examples/17-nix-packages.yml
+          - examples/20-nix-no-nix.yml
+    steps:
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+      - name: Checkout bit dependency
+        run: git clone --depth 1 https://github.com/bit-vcs/bit.git ../../bit-vcs/bit
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@d96bc962e61b3049ce8128d03d57a1144fa96539 # main
+      - name: Install MoonBit CLI
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+      - name: Moon update
+        run: moon update
+      - name: Build CLI
+        run: moon build src/cmd/actrun --target native
+      - name: Run example
+        run: |
+          ACTRUN=$(find _build/native -name "actrun.exe" -type f | head -1)
+          $ACTRUN ${{ matrix.example }} --local --trust --trigger push

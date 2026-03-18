@@ -1,5 +1,7 @@
 import {
   "mizchi/actrun" @ar,
+  "mizchi/actrun/lint" @lint,
+  "bobzhang/toml" @toml,
   "moonbitlang/async",
   "moonbitlang/async/process" @process,
   "moonbitlang/core/env" @env,

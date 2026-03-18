@@ -212,6 +212,30 @@ The approach has two stages:
 - [ ] `schedule` trigger (cron, local dry-run only)
 - [ ] Other event triggers (issues, release, deployment, etc. — low priority)
 
+## P7: Lint — Static Analysis (actionlint-inspired)
+
+### Tier 1: Structure Validation
+
+- [x] S001: Duplicate step IDs in same job
+- [x] S002: Empty `runs-on` (required unless reusable workflow)
+- [x] S003: Empty job (no steps, not reusable workflow)
+- [x] S004: Step has both `uses` and `run`
+- [x] S005: Matrix with empty rows
+
+### Tier 2: Workflow Semantics
+
+- [x] S006: Invalid `uses` syntax (owner/repo@ref format)
+- [ ] S007: Invalid webhook event names in `on` trigger (handled at parse time)
+- [ ] S008: Invalid cron expressions in schedule trigger (no schedule in WorkflowSpec)
+- [x] S009: Invalid glob patterns in branches/paths filters
+- [x] S010: Always-true/false compound conditions
+
+### Tier 3: Security
+
+- [x] SEC01: Script injection — untrusted input directly in `run:`
+- [x] SEC02: Overly permissive permissions (`write-all`)
+- [x] SEC03: Deprecated workflow commands (`::set-output`, `::save-state`)
+
 ## Completion Criteria
 
 - [x] Can operate local run / logs / artifacts / cache via `gh`-compatible CLI

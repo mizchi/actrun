@@ -13,13 +13,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Baseline checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
       - name: Create untracked before clean false
         shell: bash
         run: |
           printf '%s' 'keep-me' > scratch-before.txt
       - name: Checkout clean false
-        uses: actions/checkout@v5
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
         with:
           clean: false
       - id: keep_report
@@ -32,7 +32,7 @@ jobs:
         run: |
           printf '%s' 'remove-me' > scratch-after.txt
       - name: Checkout default clean
-        uses: actions/checkout@v5
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
       - name: Build report
         shell: bash
         run: |
@@ -42,7 +42,7 @@ jobs:
             "$(test -f scratch-before.txt && echo yes || echo no)" \
             "$(test -f scratch-after.txt && echo yes || echo no)" > report/result.txt
       - name: Upload report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: compat-checkout-clean-report
           path: report/result.txt

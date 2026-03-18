@@ -45,6 +45,24 @@ snapshot-verify:
     moon build src/cmd/actrun --target native
     bash scripts/snapshot_verify.sh
 
+# Update example snapshots (run examples locally and save golden files)
+snapshot-examples-update:
+    moon build src/cmd/actrun --target native
+    bash scripts/snapshot_examples.sh
+
+# Verify example snapshots match (re-run and compare with golden files)
+snapshot-examples-verify:
+    moon build src/cmd/actrun --target native
+    bash scripts/snapshot_examples_verify.sh
+
+# Download GHA example snapshots and compare with local golden files
+gha-examples-download run_id:
+    gh run download {{run_id}} -n example-snapshots -D _build/gha-examples/{{run_id}}
+
+# Compare downloaded GHA snapshots with local golden files
+gha-examples-compare dir:
+    bash scripts/snapshot_examples_compare.sh {{dir}}
+
 # Dispatch a GitHub-hosted compat workflow
 gha-compat-dispatch workflow ref="main":
     gh workflow run {{workflow}} --ref {{ref}}

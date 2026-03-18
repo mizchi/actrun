@@ -16,9 +16,10 @@ concurrency:
 jobs:
   lint:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
       - name: Secretlint
         if: ${{ !env.ACTRUN_LOCAL }}
         run: npx --yes -p secretlint -p @secretlint/secretlint-rule-preset-recommend secretlint "**/*"
@@ -26,7 +27,7 @@ jobs:
         if: ${{ !env.ACTRUN_LOCAL }}
         run: git clone --depth 1 https://github.com/bit-vcs/bit.git ../../bit-vcs/bit
       - name: Setup just
-        uses: extractions/setup-just@v3
+        uses: extractions/setup-just@f8a3cce218d9f83db3a2ecd90e41ac3de6cdfd9b # v3
       - name: Install MoonBit CLI
         if: ${{ !env.ACTRUN_LOCAL }}
         run: |
@@ -43,6 +44,7 @@ jobs:
         run: just info-check
 
   test:
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -54,12 +56,12 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
       - name: Checkout bit dependency
         if: ${{ !env.ACTRUN_LOCAL }}
         run: git clone --depth 1 https://github.com/bit-vcs/bit.git ../../bit-vcs/bit
       - name: Setup just
-        uses: extractions/setup-just@v3
+        uses: extractions/setup-just@f8a3cce218d9f83db3a2ecd90e41ac3de6cdfd9b # v3
       - name: Install MoonBit CLI
         if: ${{ !env.ACTRUN_LOCAL }}
         run: |
@@ -77,14 +79,15 @@ jobs:
 
   e2e:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
       - name: Checkout bit dependency
         if: ${{ !env.ACTRUN_LOCAL }}
         run: git clone --depth 1 https://github.com/bit-vcs/bit.git ../../bit-vcs/bit
       - name: Setup just
-        uses: extractions/setup-just@v3
+        uses: extractions/setup-just@f8a3cce218d9f83db3a2ecd90e41ac3de6cdfd9b # v3
       - name: Install MoonBit CLI
         if: ${{ !env.ACTRUN_LOCAL }}
         run: |
@@ -97,114 +100,3 @@ jobs:
         run: moon build src/cmd/actrun --target native
       - name: Run E2E scenarios
         run: just e2e
-
-  examples:
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        example:
-          - examples/01-hello.yml
-          - examples/02-env-and-outputs.yml
-          - examples/03-matrix.yml
-          - examples/04-multi-job.yml
-          - examples/05-secrets.yml
-          - examples/06-local-skip.yml
-          - examples/07-artifacts.yml
-          - examples/09-conditional.yml
-          - examples/21-schedule.yml
-          - examples/22-working-directory.yml
-          - examples/23-shell-types.yml
-          - examples/24-multiline-run.yml
-          - examples/25-continue-on-error.yml
-          - examples/26-step-outputs.yml
-          - examples/27-github-env.yml
-          - examples/28-job-outputs.yml
-          - examples/29-expressions.yml
-          - examples/30-step-if.yml
-          - examples/31-local-file-safety.yml
-          - examples/32-permissions.yml
-          - examples/33-deep-dependencies.yml
-          - examples/35-matrix-fan-in.yml
-        mode:
-          - --worktree
-          - --local
-          - --tmp
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-      - name: Checkout bit dependency
-        run: git clone --depth 1 https://github.com/bit-vcs/bit.git ../../bit-vcs/bit
-      - name: Install MoonBit CLI
-        run: |
-          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
-          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
-      - name: Moon update
-        run: moon update
-      - name: Build CLI
-        run: moon build src/cmd/actrun --target native
-      - name: Run example
-        run: |
-          ACTRUN=$(find _build/native -name "actrun.exe" -type f | head -1)
-          $ACTRUN ${{ matrix.example }} ${{ matrix.mode }} --trust --trigger push
-          echo "Exit code: $?"
-
-  examples-remote:
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        example:
-          - examples/12-remote-actions.yml
-          - examples/13-remote-docker-action.yml
-        mode:
-          - --worktree
-          - --local
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-      - name: Checkout bit dependency
-        run: git clone --depth 1 https://github.com/bit-vcs/bit.git ../../bit-vcs/bit
-      - name: Install MoonBit CLI
-        run: |
-          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
-          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
-      - name: Moon update
-        run: moon update
-      - name: Build CLI
-        run: moon build src/cmd/actrun --target native
-      - name: Run example
-        run: |
-          ACTRUN=$(find _build/native -name "actrun.exe" -type f | head -1)
-          $ACTRUN ${{ matrix.example }} ${{ matrix.mode }} --trust --trigger push
-
-  examples-nix:
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        example:
-          - examples/17-nix-packages.yml
-          - examples/20-nix-no-nix.yml
-        mode:
-          - --worktree
-          - --local
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-      - name: Checkout bit dependency
-        run: git clone --depth 1 https://github.com/bit-vcs/bit.git ../../bit-vcs/bit
-      - name: Install Nix
-        uses: DeterminateSystems/nix-installer-action@main
-      - name: Install MoonBit CLI
-        run: |
-          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
-          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
-      - name: Moon update
-        run: moon update
-      - name: Build CLI
-        run: moon build src/cmd/actrun --target native
-      - name: Run example
-        run: |
-          ACTRUN=$(find _build/native -name "actrun.exe" -type f | head -1)
-          $ACTRUN ${{ matrix.example }} ${{ matrix.mode }} --trust --trigger push

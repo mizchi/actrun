@@ -1,0 +1,6 @@
+import {
+  "mizchi/actrun" @ar,
+  "mizchi/moomaid" @mermaid,
+}
+
+warnings = "-0006-0007-0009"

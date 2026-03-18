@@ -7,7 +7,9 @@
     "mizchi/bit": "0.29.0",
     "moonbitlang/x": "0.4.40",
     "moonbitlang/quickcheck": "0.9.10",
-    "moonbit-community/yaml": "0.0.4"
+    "moonbit-community/yaml": "0.0.4",
+    "mizchi/moomaid": "0.1.2",
+    "bobzhang/toml": "0.1.8"
   },
   "readme": "src/README.mbt.md",
   "repository": "https://github.com/mizchi/actrun",

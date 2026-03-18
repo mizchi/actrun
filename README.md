@@ -106,6 +106,85 @@ actrun run logs <run-id> --task <id> # View specific task log
 actrun run download <run-id>         # Download all artifacts
 ```
 
+### Analysis Commands
+
+```bash
+# Lint: type check expressions and detect dead code
+actrun lint                          # Lint all .github/workflows/*.yml
+actrun lint .github/workflows/ci.yml # Lint a specific file
+actrun lint --ignore W001            # Suppress a rule (repeatable)
+
+# Visualize: render workflow job dependency graph
+actrun viz .github/workflows/ci.yml              # ASCII art (terminal)
+actrun viz .github/workflows/ci.yml --mermaid    # Mermaid text (for Markdown)
+actrun viz .github/workflows/ci.yml --detail     # Mermaid with step subgraphs
+actrun viz .github/workflows/ci.yml --svg        # SVG image
+actrun viz .github/workflows/ci.yml --svg --theme github-light
+```
+
+#### Lint Diagnostics
+
+| Rule | Severity | Description |
+|------|----------|-------------|
+| `undefined-context` | error | Undefined context (e.g. `foobar.x`) |
+| `wrong-arity` | error | Wrong function arity (e.g. `contains('one')`) |
+| `unknown-function` | error | Unknown function (e.g. `myFunc()`) |
+| `unknown-property` | warning | Unknown property (e.g. `github.nonexistent`) |
+| `type-mismatch` | warning | Comparing incompatible types |
+| `unreachable-step` | warning | Unreachable step (`if: false`) |
+| `future-step-ref` | error | Reference to future step |
+| `undefined-step-ref` | error | Reference to undefined step |
+| `undefined-needs` | error | Undefined `needs` job reference |
+| `circular-needs` | error | Circular `needs` dependency |
+| `unused-outputs` | warning | Unused job outputs |
+| `duplicate-step-id` | error | Duplicate step IDs in same job |
+| `missing-runs-on` | error | Missing `runs-on` |
+| `empty-job` | error | Empty job (no steps) |
+| `uses-and-run` | error | Step has both `uses` and `run` |
+| `empty-matrix` | warning | Matrix with empty rows |
+| `invalid-uses` | error | Invalid `uses` syntax |
+| `invalid-glob` | warning | Invalid glob pattern in trigger filter |
+| `redundant-condition` | warning | Always-true/false condition |
+| `script-injection` | warning | Script injection risk (untrusted input in `run:`) |
+| `permissive-permissions` | warning | Overly permissive permissions |
+| `deprecated-command` | warning | Deprecated workflow command (`::set-output` etc.) |
+| `missing-prt-permissions` | warning | `pull_request_target` without explicit `permissions` |
+| `if-always` | warning | Bare `always()` — prefer `success() \|\| failure()` |
+| `dangerous-checkout-in-prt` | error | Checkout PR head in `pull_request_target` |
+| `secrets-to-third-party` | warning | Secrets passed via env to third-party action |
+| `missing-timeout` | warning | No `timeout-minutes` (opt-in: `--strict`) |
+| `mutable-action-ref` | warning | Tag ref instead of SHA pin (opt-in: `--online`) |
+| `action-not-found` | error | Action ref not found on GitHub (opt-in: `--online`) |
+
+Configure lint behavior in `actrun.toml`:
+
+```toml
+[lint]
+preset = "default"  # default, strict, oss
+ignore_rules = ["unknown-property", "unused-outputs"]
+```
+
+| Preset | Includes |
+|--------|----------|
+| `default` | All rules except `missing-timeout` and online checks |
+| `strict` | `default` + `missing-timeout` |
+| `oss` | `strict` + `mutable-action-ref` / `action-not-found` (network) |
+
+#### Visualization Example
+
+```
+$ actrun viz .github/workflows/release.yml
+
+┌───────┐    ┌────────┐
+│ build │    │ docker │
+└───────┘    └────────┘
+    └┐
+     │
+┌─────────┐
+│ release │
+└─────────┘
+```
+
 ### Artifact & Cache Commands
 
 ```bash
@@ -412,7 +491,8 @@ just gha-compat-compare compat-checkout-artifact.yml _build/gha-compat/<run-id>
 | `src/lowering.mbt` | Bitflow IR lowering, action/reusable workflow expansion |
 | `src/executor.mbt` | Native host executor |
 | `src/runtime.mbt` | Git workspace materialization |
-| `src/main/main.mbt` | CLI entry point |
+| `src/lint/` | Expression parser, type checker, dead code detection, workflow visualization |
+| `src/cmd/actrun/main.mbt` | CLI entry point |
 | `testdata/` | Compatibility fixtures |
 
 ## License

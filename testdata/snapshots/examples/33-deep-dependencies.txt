@@ -1,0 +1,13 @@
+ok=true state=completed
+lint/step_1:success
+build-a/ver:success
+build-b/h:success
+build-a/step_2:success
+build-b/step_2:success
+integration/step_1:success
+deploy/step_1:success
+lint:success
+build-a:success
+build-b:success
+integration:success
+deploy:success

@@ -19,7 +19,7 @@ jobs:
           printf '%s' alpha > dist/value.txt
       - name: Upload first artifact
         id: upload_first
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: bundle
           path: dist/value.txt
@@ -29,20 +29,20 @@ jobs:
           printf '%s' beta > dist/value.txt
       - name: Upload duplicate without overwrite
         id: upload_again
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         continue-on-error: true
         with:
           name: bundle
           path: dist/value.txt
       - name: Upload with overwrite
         id: upload_overwrite
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: bundle
           path: dist/value.txt
           overwrite: true
       - name: Download bundle
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: bundle
           path: restored
@@ -55,7 +55,7 @@ jobs:
             "${{ steps.upload_again.conclusion }}" \
             "$(cat restored/value.txt)" > report/result.txt
       - name: Upload report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: compat-artifact-overwrite-report
           path: report/result.txt

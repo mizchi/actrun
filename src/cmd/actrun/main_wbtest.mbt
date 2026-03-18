@@ -1234,44 +1234,48 @@ test "cli: parse --nix-packages flag" {
 
 ///|
 test "toml: parse string values" {
-  let result = parse_toml_minimal(
+  let root = @toml.parse(
     "workspace_mode = \"worktree\"\ntrust_actions = true\n",
   )
-  inspect(result.entries.get("workspace_mode"), content="Some(\"worktree\")")
-  inspect(result.entries.get("trust_actions"), content="Some(\"true\")")
+  guard root is @toml.TomlTable(table) else { fail("expected table") }
+  inspect(toml_get_string(table, "workspace_mode"), content="worktree")
+  inspect(toml_get_bool(table, "trust_actions"), content="true")
 }
 
 ///|
 test "toml: parse array values" {
-  let result = parse_toml_minimal(
+  let root = @toml.parse(
     "skip_actions = [\"actions/checkout\", \"actions/setup-node\"]\n",
   )
+  guard root is @toml.TomlTable(table) else { fail("expected table") }
   inspect(
-    result.arrays.get("skip_actions"),
-    content=(
-      #|Some(["actions/checkout", "actions/setup-node"])
-    ),
+    toml_get_string_array(table, "skip_actions"),
+    content="[\"actions/checkout\", \"actions/setup-node\"]",
   )
 }
 
 ///|
 test "toml: skip comments and empty lines" {
-  let result = parse_toml_minimal("# comment\n\nworkspace_mode = \"local\"\n")
-  inspect(result.entries.get("workspace_mode"), content="Some(\"local\")")
-  inspect(result.entries.length(), content="1")
+  let root = @toml.parse("# comment\n\nworkspace_mode = \"local\"\n")
+  guard root is @toml.TomlTable(table) else { fail("expected table") }
+  inspect(toml_get_string(table, "workspace_mode"), content="local")
 }
 
 ///|
-test "toml: section headers prefix keys" {
-  let result = parse_toml_minimal("[section]\nkey = \"value\"\n")
-  inspect(result.entries.get("section.key"), content="Some(\"value\")")
+test "toml: section headers" {
+  let root = @toml.parse("[section]\nkey = \"value\"\n")
+  guard root is @toml.TomlTable(table) else { fail("expected table") }
+  let section = toml_get_table(table, "section")
+  inspect(toml_get_string(section, "key"), content="value")
 }
 
 ///|
-test "toml: top-level keys have no section prefix" {
-  let result = parse_toml_minimal("top = \"val\"\n[section]\nkey = \"value\"\n")
-  inspect(result.entries.get("top"), content="Some(\"val\")")
-  inspect(result.entries.get("section.key"), content="Some(\"value\")")
+test "toml: top-level keys and sections" {
+  let root = @toml.parse("top = \"val\"\n[section]\nkey = \"value\"\n")
+  guard root is @toml.TomlTable(table) else { fail("expected table") }
+  inspect(toml_get_string(table, "top"), content="val")
+  let section = toml_get_table(table, "section")
+  inspect(toml_get_string(section, "key"), content="value")
 }
 
 ///|
@@ -1286,6 +1290,8 @@ test "config: merge cli overrides config" {
     local_override_actions: {},
     affected: {},
     includes: [],
+    lint_ignore_rules: [],
+    lint_preset: "default",
   }
   let cli = parse_cli_args(["actrun", "ci.yml", "--local", "--no-nix"])
   let options = expect_cli_options(cli)
@@ -1316,6 +1322,8 @@ test "config: cli skip_actions overrides local_skip_actions" {
     local_override_actions: {},
     affected: {},
     includes: [],
+    lint_ignore_rules: [],
+    lint_preset: "default",
   }
   let cli = parse_cli_args([
     "actrun", "ci.yml", "--skip-action", "actions/setup-node",
@@ -1360,6 +1368,8 @@ test "config: container_runtime from config" {
     local_override_actions: {},
     affected: {},
     includes: [],
+    lint_ignore_rules: [],
+    lint_preset: "default",
   }
   let cli = parse_cli_args(["actrun", "ci.yml"])
   let options = expect_cli_options(cli)
@@ -1379,6 +1389,8 @@ test "config: cli container_runtime overrides config" {
     local_override_actions: {},
     affected: {},
     includes: [],
+    lint_ignore_rules: [],
+    lint_preset: "default",
   }
   let cli = parse_cli_args(["actrun", "ci.yml", "--container-runtime", "lima"])
   let options = expect_cli_options(cli)
@@ -1410,52 +1422,43 @@ test "container runtime: resolve bin names" {
 ///|
 test "toml: all-comments config parses as empty" {
   let template = "# comment line\n# key = \"value\"\n\n# another\n"
-  let parsed = parse_toml_minimal(template)
-  inspect(parsed.entries.length(), content="0")
-  inspect(parsed.arrays.length(), content="0")
+  let root = @toml.parse(template)
+  guard root is @toml.TomlTable(table) else { fail("expected table") }
+  inspect(table.length(), content="0")
 }
 
 ///|
 test "toml: affected section parsing" {
-  let toml = "[affected.ci.yml]\npatterns = [\"src/**\", \"*.toml\"]\n"
-  let parsed = parse_toml_minimal(toml)
+  let root = @toml.parse(
+    "[affected.\"ci.yml\"]\npatterns = [\"src/**\", \"*.toml\"]\n",
+  )
+  guard root is @toml.TomlTable(table) else { fail("expected table") }
+  let affected = toml_get_table(table, "affected")
+  let ci = toml_get_table(affected, "ci.yml")
   inspect(
-    parsed.arrays.get("affected.ci.yml.patterns"),
-    content=(
-      #|Some(["src/**", "*.toml"])
-    ),
+    toml_get_string_array(ci, "patterns"),
+    content="[\"src/**\", \"*.toml\"]",
   )
 }
 
 ///|
 test "config: affected patterns loaded" {
-  // Simulate what load_actrun_config does with affected section
-  let toml = "[affected.ci.yml]\npatterns = [\"src/**\"]\n"
-  let parsed = parse_toml_minimal(toml)
+  let root = @toml.parse("[affected.\"ci.yml\"]\npatterns = [\"src/**\"]\n")
+  guard root is @toml.TomlTable(table) else { fail("expected table") }
+  let affected = toml_get_table(table, "affected")
   let result : Map[String, Array[String]] = {}
-  for key, patterns in parsed.arrays {
-    if key.has_prefix("affected.") {
-      let rest = String::unsafe_substring(key, start=9, end=key.length())
-      let mut last_dot = -1
-      for i in 0..<rest.length() {
-        if rest[i] == '.' {
-          last_dot = i
+  for wf_name, wf_value in affected {
+    match wf_value {
+      @toml.TomlTable(wf_tbl) => {
+        let patterns = toml_get_string_array(wf_tbl, "patterns")
+        if patterns.length() > 0 {
+          result[wf_name] = patterns
         }
       }
-      if last_dot > 0 {
-        let wf = String::unsafe_substring(rest, start=0, end=last_dot)
-          .trim(chars="\"'")
-          .to_string()
-        result[wf] = patterns
-      }
+      _ => ()
     }
   }
-  inspect(
-    result.get("ci.yml"),
-    content=(
-      #|Some(["src/**"])
-    ),
-  )
+  inspect(result.get("ci.yml"), content="Some([\"src/**\"])")
 }
 
 ///|
@@ -1704,75 +1707,50 @@ test "files_match_patterns: realistic CI patterns" {
   )
 }
 
-// --- toml_normalize_section tests ---
-
-///|
-test "toml_normalize_section: bare key" {
-  inspect(toml_normalize_section("affected"), content="affected")
-  inspect(toml_normalize_section("workspace"), content="workspace")
-}
-
-///|
-test "toml_normalize_section: dotted bare keys" {
-  inspect(toml_normalize_section("affected.ci"), content="affected.ci")
-}
-
-///|
-test "toml_normalize_section: quoted key" {
-  inspect(
-    toml_normalize_section("affected.\"ci.yml\""),
-    content="affected.ci.yml",
-  )
-}
-
-///|
-test "toml_normalize_section: quoted path key" {
-  inspect(
-    toml_normalize_section("affected.\".github/workflows/ci.yml\""),
-    content="affected..github/workflows/ci.yml",
-  )
-}
-
 // --- affected config parsing tests ---
 
 ///|
-test "parse_toml_minimal: affected with quoted key" {
-  let config = "[affected.\"ci.yml\"]\npatterns = [\"src/**\", \"*.toml\"]\n"
-  let parsed = parse_toml_minimal(config)
+test "toml: affected with quoted key" {
+  let root = @toml.parse(
+    "[affected.\"ci.yml\"]\npatterns = [\"src/**\", \"*.toml\"]\n",
+  )
+  guard root is @toml.TomlTable(table) else { fail("expected table") }
+  let affected = toml_get_table(table, "affected")
+  let ci = toml_get_table(affected, "ci.yml")
   inspect(
-    parsed.arrays.get("affected.ci.yml.patterns").unwrap(),
+    toml_get_string_array(ci, "patterns"),
     content="[\"src/**\", \"*.toml\"]",
   )
 }
 
 ///|
-test "parse_toml_minimal: affected with path key" {
-  let config = "[affected.\".github/workflows/ci.yml\"]\npatterns = [\"src/**\"]\n"
-  let parsed = parse_toml_minimal(config)
-  inspect(
-    parsed.arrays.get("affected..github/workflows/ci.yml.patterns").unwrap(),
-    content="[\"src/**\"]",
+test "toml: affected with path key" {
+  let root = @toml.parse(
+    "[affected.\".github/workflows/ci.yml\"]\npatterns = [\"src/**\"]\n",
   )
+  guard root is @toml.TomlTable(table) else { fail("expected table") }
+  let affected = toml_get_table(table, "affected")
+  let ci = toml_get_table(affected, ".github/workflows/ci.yml")
+  inspect(toml_get_string_array(ci, "patterns"), content="[\"src/**\"]")
 }
 
 ///|
-test "load_actrun_config: affected patterns extraction" {
-  let config = "[affected.\"ci.yml\"]\npatterns = [\"src/**\", \"*.toml\"]\n[affected.\"lint.yml\"]\npatterns = [\"src/**\"]\n"
-  let parsed = parse_toml_minimal(config)
-  // Simulate the affected extraction logic
+test "toml: affected patterns extraction" {
+  let root = @toml.parse(
+    "[affected.\"ci.yml\"]\npatterns = [\"src/**\", \"*.toml\"]\n[affected.\"lint.yml\"]\npatterns = [\"src/**\"]\n",
+  )
+  guard root is @toml.TomlTable(table) else { fail("expected table") }
+  let affected = toml_get_table(table, "affected")
   let result : Map[String, Array[String]] = {}
-  let prefix = "affected."
-  let suffix = ".patterns"
-  for key, patterns in parsed.arrays {
-    if key.has_prefix(prefix) && key.has_suffix(suffix) {
-      let wf = String::unsafe_substring(
-        key,
-        start=prefix.length(),
-        end=key.length() - suffix.length(),
-      )
-      if wf.length() > 0 {
-        result[wf] = patterns
+  for wf_name, wf_value in affected {
+    match wf_value {
+      @toml.TomlTable(wf_tbl) => {
+        let patterns = toml_get_string_array(wf_tbl, "patterns")
+        if patterns.length() > 0 {
+          result[wf_name] = patterns
+        }
       }
+      _ => ()
     }
   }
   inspect(result.get("ci.yml").unwrap(), content="[\"src/**\", \"*.toml\"]")
@@ -1780,14 +1758,14 @@ test "load_actrun_config: affected patterns extraction" {
 }
 
 ///|
-test "security: toml override script is isolated" {
-  let config = "[override.\"actions/setup-node\"]\nrun = \"echo 'safe'\"\n"
-  let parsed = parse_toml_minimal(config)
-  // The script string should be parsed literally, not executed
-  inspect(
-    parsed.entries.get("override.actions/setup-node.run"),
-    content="Some(\"echo 'safe'\")",
+test "toml: override script is isolated" {
+  let root = @toml.parse(
+    "[override.\"actions/setup-node\"]\nrun = \"echo 'safe'\"\n",
   )
+  guard root is @toml.TomlTable(table) else { fail("expected table") }
+  let override_tbl = toml_get_table(table, "override")
+  let node = toml_get_table(override_tbl, "actions/setup-node")
+  inspect(toml_get_string(node, "run"), content="echo 'safe'")
 }
 
 ///|

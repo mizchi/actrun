@@ -1,0 +1,5 @@
+ok=true state=completed
+build/compute:success
+deploy/step_1:success
+build:success
+deploy:success

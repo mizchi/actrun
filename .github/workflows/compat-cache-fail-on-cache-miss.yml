@@ -18,10 +18,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
       - id: restore
         name: Restore cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         continue-on-error: true
         with:
           key: ${{ inputs.compat_key }}
@@ -36,7 +36,7 @@ jobs:
             "${{ steps.restore.conclusion }}" \
             "$(if [ -f cache-dir/value.txt ]; then printf yes; else printf no; fi)" > report/result.txt
       - name: Upload report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: compat-cache-fail-on-cache-miss-report
           path: report/result.txt

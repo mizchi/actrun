@@ -187,6 +187,18 @@ fn usage_text() -> String {
   "  cache list                   List cache entries\n" +
   "  cache prune                  Delete cache entries\n" +
   "\n" +
+  "Analysis commands:\n" +
+  "  lint [workflow.yml]          Lint workflows for type errors and dead code\n" +
+  "  lint --preset <name>         Preset: default, strict, oss\n" +
+  "  lint --strict                Enable strict checks (missing-timeout)\n" +
+  "  lint --online                Verify actions exist, suggest SHA pins (network)\n" +
+  "  lint --update-hash           Pin action refs to SHA in-place (implies --online)\n" +
+  "  lint --ignore <rule>         Suppress a rule (repeatable, or set in actrun.toml)\n" +
+  "  viz <workflow.yml>           Visualize workflow as ASCII art\n" +
+  "  viz <workflow.yml> --mermaid Output Mermaid diagram text\n" +
+  "  viz <workflow.yml> --detail  Output Mermaid with step-level subgraphs\n" +
+  "  viz <workflow.yml> --svg     Output SVG (--theme github-dark|github-light|...)\n" +
+  "\n" +
   "Other commands:\n" +
   "  list [patterns...]           List workflows and their run commands\n" +
   "  clean [target]               Clean build artifacts (all, runs, cache, workspace, actions)\n" +
@@ -1491,6 +1503,8 @@ struct ActrunConfig {
   container_runtime : String
   affected : Map[String, Array[String]]
   includes : Array[String]
+  lint_ignore_rules : Array[String]
+  lint_preset : String
 }
 
 ///|
@@ -1505,6 +1519,8 @@ fn default_actrun_config() -> ActrunConfig {
     container_runtime: "",
     affected: {},
     includes: [],
+    lint_ignore_rules: @lint.default_ignore_rules,
+    lint_preset: "default",
   }
 }
 
@@ -1597,153 +1613,72 @@ async fn generate_actrun_config() -> String {
   config = config + "\n# Override actions with local scripts (optional)\n"
   config = config + "# [override.\"actions/setup-node\"]\n"
   config = config + "# run = \"echo 'using local node'\"\n"
+  config = config + "\n# Lint rule configuration (optional)\n"
+  config = config + "# [lint]\n"
+  config = config + "# preset = \"default\"  # default, strict, oss\n"
+  config = config +
+    "# ignore_rules = [\"unknown-property\", \"unused-outputs\"]\n"
   config
 }
 
 ///|
-struct TomlParseResult {
-  entries : Map[String, String]
-  arrays : Map[String, Array[String]]
+fn toml_get_string(
+  table : Map[String, @toml.TomlValue],
+  key : String,
+) -> String {
+  match table.get(key) {
+    Some(@toml.TomlString(s)) => s
+    _ => ""
+  }
 }
 
 ///|
-/// Normalize TOML section key: strip quotes from dotted keys.
-/// "affected.\"ci.yml\"" → "affected.ci.yml"
-/// "affected.\".github/workflows/ci.yml\"" → "affected..github/workflows/ci.yml"
-fn toml_normalize_section(raw : String) -> String {
-  let parts : Array[String] = []
-  let mut idx = 0
-  let mut start = 0
-  while idx < raw.length() {
-    let ch = raw.unsafe_get(idx)
-    if ch == '"' {
-      // Read quoted segment
-      idx += 1
-      let qstart = idx
-      while idx < raw.length() && raw.unsafe_get(idx) != '"' {
-        idx += 1
-      }
-      parts.push(String::unsafe_substring(raw, start=qstart, end=idx))
-      if idx < raw.length() {
-        idx += 1 // skip closing quote
-      }
-      // skip dot after quote
-      if idx < raw.length() && raw.unsafe_get(idx) == '.' {
-        idx += 1
-      }
-      start = idx
-    } else if ch == '.' {
-      if idx > start {
-        parts.push(
-          String::unsafe_substring(raw, start~, end=idx)
-          .trim(chars=" \t")
-          .to_string(),
-        )
-      }
-      idx += 1
-      start = idx
-    } else {
-      idx += 1
-    }
+fn toml_get_bool(table : Map[String, @toml.TomlValue], key : String) -> Bool {
+  match table.get(key) {
+    Some(@toml.TomlBoolean(b)) => b
+    _ => false
   }
-  if start < raw.length() {
-    parts.push(
-      String::unsafe_substring(raw, start~, end=raw.length())
-      .trim(chars=" \t")
-      .to_string(),
-    )
-  }
-  parts.join(".")
 }
 
 ///|
-fn parse_toml_minimal(content : String) -> TomlParseResult {
-  let entries : Map[String, String] = {}
-  let arrays : Map[String, Array[String]] = {}
-  let mut section = ""
-  for part in content.split("\n") {
-    let raw = part.to_string().trim(chars="\r").to_string()
-    let line = raw.trim(chars=" \t").to_string()
-    if line.length() == 0 || line.has_prefix("#") {
-      continue
-    }
-    // Parse section headers: [section], [section."key"], [section."path/key"]
-    if line.has_prefix("[") && line.has_suffix("]") {
-      let raw_section = String::unsafe_substring(
-          line,
-          start=1,
-          end=line.length() - 1,
-        )
-        .trim(chars=" \t")
-        .to_string()
-      // Normalize quoted keys: [affected."ci.yml"] → affected.ci.yml
-      section = toml_normalize_section(raw_section)
-      continue
-    }
-    match line.find("=") {
-      None => continue
-      Some(eq_idx) => {
-        let raw_key = String::unsafe_substring(line, start=0, end=eq_idx)
-          .trim(chars=" \t")
-          .to_string()
-        let key = if section.length() > 0 {
-          section + "." + raw_key
-        } else {
-          raw_key
-        }
-        let val_raw = String::unsafe_substring(
-            line,
-            start=eq_idx + 1,
-            end=line.length(),
-          )
-          .trim(chars=" \t")
-          .to_string()
-        if val_raw.has_prefix("[") {
-          // Parse array: ["item1", "item2"]
-          let items : Array[String] = []
-          let inner = if val_raw.has_suffix("]") {
-            String::unsafe_substring(val_raw, start=1, end=val_raw.length() - 1)
-          } else {
-            String::unsafe_substring(val_raw, start=1, end=val_raw.length())
-          }
-          for item_view in inner.split(",") {
-            let item = item_view.to_string().trim(chars=" \t\"'").to_string()
-            if item.length() > 0 {
-              items.push(item)
-            }
-          }
-          arrays[key] = items
-        } else if val_raw == "true" || val_raw == "false" {
-          entries[key] = val_raw
-        } else if val_raw.has_prefix("\"") &&
-          val_raw.has_suffix("\"") &&
-          val_raw.length() >= 2 {
-          entries[key] = String::unsafe_substring(
-            val_raw,
-            start=1,
-            end=val_raw.length() - 1,
-          )
-        } else {
-          entries[key] = val_raw
+fn toml_get_string_array(
+  table : Map[String, @toml.TomlValue],
+  key : String,
+) -> Array[String] {
+  match table.get(key) {
+    Some(@toml.TomlArray(arr)) => {
+      let result : Array[String] = []
+      for item in arr {
+        match item {
+          @toml.TomlString(s) => result.push(s)
+          _ => ()
         }
       }
+      result
     }
+    _ => []
   }
-  { entries, arrays }
+}
+
+///|
+fn toml_get_table(
+  table : Map[String, @toml.TomlValue],
+  key : String,
+) -> Map[String, @toml.TomlValue] {
+  match table.get(key) {
+    Some(@toml.TomlTable(t)) => t
+    _ => {}
+  }
 }
 
 ///|
 let known_config_keys : Array[String] = [
   "workspace_mode", "local_skip_actions", "trust_actions", "nix_mode", "nix_packages",
-  "container_runtime", "includes",
+  "container_runtime", "includes", "affected", "override", "lint",
 ]
 
 ///|
 fn is_known_config_key(key : String) -> Bool {
-  // Allow any key under [affected.*] and [override.*] sections
-  if key.has_prefix("affected.") || key.has_prefix("override.") {
-    return true
-  }
   for k in known_config_keys {
     if k == key {
       return true
@@ -1767,68 +1702,77 @@ fn load_actrun_config(dir : String) -> ActrunConfig {
   } noraise {
     value => value
   }
-  let parsed = parse_toml_minimal(content)
-  // Warn on unknown keys
-  for key, _ in parsed.entries {
+  let root = try @toml.parse(content) catch {
+    err => {
+      println(
+        "warning: failed to parse " + config_path + ": " + err.to_string(),
+      )
+      return default_actrun_config()
+    }
+  } noraise {
+    value => value
+  }
+  guard root is @toml.TomlTable(table) else { return default_actrun_config() }
+  // Warn on unknown top-level keys
+  for key, _ in table {
     if not(is_known_config_key(key)) {
       println("warning: unknown key '" + key + "' in " + config_path)
     }
   }
-  for key, _ in parsed.arrays {
-    if not(is_known_config_key(key)) {
-      println("warning: unknown key '" + key + "' in " + config_path)
+  // Parse [affected."workflow"] sections
+  let affected_result : Map[String, Array[String]] = {}
+  let affected_table = toml_get_table(table, "affected")
+  for wf_name, wf_value in affected_table {
+    match wf_value {
+      @toml.TomlTable(wf_tbl) => {
+        let patterns = toml_get_string_array(wf_tbl, "patterns")
+        if patterns.length() > 0 {
+          affected_result[wf_name] = patterns
+        }
+      }
+      _ => ()
     }
   }
+  // Parse [override."action"] sections
+  let override_result : Map[String, String] = {}
+  let override_table = toml_get_table(table, "override")
+  for action_name, action_value in override_table {
+    match action_value {
+      @toml.TomlTable(action_tbl) => {
+        let run_script = toml_get_string(action_tbl, "run")
+        if run_script.length() > 0 {
+          override_result[action_name] = run_script
+        }
+      }
+      _ => ()
+    }
+  }
+  // Parse [lint] section
+  let lint_table = toml_get_table(table, "lint")
+  let lint_rules = toml_get_string_array(lint_table, "ignore_rules")
   {
-    workspace_mode: parsed.entries.get("workspace_mode").unwrap_or(""),
-    local_skip_actions: parsed.arrays.get("local_skip_actions").unwrap_or([]),
-    trust_actions: parsed.entries.get("trust_actions").unwrap_or("false") ==
-    "true",
-    nix_mode: parsed.entries.get("nix_mode").unwrap_or(""),
-    nix_packages: parsed.arrays.get("nix_packages").unwrap_or([]),
-    container_runtime: parsed.entries.get("container_runtime").unwrap_or(""),
-    affected: {
-      let result : Map[String, Array[String]] = {}
-      // Parse affected keys: "affected.WORKFLOW.patterns" → workflow → patterns
-      // After section normalization, key is e.g.:
-      //   "affected.ci.yml.patterns" (from [affected."ci.yml"])
-      //   "affected..github/workflows/ci.yml.patterns"
-      let prefix = "affected."
-      let suffix = ".patterns"
-      for key, patterns in parsed.arrays {
-        if key.has_prefix(prefix) && key.has_suffix(suffix) {
-          let wf = String::unsafe_substring(
-            key,
-            start=prefix.length(),
-            end=key.length() - suffix.length(),
-          )
-          if wf.length() > 0 {
-            result[wf] = patterns
-          }
-        }
-      }
-      result
+    workspace_mode: toml_get_string(table, "workspace_mode"),
+    local_skip_actions: toml_get_string_array(table, "local_skip_actions"),
+    trust_actions: toml_get_bool(table, "trust_actions"),
+    nix_mode: toml_get_string(table, "nix_mode"),
+    nix_packages: toml_get_string_array(table, "nix_packages"),
+    container_runtime: toml_get_string(table, "container_runtime"),
+    affected: affected_result,
+    local_override_actions: override_result,
+    includes: toml_get_string_array(table, "includes"),
+    lint_ignore_rules: if lint_rules.length() > 0 {
+      lint_rules
+    } else {
+      @lint.default_ignore_rules
     },
-    local_override_actions: {
-      let result : Map[String, String] = {}
-      // Parse override keys: "override.ACTION.run" → action → script
-      let prefix = "override."
-      let suffix = ".run"
-      for key, value in parsed.entries {
-        if key.has_prefix(prefix) && key.has_suffix(suffix) {
-          let action = String::unsafe_substring(
-            key,
-            start=prefix.length(),
-            end=key.length() - suffix.length(),
-          )
-          if action.length() > 0 {
-            result[action] = value
-          }
-        }
+    lint_preset: {
+      let p = toml_get_string(lint_table, "preset")
+      if p.length() > 0 {
+        p
+      } else {
+        "default"
       }
-      result
     },
-    includes: parsed.arrays.get("includes").unwrap_or([]),
   }
 }
 
@@ -3672,6 +3616,384 @@ fn print_errors(errors : Array[String]) -> Unit {
   for err in errors {
     println("error: " + err)
   }
+}
+
+///|
+fn handle_viz_command(cli_args : Array[String]) -> Int {
+  if cli_args.length() < 3 {
+    println(
+      "Usage: actrun viz <workflow.yml> [--svg [--theme <name>] | --mermaid | --detail]",
+    )
+    return 1
+  }
+  let path = cli_args[2]
+  let text = match read_text(path) {
+    Some(content) => content
+    None => {
+      println("error: failed to read " + path)
+      return 1
+    }
+  }
+  let parsed = @ar.parse_workflow_yaml(text)
+  if parsed.errors.length() > 0 {
+    for err in parsed.errors {
+      println("error: " + err)
+    }
+    return 1
+  }
+  guard parsed.workflow is Some(workflow) else {
+    println("error: failed to parse workflow")
+    return 1
+  }
+  // Parse flags
+  let mut mode = "ascii"
+  let mut theme = "github-dark"
+  let mut i = 3
+  while i < cli_args.length() {
+    if cli_args[i] == "--svg" {
+      mode = "svg"
+    } else if cli_args[i] == "--mermaid" {
+      mode = "mermaid"
+    } else if cli_args[i] == "--detail" {
+      mode = "detail"
+    } else if cli_args[i] == "--theme" && i + 1 < cli_args.length() {
+      theme = cli_args[i + 1]
+      i += 1
+    }
+    i += 1
+  }
+  if mode == "svg" {
+    println(@lint.render_workflow_svg(workflow, theme~))
+  } else if mode == "mermaid" {
+    println(@lint.workflow_to_mermaid(workflow))
+  } else if mode == "detail" {
+    println(@lint.workflow_to_mermaid_detail(workflow))
+  } else {
+    println(@lint.render_workflow_ascii(workflow))
+  }
+  0
+}
+
+///|
+async fn handle_lint_command(cli_args : Array[String]) -> Int {
+  let config = load_actrun_config(".")
+  let paths : Array[String] = []
+  // Apply preset from config first, then CLI flags override
+  let (preset_strict, preset_online) = @lint.apply_preset(config.lint_preset)
+  let mut strict = preset_strict
+  let mut online = preset_online
+  let mut update_hash = false
+  let mut i = 2
+  while i < cli_args.length() {
+    if cli_args[i] == "--ignore" && i + 1 < cli_args.length() {
+      config.lint_ignore_rules.push(cli_args[i + 1])
+      i += 2
+    } else if cli_args[i] == "--strict" {
+      strict = true
+      i += 1
+    } else if cli_args[i] == "--online" {
+      online = true
+      i += 1
+    } else if cli_args[i] == "--update-hash" {
+      online = true
+      update_hash = true
+      i += 1
+    } else if cli_args[i] == "--preset" && i + 1 < cli_args.length() {
+      let (s, o) = @lint.apply_preset(cli_args[i + 1])
+      strict = s
+      online = o
+      i += 2
+    } else {
+      paths.push(cli_args[i])
+      i += 1
+    }
+  }
+  if paths.length() == 0 {
+    // Default: lint .github/workflows/*.yml
+    if @xfs.path_exists(".github/workflows") {
+      let entries = try @xfs.read_dir(".github/workflows") catch {
+        _ => []
+      } noraise {
+        value => value
+      }
+      for name in entries {
+        if name.has_suffix(".yml") || name.has_suffix(".yaml") {
+          paths.push(".github/workflows/" + name)
+        }
+      }
+    }
+    if paths.length() == 0 {
+      println("error: no workflow files found")
+      return 1
+    }
+  }
+  let mut total_errors = 0
+  let mut total_warnings = 0
+  let cross_file_refs : Array[(String, Array[@lint.ActionRefToResolve])] = []
+  for path in paths {
+    let text = match read_text(path) {
+      Some(content) => content
+      None => {
+        println("error: failed to read " + path)
+        total_errors += 1
+        continue
+      }
+    }
+    let parsed = @ar.parse_workflow_yaml(text)
+    if parsed.errors.length() > 0 {
+      println(path + ":")
+      for err in parsed.errors {
+        println("  parse error: " + err)
+      }
+      total_errors += 1
+      continue
+    }
+    guard parsed.workflow is Some(workflow) else {
+      println(path + ": parse failed")
+      total_errors += 1
+      continue
+    }
+    // Collect action refs for cross-file version consistency check
+    cross_file_refs.push((path, @lint.collect_action_refs(workflow)))
+    let lint_options = @lint.new_lint_options(strict~, online~, yaml_text=text)
+    let all_diagnostics = @lint.lint_workflow(
+      workflow,
+      yaml_text=text,
+      options=lint_options,
+    )
+    // Online checks: resolve action refs via git ls-remote
+    if online {
+      let action_refs = @lint.collect_action_refs(workflow)
+      if action_refs.length() > 0 {
+        let resolutions = resolve_action_refs(action_refs)
+        if update_hash {
+          let new_text = apply_hash_updates(text, action_refs, resolutions)
+          if new_text != text {
+            try @xfs.write_string_to_file(path, new_text) catch {
+              err =>
+                println(
+                  "error: failed to write " + path + ": " + err.to_string(),
+                )
+            } noraise {
+              _ => println("updated: " + path)
+            }
+          }
+        } else {
+          let online_diags = @lint.diagnostics_from_resolutions(
+            action_refs, resolutions,
+          )
+          for d in online_diags {
+            all_diagnostics.push(d)
+          }
+        }
+      }
+    }
+    let diagnostics = @lint.filter_diagnostics(
+      all_diagnostics,
+      config.lint_ignore_rules,
+    )
+    if diagnostics.length() > 0 {
+      println(path + ":")
+      for d in diagnostics {
+        println("  " + d.format())
+        match d.severity {
+          @lint.Error => total_errors += 1
+          @lint.Warning => total_warnings += 1
+        }
+      }
+    }
+  }
+  // Cross-file version consistency check
+  if cross_file_refs.length() > 1 {
+    let consistency_diags = @lint.check_version_consistency(cross_file_refs)
+    let filtered_consistency = @lint.filter_diagnostics(
+      consistency_diags,
+      config.lint_ignore_rules,
+    )
+    if filtered_consistency.length() > 0 {
+      println("cross-file:")
+      for d in filtered_consistency {
+        println("  " + d.format())
+        match d.severity {
+          @lint.Error => total_errors += 1
+          @lint.Warning => total_warnings += 1
+        }
+      }
+    }
+  }
+  let ignored_count = config.lint_ignore_rules.length()
+  if total_errors == 0 && total_warnings == 0 {
+    let suffix = if ignored_count > 0 {
+      ", " + ignored_count.to_string() + " rule(s) ignored"
+    } else {
+      ""
+    }
+    println(
+      "lint: all clean (" + paths.length().to_string() + " files" + suffix + ")",
+    )
+  } else {
+    println(
+      "\nlint: " +
+      total_errors.to_string() +
+      " error(s), " +
+      total_warnings.to_string() +
+      " warning(s)",
+    )
+  }
+  if total_errors > 0 {
+    1
+  } else {
+    0
+  }
+}
+
+///|
+fn apply_hash_updates(
+  text : String,
+  refs : Array[@lint.ActionRefToResolve],
+  resolutions : Array[@lint.ActionResolution],
+) -> String {
+  let mut result = text
+  for i, action_ref in refs {
+    if i >= resolutions.length() {
+      break
+    }
+    let resolution = resolutions[i]
+    // Only update mutable refs that resolved successfully
+    if action_ref.is_sha_pinned ||
+      not(resolution.exists) ||
+      resolution.sha.length() == 0 {
+      continue
+    }
+    // Replace "owner/repo@tag" with "owner/repo@sha # tag"
+    // Also handle "owner/repo/path@tag"
+    let old_ref = action_ref.uses
+    let new_ref = action_ref.owner +
+      "/" +
+      action_ref.repo +
+      action_ref.subpath +
+      "@" +
+      resolution.sha +
+      " # " +
+      action_ref.ref_str
+    result = string_replace(result, old_ref, new_ref)
+  }
+  result
+}
+
+///|
+fn string_replace(text : String, old : String, new_ : String) -> String {
+  if old.length() == 0 {
+    return text
+  }
+  let parts : Array[String] = []
+  let mut idx = 0
+  while idx <= text.length() - old.length() {
+    let segment = String::unsafe_substring(
+      text,
+      start=idx,
+      end=idx + old.length(),
+    )
+    if segment == old {
+      parts.push(new_)
+      idx += old.length()
+    } else {
+      // Append one character at a time
+      parts.push(String::unsafe_substring(text, start=idx, end=idx + 1))
+      idx += 1
+    }
+  }
+  // Append remaining
+  if idx < text.length() {
+    parts.push(String::unsafe_substring(text, start=idx, end=text.length()))
+  }
+  parts.join("")
+}
+
+///|
+async fn resolve_action_refs(
+  refs : Array[@lint.ActionRefToResolve],
+) -> Array[@lint.ActionResolution] {
+  let results : Array[@lint.ActionResolution] = []
+  // Deduplicate by owner/repo@ref to minimize git ls-remote calls
+  let cache : Map[String, (String, Bool, String)] = {} // url@ref -> (sha, exists, error)
+  for action_ref in refs {
+    // SHA-pinned actions are already secure, skip resolution
+    if action_ref.is_sha_pinned {
+      results.push(@lint.new_action_resolution(action_ref.uses, exists=true))
+      continue
+    }
+    let url = "https://github.com/" + action_ref.owner + "/" + action_ref.repo
+    let cache_key = url + "@" + action_ref.ref_str
+    let (sha, exists, error) = match cache.get(cache_key) {
+      Some(cached) => cached
+      None => {
+        let (code, stdout, stderr) = run_command(
+          "git",
+          ["ls-remote", url, action_ref.ref_str],
+          cwd=".",
+        )
+        if code != 0 {
+          let err = "git ls-remote failed: " +
+            stderr.trim(chars=" \t\r\n").to_string()
+          cache[cache_key] = ("", false, err)
+          ("", false, err)
+        } else {
+          let trimmed = stdout.trim(chars=" \t\r\n").to_string()
+          if trimmed.length() == 0 {
+            // ref not found, try as a tag with full path
+            let (code2, stdout2, _) = run_command(
+              "git",
+              ["ls-remote", url, "refs/tags/" + action_ref.ref_str],
+              cwd=".",
+            )
+            if code2 == 0 {
+              let trimmed2 = stdout2.trim(chars=" \t\r\n").to_string()
+              if trimmed2.length() > 0 {
+                let resolved_sha = extract_ls_remote_sha(trimmed2)
+                cache[cache_key] = (resolved_sha, true, "")
+                (resolved_sha, true, "")
+              } else {
+                cache[cache_key] = (
+                  "",
+                  false,
+                  "ref '\{action_ref.ref_str}' not found",
+                )
+                ("", false, "ref '\{action_ref.ref_str}' not found")
+              }
+            } else {
+              cache[cache_key] = (
+                "",
+                false,
+                "ref '\{action_ref.ref_str}' not found",
+              )
+              ("", false, "ref '\{action_ref.ref_str}' not found")
+            }
+          } else {
+            let resolved_sha = extract_ls_remote_sha(trimmed)
+            cache[cache_key] = (resolved_sha, true, "")
+            (resolved_sha, true, "")
+          }
+        }
+      }
+    }
+    results.push(
+      @lint.new_action_resolution(action_ref.uses, sha~, exists~, error~),
+    )
+  }
+  results
+}
+
+///|
+fn extract_ls_remote_sha(output : String) -> String {
+  // git ls-remote output: "SHA\trefs/..."
+  for ch_view in output.split("\t") {
+    let sha = ch_view.to_string().trim(chars=" \t\r\n").to_string()
+    if sha.length() >= 40 {
+      return String::unsafe_substring(sha, start=0, end=40)
+    }
+  }
+  ""
 }
 
 ///|
@@ -5886,6 +6208,20 @@ async fn main {
       (cli_args[1] == "--help" || cli_args[1] == "-h" || cli_args[1] == "help")
     ) {
     println(usage_text())
+    return
+  }
+  if cli_args.length() > 1 && cli_args[1] == "viz" {
+    let exit_code = handle_viz_command(cli_args)
+    if exit_code != 0 {
+      @xsys.exit(exit_code)
+    }
+    return
+  }
+  if cli_args.length() > 1 && cli_args[1] == "lint" {
+    let exit_code = handle_lint_command(cli_args)
+    if exit_code != 0 {
+      @xsys.exit(exit_code)
+    }
     return
   }
   if cli_args.length() > 1 && cli_args[1] == "doctor" {
