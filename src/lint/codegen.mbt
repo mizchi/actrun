@@ -12,7 +12,7 @@ pub fn workflow_to_shell(workflow : @ar.WorkflowSpec) -> String {
   if workflow.env.length() > 0 {
     out.push("# Workflow environment")
     for key, value in workflow.env {
-      out.push("export " + shell_quote_assign(key, value))
+      out.push("export " + key + "=" + shell_quote(resolve_expressions(value)))
     }
     out.push("")
   }
@@ -34,7 +34,7 @@ pub fn job_to_shell(job : @ar.JobSpec, workflow : @ar.WorkflowSpec) -> String {
   out.push("# Job: " + job.id)
   if workflow.env.length() > 0 {
     for key, value in workflow.env {
-      out.push("export " + shell_quote_assign(key, value))
+      out.push("export " + key + "=" + shell_quote(resolve_expressions(value)))
     }
     out.push("")
   }
@@ -67,7 +67,7 @@ fn emit_job(
   // Job-level env
   if job.env.length() > 0 {
     for key, value in job.env {
-      out.push("export " + shell_quote_assign(key, value))
+      out.push("export " + key + "=" + shell_quote(resolve_expressions(value)))
     }
     out.push("")
   }
@@ -75,16 +75,26 @@ fn emit_job(
   for i, step in job.steps {
     emit_step(step, i, job.id, out)
   }
+  // Capture job outputs as shell variables for downstream needs
+  if job.outputs.length() > 0 {
+    out.push(
+      "# Job outputs (available to downstream jobs as _NEEDS_<JOB>_<KEY>)",
+    )
+    for key, value in job.outputs {
+      let var_name = "_NEEDS_" + to_shell_var(job.id) + "_" + to_shell_var(key)
+      out.push(var_name + "=" + shell_quote(resolve_expressions(value)))
+    }
+    out.push("")
+  }
 }
 
 ///|
 fn emit_step(
   step : @ar.StepSpec,
   index : Int,
-  _job_id : String,
+  job_id : String,
   out : Array[String],
 ) -> Unit {
-  // Step header
   let label = if step.name.length() > 0 {
     step.name
   } else if step.id.length() > 0 {
@@ -103,7 +113,7 @@ fn emit_step(
   // Step env
   if step.env.length() > 0 {
     for key, value in step.env {
-      out.push("export " + shell_quote_assign(key, value))
+      out.push("export " + key + "=" + shell_quote(resolve_expressions(value)))
     }
   }
   // Working directory
@@ -116,13 +126,18 @@ fn emit_step(
     Option::Some(uses) => emit_uses_step(uses, step.with_values, out)
     Option::None =>
       match step.run {
-        Option::Some(script) =>
-          // Continue on error
+        Option::Some(script) => {
+          let resolved = resolve_expressions(
+            script.trim(chars=" \t\r\n").to_string(),
+          )
+          // Convert GITHUB_OUTPUT writes to shell variable captures
+          let converted = convert_github_output(resolved, step.id, job_id)
           if step.continue_on_error == "true" {
-            out.push(script.trim(chars=" \t\r\n").to_string() + " || true")
+            out.push(converted + " || true")
           } else {
-            out.push(script.trim(chars=" \t\r\n").to_string())
+            out.push(converted)
           }
+        }
         Option::None => out.push("# (empty step)")
       }
   }
@@ -187,7 +202,6 @@ fn emit_checkout(
   let fetch_depth = get_with(with_values, "fetch-depth")
   let submodules = get_with(with_values, "submodules")
   if path.length() > 0 {
-    // Checkout into a subdirectory
     let depth = if fetch_depth.length() > 0 {
       " --depth " + fetch_depth
     } else {
@@ -197,20 +211,19 @@ fn emit_checkout(
       "git clone" +
       depth +
       " \"$\u007bGITHUB_SERVER_URL:-https://github.com}/$\u007bGITHUB_REPOSITORY}\" " +
-      shell_quote(path),
+      shell_quote(resolve_expressions(path)),
     )
     if ref_val.length() > 0 {
       out.push(
         "(cd " +
-        shell_quote(path) +
+        shell_quote(resolve_expressions(path)) +
         " && git checkout " +
-        shell_quote(ref_val) +
+        shell_quote(resolve_expressions(ref_val)) +
         ")",
       )
     }
-    // In-place checkout (assume we're in the repo)
   } else if ref_val.length() > 0 {
-    out.push("git checkout " + shell_quote(ref_val))
+    out.push("git checkout " + shell_quote(resolve_expressions(ref_val)))
   } else {
     out.push("git fetch --depth 1 origin")
     if fetch_depth.length() > 0 && fetch_depth != "1" {
@@ -238,7 +251,11 @@ fn emit_setup_node(
     out.push("# nvm use " + version + " || nvm install " + version)
   } else if version_file.length() > 0 {
     out.push("# Node version from " + version_file)
-    out.push("# mise use node@$(cat " + shell_quote(version_file) + " | head -1 | tr -d 'v ')")
+    out.push(
+      "# mise use node@$(cat " +
+      shell_quote(version_file) +
+      " | head -1 | tr -d 'v ')",
+    )
   } else {
     out.push("# Using system Node.js")
   }
@@ -258,7 +275,9 @@ fn emit_setup_python(
   out : Array[String],
 ) -> Unit {
   let version = get_with(with_values, "python-version")
-  out.push("# actions/setup-python — uncomment your preferred version manager:")
+  out.push(
+    "# actions/setup-python — uncomment your preferred version manager:",
+  )
   if version.length() > 0 {
     out.push("# Python " + version)
     out.push("# mise use python@" + version)
@@ -275,8 +294,8 @@ fn emit_upload_artifact(
   with_values : Map[String, String],
   out : Array[String],
 ) -> Unit {
-  let name = get_with(with_values, "name")
-  let path = get_with(with_values, "path")
+  let name = resolve_expressions(get_with(with_values, "name"))
+  let path = resolve_expressions(get_with(with_values, "path"))
   let artifact_name = if name.length() > 0 { name } else { "artifact" }
   if path.length() > 0 {
     out.push("# Upload artifact: " + artifact_name)
@@ -302,8 +321,8 @@ fn emit_download_artifact(
   with_values : Map[String, String],
   out : Array[String],
 ) -> Unit {
-  let name = get_with(with_values, "name")
-  let path = get_with(with_values, "path")
+  let name = resolve_expressions(get_with(with_values, "name"))
+  let path = resolve_expressions(get_with(with_values, "path"))
   let dest = if path.length() > 0 { path } else { "." }
   if name.length() > 0 {
     out.push("# Download artifact: " + name)
@@ -337,6 +356,304 @@ fn emit_cache(
 }
 
 ///|
+/// Replace ${{ expr }} with shell variable references
+fn resolve_expressions(text : String) -> String {
+  let prefix = "$\u007b\u007b"
+  let suffix = "}}"
+  let mut result = text
+  // Iteratively replace ${{ ... }} patterns
+  let mut safety = 0
+  while safety < 50 {
+    safety += 1
+    let start = find_substr(result, prefix, 0)
+    if start < 0 {
+      break
+    }
+    let end = find_substr(result, suffix, start + prefix.length())
+    if end < 0 {
+      break
+    }
+    let expr = String::unsafe_substring(
+        result,
+        start=start + prefix.length(),
+        end~,
+      )
+      .trim(chars=" \t")
+      .to_string()
+    let replacement = expr_to_shell_var(expr)
+    let before = String::unsafe_substring(result, start=0, end=start)
+    let after = String::unsafe_substring(
+      result,
+      start=end + suffix.length(),
+      end=result.length(),
+    )
+    result = before + replacement + after
+  }
+  result
+}
+
+///|
+/// Convert a GitHub Actions expression to a shell variable reference
+fn expr_to_shell_var(expr : String) -> String {
+  // env.VAR → $VAR
+  if expr.has_prefix("env.") {
+    let var_name = String::unsafe_substring(expr, start=4, end=expr.length())
+    return "$" + var_name
+  }
+  // secrets.VAR → $SECRET_VAR
+  if expr.has_prefix("secrets.") {
+    let var_name = String::unsafe_substring(expr, start=8, end=expr.length())
+    return "$SECRET_" + to_shell_var(var_name)
+  }
+  // github.* → known mappings
+  if expr.has_prefix("github.") {
+    return resolve_github_context(expr)
+  }
+  // matrix.VAR → $MATRIX_VAR
+  if expr.has_prefix("matrix.") {
+    let var_name = String::unsafe_substring(expr, start=7, end=expr.length())
+    return "$MATRIX_" + to_shell_var(var_name)
+  }
+  // runner.* → known mappings
+  if expr.has_prefix("runner.") {
+    let field = String::unsafe_substring(expr, start=7, end=expr.length())
+    return "$RUNNER_" + to_shell_var(field)
+  }
+  // steps.ID.outputs.KEY → $_STEP_ID_KEY
+  if expr.has_prefix("steps.") {
+    return resolve_step_ref(expr)
+  }
+  // needs.JOB.outputs.KEY → $_NEEDS_JOB_KEY
+  if expr.has_prefix("needs.") {
+    return resolve_needs_ref(expr)
+  }
+  // Boolean/function expressions — pass through as comment
+  if expr.contains("(") {
+    return "# " + expr
+  }
+  // Fallback
+  "$\u007b" + expr + "}"
+}
+
+///|
+fn resolve_github_context(expr : String) -> String {
+  let known : Map[String, String] = {}
+  known["github.ref"] = "$GITHUB_REF"
+  known["github.ref_name"] = "$GITHUB_REF_NAME"
+  known["github.sha"] = "$GITHUB_SHA"
+  known["github.repository"] = "$GITHUB_REPOSITORY"
+  known["github.actor"] = "$GITHUB_ACTOR"
+  known["github.workflow"] = "$GITHUB_WORKFLOW"
+  known["github.run_id"] = "$GITHUB_RUN_ID"
+  known["github.run_number"] = "$GITHUB_RUN_NUMBER"
+  known["github.workspace"] = "$GITHUB_WORKSPACE"
+  known["github.server_url"] = "$GITHUB_SERVER_URL"
+  known["github.api_url"] = "$GITHUB_API_URL"
+  known["github.token"] = "$GITHUB_TOKEN"
+  known["github.event_name"] = "$GITHUB_EVENT_NAME"
+  known["github.head_ref"] = "$GITHUB_HEAD_REF"
+  known["github.base_ref"] = "$GITHUB_BASE_REF"
+  known["github.job"] = "$GITHUB_JOB"
+  known["github.action"] = "$GITHUB_ACTION"
+  known["github.action_path"] = "$GITHUB_ACTION_PATH"
+  known["github.triggering_actor"] = "$GITHUB_TRIGGERING_ACTOR"
+  match known.get(expr) {
+    Some(v) => v
+    None =>
+      // github.event.* → jq from event.json
+      if expr.has_prefix("github.event.") {
+        let jq_path = "." +
+          String::unsafe_substring(expr, start=13, end=expr.length())
+        "$(jq -r '" + jq_path + "' \"$GITHUB_EVENT_PATH\")"
+      } else {
+        "$\u007b" + to_shell_var(expr) + "}"
+      }
+  }
+}
+
+///|
+fn resolve_step_ref(expr : String) -> String {
+  // steps.ID.outputs.KEY → $_STEP_ID_KEY
+  // steps.ID.outcome → $_STEP_ID_OUTCOME
+  let rest = String::unsafe_substring(expr, start=6, end=expr.length())
+  let parts = split_by_dot(rest)
+  if parts.length() >= 3 && parts[1] == "outputs" {
+    let step_id = parts[0]
+    let key = parts[2]
+    "$_STEP_" + to_shell_var(step_id) + "_" + to_shell_var(key)
+  } else if parts.length() >= 2 && parts[1] == "outcome" {
+    "$_STEP_" + to_shell_var(parts[0]) + "_OUTCOME"
+  } else if parts.length() >= 2 && parts[1] == "conclusion" {
+    "$_STEP_" + to_shell_var(parts[0]) + "_CONCLUSION"
+  } else {
+    "$\u007bsteps." + rest + "}"
+  }
+}
+
+///|
+fn resolve_needs_ref(expr : String) -> String {
+  // needs.JOB.outputs.KEY → $_NEEDS_JOB_KEY
+  // needs.JOB.result → $_NEEDS_JOB_RESULT
+  let rest = String::unsafe_substring(expr, start=6, end=expr.length())
+  let parts = split_by_dot(rest)
+  if parts.length() >= 3 && parts[1] == "outputs" {
+    let job_id = parts[0]
+    let key = parts[2]
+    "$_NEEDS_" + to_shell_var(job_id) + "_" + to_shell_var(key)
+  } else if parts.length() >= 2 && parts[1] == "result" {
+    "$_NEEDS_" + to_shell_var(parts[0]) + "_RESULT"
+  } else {
+    "$\u007bneeds." + rest + "}"
+  }
+}
+
+///|
+/// Convert GITHUB_OUTPUT writes to shell variable assignments
+/// `echo "key=value" >> "$GITHUB_OUTPUT"` → `_STEP_<ID>_<KEY>=value`
+fn convert_github_output(
+  script : String,
+  step_id : String,
+  _job_id : String,
+) -> String {
+  if not(script.contains("GITHUB_OUTPUT")) {
+    return script
+  }
+  let lines : Array[String] = []
+  for line_view in script.split("\n") {
+    let line = line_view.to_string()
+    let trimmed = line.trim(chars=" \t\r").to_string()
+    // Match: echo "key=value" >> "$GITHUB_OUTPUT"
+    if trimmed.contains(">>") && trimmed.contains("GITHUB_OUTPUT") {
+      // Try to extract key=value pattern
+      let kv = extract_output_kv(trimmed)
+      match kv {
+        Option::Some((key, value)) => {
+          let var_name = if step_id.length() > 0 {
+            "_STEP_" + to_shell_var(step_id) + "_" + to_shell_var(key)
+          } else {
+            "_OUTPUT_" + to_shell_var(key)
+          }
+          lines.push(var_name + "=" + shell_quote(value))
+        }
+        Option::None => lines.push(line)
+      }
+    } else if trimmed.contains(">>") && trimmed.contains("GITHUB_ENV") {
+      // echo "KEY=value" >> "$GITHUB_ENV" → export KEY=value
+      let kv = extract_output_kv(trimmed)
+      match kv {
+        Option::Some((key, value)) =>
+          lines.push("export " + key + "=" + shell_quote(value))
+        Option::None => lines.push(line)
+      }
+    } else {
+      lines.push(line)
+    }
+  }
+  lines.join("\n")
+}
+
+///|
+/// Extract key=value from echo "key=value" >> ... patterns
+fn extract_output_kv(line : String) -> (String, String)? {
+  // Find the quoted content between echo " and " >>
+  let echo_idx = find_substr(line, "echo ", 0)
+  if echo_idx < 0 {
+    return Option::None
+  }
+  let content_start = echo_idx + 5
+  // Skip opening quote
+  let mut start = content_start
+  if start < line.length() && line.unsafe_get(start) == '"' {
+    start += 1
+  }
+  // Find >>
+  let redir = find_substr(line, ">>", start)
+  if redir < 0 {
+    return Option::None
+  }
+  let mut end = redir
+  // Strip trailing quote and whitespace
+  while end > start &&
+        (line.unsafe_get(end - 1) == '"' || line.unsafe_get(end - 1) == ' ') {
+    end -= 1
+  }
+  let content = String::unsafe_substring(line, start~, end~)
+  // Find = in content
+  let eq = find_substr(content, "=", 0)
+  if eq < 0 {
+    return Option::None
+  }
+  let key = String::unsafe_substring(content, start=0, end=eq)
+  let value = String::unsafe_substring(
+    content,
+    start=eq + 1,
+    end=content.length(),
+  )
+  Option::Some((key, value))
+}
+
+///|
+/// Convert string to valid shell variable name (uppercase, replace non-alnum with _)
+fn to_shell_var(s : String) -> String {
+  let buf = StringBuilder::new()
+  for ch in s {
+    if (ch >= 'a' && ch <= 'z') ||
+      (ch >= 'A' && ch <= 'Z') ||
+      (ch >= '0' && ch <= '9') {
+      buf.write_char(
+        if ch >= 'a' && ch <= 'z' {
+          Int::unsafe_to_char(ch.to_int() - 32)
+        } else {
+          ch
+        },
+      )
+    } else {
+      buf.write_char('_')
+    }
+  }
+  buf.to_string()
+}
+
+///|
+fn split_by_dot(s : String) -> Array[String] {
+  let parts : Array[String] = []
+  let buf = StringBuilder::new()
+  for ch in s {
+    if ch == '.' {
+      parts.push(buf.to_string())
+      buf.reset()
+    } else {
+      buf.write_char(ch)
+    }
+  }
+  let last = buf.to_string()
+  if last.length() > 0 {
+    parts.push(last)
+  }
+  parts
+}
+
+///|
+fn find_substr(text : String, pattern : String, from : Int) -> Int {
+  if pattern.length() == 0 {
+    return from
+  }
+  let mut idx = from
+  while idx + pattern.length() <= text.length() {
+    let seg = String::unsafe_substring(
+      text,
+      start=idx,
+      end=idx + pattern.length(),
+    )
+    if seg == pattern {
+      return idx
+    }
+    idx += 1
+  }
+  -1
+}
+
+///|
 fn translate_if_condition(cond : String) -> String {
   let expr = unwrap_expression_for_codegen(cond)
   if expr == "always()" || expr == "always" {
@@ -351,7 +668,13 @@ fn translate_if_condition(cond : String) -> String {
   if expr == "success()" || expr == "success" {
     return ""
   }
-  "true # if: " + cond
+  // Try to resolve expression to shell
+  let resolved = resolve_expressions(cond)
+  if resolved != cond {
+    "true # " + resolved
+  } else {
+    "true # if: " + cond
+  }
 }
 
 ///|
@@ -380,12 +703,10 @@ fn shell_quote(s : String) -> String {
   if s.length() == 0 {
     return "\"\""
   }
-  // If no special characters, return as-is
   let mut needs_quote = false
   for ch in s {
     if ch == ' ' ||
       ch == '\t' ||
-      ch == '"' ||
       ch == '\'' ||
       ch == '\\' ||
       ch == '(' ||
@@ -410,17 +731,6 @@ fn shell_quote(s : String) -> String {
     return s
   }
   "\"" + s + "\""
-}
-
-///|
-fn shell_quote_assign(key : String, value : String) -> String {
-  // For export KEY=VALUE, quote the value if it contains ${{ }}
-  if value.contains("$\u007b\u007b") {
-    // Preserve expression as-is (it's a GitHub Actions expression, user needs to adapt)
-    key + "=" + shell_quote(value) + "  # TODO: resolve expression"
-  } else {
-    key + "=" + shell_quote(value)
-  }
 }
 
 ///|
