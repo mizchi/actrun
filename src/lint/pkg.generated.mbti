@@ -38,6 +38,8 @@ pub fn format_diagnostics(Array[LintDiagnostic]) -> String
 
 pub fn has_errors(Array[LintDiagnostic]) -> Bool
 
+pub fn job_to_shell(@actrun.JobSpec, @actrun.WorkflowSpec) -> String
+
 pub fn lint_workflow(@actrun.WorkflowSpec, yaml_text? : String, options? : LintOptions) -> Array[LintDiagnostic]
 
 pub fn new_action_resolution(String, sha? : String, exists? : Bool, error? : String) -> ActionResolution
@@ -53,6 +55,8 @@ pub fn render_workflow_svg(@actrun.WorkflowSpec, theme? : String) -> String
 pub fn workflow_to_mermaid(@actrun.WorkflowSpec) -> String
 
 pub fn workflow_to_mermaid_detail(@actrun.WorkflowSpec) -> String
+
+pub fn workflow_to_shell(@actrun.WorkflowSpec, reusable_workflows? : Map[String, @actrun.WorkflowSpec], parallel? : Bool) -> String
 
 // Errors
 
