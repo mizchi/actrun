@@ -7,6 +7,9 @@ pub fn workflow_to_shell(workflow : @ar.WorkflowSpec) -> String {
   out.push("")
   out.push("# Generated from workflow: " + workflow.name)
   out.push("# This is an experimental approximation — review before running")
+  out.push("# Requires: bash, jq")
+  out.push("")
+  emit_helpers(out)
   out.push("")
   // Workflow-level env
   if workflow.env.length() > 0 {
@@ -58,6 +61,23 @@ pub fn job_to_shell(job : @ar.JobSpec, workflow : @ar.WorkflowSpec) -> String {
   }
   emit_job_body(job, out)
   out.join("\n")
+}
+
+///|
+fn emit_helpers(out : Array[String]) -> Unit {
+  out.push("# --- GitHub Actions expression helpers ---")
+  out.push("gha_contains() { [[ \"$1\" == *\"$2\"* ]]; }")
+  out.push("gha_startsWith() { [[ \"$1\" == \"$2\"* ]]; }")
+  out.push("gha_endsWith() { [[ \"$1\" == *\"$2\" ]]; }")
+  out.push("gha_format() { local fmt=\"$1\"; shift; printf \"$fmt\" \"$@\"; }")
+  out.push("gha_join() { local IFS=\"$\u007b2:-,}\"; echo \"$\u007b1[*]}\"; }")
+  out.push("gha_toJSON() { jq -n --argjson v \"$(printenv | jq -Rs 'split(\"\\n\") | map(select(length > 0) | split(\"=\") | {(.[0]): (.[1:] | join(\"=\"))}) | add // {}')\" '$v'; }")
+  out.push("gha_fromJSON() { echo \"$1\" | jq -r '.'; }")
+  out.push("gha_hashFiles() { cat \"$@\" 2>/dev/null | sha256sum | cut -d' ' -f1; }")
+  out.push("gha_success() { [ \"$\u007b_NEEDS_LAST_RESULT:-success}\" = \"success\" ]; }")
+  out.push("gha_failure() { [ \"$\u007b_NEEDS_LAST_RESULT:-success}\" = \"failure\" ]; }")
+  out.push("gha_always() { true; }")
+  out.push("gha_cancelled() { false; }")
 }
 
 ///|
@@ -562,9 +582,123 @@ fn expr_to_shell_var(expr : String) -> String {
     return resolve_needs_ref(expr)
   }
   if expr.contains("(") {
-    return "# " + expr
+    return resolve_function_call(expr)
   }
   "$\u007b" + expr + "}"
+}
+
+///|
+fn resolve_function_call(expr : String) -> String {
+  // Parse the expression to get structured function call
+  let (parsed, _errors) = parse_expression(expr)
+  match parsed {
+    FunctionCall(name, args) => {
+      let resolved_args : Array[String] = []
+      for arg in args {
+        resolved_args.push(resolve_expr_node(arg))
+      }
+      match name {
+        "contains" =>
+          if resolved_args.length() == 2 {
+            "$(gha_contains " +
+            shell_quote(resolved_args[0]) +
+            " " +
+            shell_quote(resolved_args[1]) +
+            " && echo true || echo false)"
+          } else {
+            "# " + expr
+          }
+        "startsWith" =>
+          if resolved_args.length() == 2 {
+            "$(gha_startsWith " +
+            shell_quote(resolved_args[0]) +
+            " " +
+            shell_quote(resolved_args[1]) +
+            " && echo true || echo false)"
+          } else {
+            "# " + expr
+          }
+        "endsWith" =>
+          if resolved_args.length() == 2 {
+            "$(gha_endsWith " +
+            shell_quote(resolved_args[0]) +
+            " " +
+            shell_quote(resolved_args[1]) +
+            " && echo true || echo false)"
+          } else {
+            "# " + expr
+          }
+        "format" => {
+          let fmt_args = resolved_args.join(" ")
+          "$(gha_format " + fmt_args + ")"
+        }
+        "toJSON" => "$(gha_toJSON)"
+        "fromJSON" =>
+          if resolved_args.length() == 1 {
+            "$(gha_fromJSON " + shell_quote(resolved_args[0]) + ")"
+          } else {
+            "# " + expr
+          }
+        "hashFiles" => {
+          let paths = resolved_args.join(" ")
+          "$(gha_hashFiles " + paths + ")"
+        }
+        "join" => {
+          let join_args = resolved_args.join(" ")
+          "$(gha_join " + join_args + ")"
+        }
+        "success" => "$(gha_success && echo true || echo false)"
+        "failure" => "$(gha_failure && echo true || echo false)"
+        "always" => "true"
+        "cancelled" => "false"
+        _ => "# " + expr
+      }
+    }
+    _ =>
+      // Not a simple function call, fallback
+      "# " + expr
+  }
+}
+
+///|
+/// Convert an AST expression node to a shell string (for function arguments)
+fn resolve_expr_node(expr : Expr) -> String {
+  match expr {
+    Literal(LitString(s)) => s
+    Literal(LitNumber(n)) => n
+    Literal(LitBool(b)) => if b { "true" } else { "false" }
+    Literal(LitNull) => ""
+    Ident(name) => expr_to_shell_var(name)
+    PropertyAccess(_, _) => {
+      let (parsed_expr, _) = parse_expression(expr.to_string())
+      ignore(parsed_expr)
+      // Reconstruct dot path and resolve
+      let path = expr_node_to_dot_path(expr)
+      if path.length() > 0 {
+        expr_to_shell_var(path)
+      } else {
+        expr.to_string()
+      }
+    }
+    FunctionCall(_, _) => resolve_function_call(expr.to_string())
+    _ => expr.to_string()
+  }
+}
+
+///|
+fn expr_node_to_dot_path(expr : Expr) -> String {
+  match expr {
+    Ident(name) => name
+    PropertyAccess(obj, prop) => {
+      let base = expr_node_to_dot_path(obj)
+      if base.length() > 0 {
+        base + "." + prop
+      } else {
+        prop
+      }
+    }
+    _ => ""
+  }
 }
 
 ///|
