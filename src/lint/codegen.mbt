@@ -161,7 +161,8 @@ fn emit_uses_step(
     emit_cache(uses, with_values, out)
   } else if uses.contains("extractions/setup-just") {
     out.push("# " + uses)
-    out.push("command -v just > /dev/null || cargo install just")
+    out.push("# command -v just > /dev/null || cargo install just")
+    out.push("# mise use -g just  # alternative: mise")
   } else if uses.has_prefix("./") {
     out.push("# local action: " + uses)
     out.push(
@@ -229,34 +230,19 @@ fn emit_setup_node(
   let version = get_with(with_values, "node-version")
   let version_file = get_with(with_values, "node-version-file")
   let registry = get_with(with_values, "registry-url")
+  out.push("# actions/setup-node — uncomment your preferred version manager:")
   if version.length() > 0 {
-    out.push("# Ensure Node.js " + version)
-    out.push(
-      "if command -v fnm > /dev/null; then fnm use " +
-      shell_quote(version) +
-      " || fnm install " +
-      shell_quote(version) +
-      "; fi",
-    )
-    out.push(
-      "if command -v nvm > /dev/null; then nvm use " +
-      shell_quote(version) +
-      " || nvm install " +
-      shell_quote(version) +
-      "; fi",
-    )
+    out.push("# Node.js " + version)
+    out.push("# mise use node@" + version)
+    out.push("# fnm use " + version + " || fnm install " + version)
+    out.push("# nvm use " + version + " || nvm install " + version)
   } else if version_file.length() > 0 {
     out.push("# Node version from " + version_file)
-    out.push(
-      "NODE_VERSION=$(cat " +
-      shell_quote(version_file) +
-      " | head -1 | tr -d 'v ')",
-    )
-    out.push("command -v fnm > /dev/null && fnm use \"$NODE_VERSION\" || true")
+    out.push("# mise use node@$(cat " + shell_quote(version_file) + " | head -1 | tr -d 'v ')")
   } else {
     out.push("# Using system Node.js")
-    out.push("node --version")
   }
+  out.push("node --version")
   if registry.length() > 0 {
     out.push("npm config set registry " + shell_quote(registry))
   }
@@ -272,18 +258,16 @@ fn emit_setup_python(
   out : Array[String],
 ) -> Unit {
   let version = get_with(with_values, "python-version")
+  out.push("# actions/setup-python — uncomment your preferred version manager:")
   if version.length() > 0 {
-    out.push("# Ensure Python " + version)
-    out.push(
-      "command -v pyenv > /dev/null && pyenv install -s " +
-      shell_quote(version) +
-      " && pyenv local " +
-      shell_quote(version) +
-      " || true",
-    )
+    out.push("# Python " + version)
+    out.push("# mise use python@" + version)
+    out.push("# uv python install " + version)
+    out.push("# pyenv install -s " + version + " && pyenv local " + version)
   } else {
-    out.push("python3 --version")
+    out.push("# Using system Python")
   }
+  out.push("python3 --version")
 }
 
 ///|
