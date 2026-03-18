@@ -2502,6 +2502,26 @@ fn parse_bool_false_default(value : String) -> Bool {
 }
 
 ///|
+/// Resolve `.` and `..` segments in an absolute path.
+fn canonicalize_abs_path(path : String) -> String {
+  let parts : Array[String] = []
+  for part_view in path.split("/") {
+    let part = part_view.to_string()
+    if part.length() == 0 || part == "." {
+      continue
+    }
+    if part == ".." {
+      if parts.length() > 0 {
+        ignore(parts.pop())
+      }
+      continue
+    }
+    parts.push(part)
+  }
+  "/" + parts.join("/")
+}
+
+///|
 /// Validate that a user-provided path stays within the workspace.
 /// Returns the resolved absolute path, or None if it escapes.
 fn validate_workspace_path(
@@ -2509,8 +2529,10 @@ fn validate_workspace_path(
   user_path : String,
 ) -> String? {
   let resolved = resolve_task_cwd(workspace_root, user_path)
-  let resolved_abs = absolute_exec_path(resolved)
-  let workspace_abs = absolute_exec_path(resolve_task_cwd(workspace_root, ""))
+  let resolved_abs = canonicalize_abs_path(absolute_exec_path(resolved))
+  let workspace_abs = canonicalize_abs_path(
+    absolute_exec_path(resolve_task_cwd(workspace_root, "")),
+  )
   if resolved_abs == workspace_abs ||
     resolved_abs.has_prefix(workspace_abs + "/") {
     Some(resolved_abs)
