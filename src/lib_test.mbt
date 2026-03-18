@@ -2693,3 +2693,54 @@ test "security: skip pattern does not match partial action names incorrectly" {
     content="false",
   )
 }
+
+///|
+test "parser: post-if !cancelled() is accepted" {
+  let src =
+    #|name: Setup Gradle
+    #|runs:
+    #|  using: node20
+    #|  main: main.js
+    #|  post: post.js
+    #|  post-if: '!cancelled()'
+  let parsed = parse_local_action_yaml(src)
+  // Only the composite restriction error, not a post-if error
+  inspect(
+    parsed.errors,
+    content="[\"only composite local actions are supported in MVP\"]",
+  )
+}
+
+///|
+test "parser: pre-if !cancelled() is accepted" {
+  let src =
+    #|name: Setup Gradle
+    #|runs:
+    #|  using: node20
+    #|  main: main.js
+    #|  pre: pre.js
+    #|  pre-if: '!cancelled()'
+  let parsed = parse_local_action_yaml(src)
+  // Only the composite restriction error, not a pre-if error
+  inspect(
+    parsed.errors,
+    content="[\"only composite local actions are supported in MVP\"]",
+  )
+}
+
+///|
+test "parser: post-if failure() is rejected" {
+  let src =
+    #|name: Setup Gradle
+    #|runs:
+    #|  using: node20
+    #|  main: main.js
+    #|  post: post.js
+    #|  post-if: failure()
+  let parsed = parse_local_action_yaml(src)
+  // Both post-if error and composite restriction error
+  inspect(
+    parsed.errors.iter().any(fn(e) { e.contains("post-if") }),
+    content="true",
+  )
+}

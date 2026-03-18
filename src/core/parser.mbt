@@ -1753,11 +1753,11 @@ fn parse_action_manifest_yaml(text : String) -> ActionManifestParseResult {
   if action_using == "docker" && image.length() == 0 {
     errors.push("runs.image is required")
   }
-  if pre_if != "always()" && pre_if != "success()" {
-    errors.push("runs.pre-if must be success() or always() in MVP")
+  if pre_if != "always()" && pre_if != "success()" && pre_if != "!cancelled()" {
+    errors.push("runs.pre-if must be success(), always(), or !cancelled() in MVP")
   }
-  if post_if != "always()" && post_if != "success()" {
-    errors.push("runs.post-if must be success() or always() in MVP")
+  if post_if != "always()" && post_if != "success()" && post_if != "!cancelled()" {
+    errors.push("runs.post-if must be success(), always(), or !cancelled() in MVP")
   }
   if errors.length() > 0 {
     { action: None, errors }
