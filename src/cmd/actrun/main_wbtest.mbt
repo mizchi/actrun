@@ -1292,6 +1292,7 @@ test "config: merge cli overrides config" {
     includes: [],
     lint_ignore_rules: [],
     lint_preset: "default",
+    include_dirty: false,
   }
   let cli = parse_cli_args(["actrun", "ci.yml", "--local", "--no-nix"])
   let options = expect_cli_options(cli)
@@ -1324,6 +1325,7 @@ test "config: cli skip_actions overrides local_skip_actions" {
     includes: [],
     lint_ignore_rules: [],
     lint_preset: "default",
+    include_dirty: false,
   }
   let cli = parse_cli_args([
     "actrun", "ci.yml", "--skip-action", "actions/setup-node",
@@ -1370,6 +1372,7 @@ test "config: container_runtime from config" {
     includes: [],
     lint_ignore_rules: [],
     lint_preset: "default",
+    include_dirty: false,
   }
   let cli = parse_cli_args(["actrun", "ci.yml"])
   let options = expect_cli_options(cli)
@@ -1391,6 +1394,7 @@ test "config: cli container_runtime overrides config" {
     includes: [],
     lint_ignore_rules: [],
     lint_preset: "default",
+    include_dirty: false,
   }
   let cli = parse_cli_args(["actrun", "ci.yml", "--container-runtime", "lima"])
   let options = expect_cli_options(cli)

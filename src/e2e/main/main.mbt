@@ -5657,6 +5657,10 @@ async fn main {
   run_shell_templates()
   println("e2e: shell-templates ok")
 
+  println("e2e: include-dirty")
+  run_include_dirty()
+  println("e2e: include-dirty ok")
+
   println("e2e: all scenarios passed")
 }
 
@@ -6050,6 +6054,49 @@ async fn run_checkout_persist_credentials() -> Unit {
   e2e_expect_contains(result.stdout, "build/verify: success", scenario)
   let cred = e2e_read_text(e2e_join_path(workspace, "artifacts/credential.txt"))
   e2e_expect_eq(cred, "none", scenario + " no credential helper")
+}
+
+///|
+#cfg(target="native")
+async fn run_include_dirty() -> Unit {
+  let scenario = "include-dirty"
+  let fixture = e2e_fixture_dir(scenario)
+  let workspace = e2e_prepare_dir("_build/e2e/workspaces", scenario)
+  e2e_copy_tree(fixture, workspace)
+  e2e_prepare_git_checkout_workspace(workspace)
+  // Add an uncommitted (dirty) file after the git commit
+  @xfs.write_string_to_file(
+    e2e_join_path(workspace, "dirty.txt"),
+    "dirty-content\n",
+  ) catch {
+    _ => abort("failed to write dirty.txt")
+  }
+  // Run with --worktree --include-dirty: dirty file should be synced
+  let result = e2e_run_cli([
+    "workflow",
+    "run",
+    e2e_join_path(workspace, "workflow.yml"),
+    "--worktree",
+    "--include-dirty",
+  ])
+  e2e_expect_ok(result, scenario + " worktree --include-dirty")
+  e2e_expect_contains(
+    result.stdout,
+    "build/check-dirty: success",
+    scenario + " dirty file found",
+  )
+  // Run with --worktree WITHOUT --include-dirty: dirty file should be absent
+  let result_no_dirty = e2e_run_cli([
+    "workflow",
+    "run",
+    e2e_join_path(workspace, "workflow.yml"),
+    "--worktree",
+  ])
+  e2e_expect_contains(
+    result_no_dirty.stdout,
+    "build/check-dirty: failure",
+    scenario + " dirty file absent without flag",
+  )
 }
 
 ///|

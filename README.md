@@ -74,6 +74,9 @@ nix_packages = ["python312", "jq"]
 # Container runtime: docker, podman, container, lima, nerdctl
 container_runtime = "docker"
 
+# Include uncommitted changes in worktree/tmp workspace
+# include_dirty = true
+
 # Override actions with local commands
 # [override."actions/setup-node"]
 # run = "echo 'using local node' && node --version"
@@ -212,6 +215,7 @@ actrun cache prune --key <key>                         # Delete cache entry
 | `--container-runtime <name>` | Container runtime: `docker`, `podman`, `container`, `lima`, `nerdctl` |
 | `--affected [base]` | Only run if files matching patterns changed (see below) |
 | `--retry` | Re-run only failed jobs from the latest run |
+| `--include-dirty` | Include uncommitted changes in worktree/tmp workspace |
 | `--json` | JSON output for read commands and `--dry-run` |
 
 ## Affected Runs

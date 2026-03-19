@@ -30,6 +30,7 @@ struct CliOptions {
   job_filter : String
   step_filter : String
   trigger : String
+  include_dirty : Bool
 }
 
 ///|
@@ -238,6 +239,7 @@ fn usage_text() -> String {
   "  --container-runtime <name>   Container runtime: docker, podman, container, lima, nerdctl\n" +
   "  --watch                      Watch for file changes and re-run automatically\n" +
   "  --affected [base]             Only run if files changed since base (default: last success; accepts rev like HEAD~3)\n" +
+  "  --include-dirty               Include uncommitted changes in worktree/tmp workspace\n" +
   "  --retry                      Re-run only failed jobs from the latest run\n" +
   "  --job <id>                   Run only the specified job\n" +
   "  --step <id>                  Run only the specified step (use with --job)\n" +
@@ -1508,6 +1510,7 @@ struct ActrunConfig {
   includes : Array[String]
   lint_ignore_rules : Array[String]
   lint_preset : String
+  include_dirty : Bool
 }
 
 ///|
@@ -1524,6 +1527,7 @@ fn default_actrun_config() -> ActrunConfig {
     includes: [],
     lint_ignore_rules: @lint.default_ignore_rules,
     lint_preset: "default",
+    include_dirty: false,
   }
 }
 
@@ -1568,6 +1572,8 @@ async fn generate_actrun_config() -> String {
   }
   config = config + "# Trust all third-party actions without prompt\n"
   config = config + "# trust_actions = true\n\n"
+  config = config + "# Include uncommitted changes in worktree/tmp workspace\n"
+  config = config + "# include_dirty = true\n\n"
   // nix
   if @xfs.path_exists("flake.nix") {
     config = config +
@@ -1677,7 +1683,7 @@ fn toml_get_table(
 ///|
 let known_config_keys : Array[String] = [
   "workspace_mode", "local_skip_actions", "trust_actions", "nix_mode", "nix_packages",
-  "container_runtime", "includes", "affected", "override", "lint",
+  "container_runtime", "includes", "affected", "override", "lint", "include_dirty",
 ]
 
 ///|
@@ -1776,6 +1782,7 @@ fn load_actrun_config(dir : String) -> ActrunConfig {
         "default"
       }
     },
+    include_dirty: toml_get_bool(table, "include_dirty"),
   }
 }
 
@@ -1839,6 +1846,11 @@ fn merge_config_into_options(
     job_filter: options.job_filter,
     step_filter: options.step_filter,
     trigger: options.trigger,
+    include_dirty: if options.include_dirty {
+      true
+    } else {
+      config.include_dirty
+    },
   }
 }
 
@@ -3034,6 +3046,7 @@ fn parse_cli_args(args : Array[String]) -> CliParseResult {
   let mut affected_base = ""
   let mut retry = false
   let mut watch = false
+  let mut include_dirty = false
   let mut job_filter = ""
   let mut step_filter = ""
   let mut trigger = ""
@@ -3078,6 +3091,11 @@ fn parse_cli_args(args : Array[String]) -> CliParseResult {
     }
     if arg == "--retry" {
       retry = true
+      index += 1
+      continue
+    }
+    if arg == "--include-dirty" {
+      include_dirty = true
       index += 1
       continue
     }
@@ -3275,6 +3293,7 @@ fn parse_cli_args(args : Array[String]) -> CliParseResult {
       job_filter,
       step_filter,
       trigger,
+      include_dirty,
     }),
     errors,
   }
@@ -5056,6 +5075,48 @@ fn copy_file(src : String, dst : String) -> Bool {
 }
 
 ///|
+async fn sync_dirty_changes(
+  source_root : String,
+  execution_root : String,
+) -> Array[String] {
+  let errors : Array[String] = []
+  // 1. tracked changes (staged + unstaged)
+  let (code, patch, _) = run_command(
+    "git",
+    ["diff", "--no-ext-diff", "HEAD"],
+    cwd=source_root,
+  )
+  if code == 0 && patch.trim(chars=" \t\r\n").length() > 0 {
+    let patch_file = execution_root + "/.actrun-dirty.patch"
+    ignore(try? @xfs.write_string_to_file(patch_file, patch))
+    let (apply_code, _, stderr) = run_command(
+      "git",
+      ["apply", "--whitespace=nowarn", patch_file],
+      cwd=execution_root,
+    )
+    ignore(try? @xfs.remove_file(patch_file))
+    if apply_code != 0 {
+      errors.push("git apply failed: " + stderr)
+    }
+  }
+  // 2. untracked files
+  let (code2, stdout2, _) = run_command(
+    "git",
+    ["ls-files", "--others", "--exclude-standard"],
+    cwd=source_root,
+  )
+  if code2 == 0 {
+    for line in stdout2.split("\n") {
+      let file = line.trim(chars=" \t\r\n").to_string()
+      if file.length() > 0 {
+        ignore(copy_file(source_root + "/" + file, execution_root + "/" + file))
+      }
+    }
+  }
+  errors
+}
+
+///|
 fn format_run_view_text(run_json_text : String) -> String? {
   let payload = @json.parse(run_json_text) catch { _ => return None }
   guard payload is Object(_) else { return None }
@@ -5765,6 +5826,18 @@ async fn handle_workflow_run_command(raw_options : CliOptions) -> Int {
       workflow_path = join_path(execution_root, options.workflow_path)
     }
     local_workspace = Some(workspace)
+    // Sync uncommitted changes if requested
+    if options.include_dirty {
+      let sync_errors = sync_dirty_changes(
+        workspace.source_root,
+        execution_root,
+      )
+      if sync_errors.length() > 0 {
+        for err in sync_errors {
+          println("warning: " + err)
+        }
+      }
+    }
   }
   let base_event = match options.event_path {
     Some(event_path) =>
@@ -6176,6 +6249,9 @@ async fn handle_workflow_run_command(raw_options : CliOptions) -> Int {
   }
 
   if options.dry_run {
+    if options.include_dirty {
+      println("include_dirty: true (uncommitted changes will be synced)")
+    }
     let lowered = @ar.lower_push_workflow_in_workspace(
       filtered_workflow, execution_root,
     )

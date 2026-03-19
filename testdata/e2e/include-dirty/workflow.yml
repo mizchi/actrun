@@ -1,0 +1,15 @@
+name: include-dirty
+'on':
+  push:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - id: check-dirty
+        run: |
+          if [ -f dirty.txt ]; then
+            echo "dirty_found=true"
+          else
+            echo "dirty_found=false"
+            exit 1
+          fi
