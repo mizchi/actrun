@@ -10,7 +10,7 @@
     "moonbit-community/yaml": "0.0.4",
     "mizchi/moomaid": "0.1.2",
     "bobzhang/toml": "0.1.8",
-    "mizchi/jq": "0.2.0"
+    "mizchi/jq": "0.2.1"
   },
   "readme": "src/README.mbt.md",
   "repository": "https://github.com/mizchi/actrun",
