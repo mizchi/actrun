@@ -709,6 +709,7 @@ async test "cli: persist run record stores task logs and summaries" {
     download_dir: run_download_dir,
     json_output: false,
     json_fields: [],
+    jq_expr: "",
     limit: 0,
     status_filter: "",
     exit_status: false,
@@ -1583,6 +1584,7 @@ test "gh-compat: handle_run_read_command view --exit-status returns 1 for failur
     download_dir: ".",
     json_output: false,
     json_fields: [],
+    jq_expr: "",
     limit: 0,
     status_filter: "",
     exit_status: true,
@@ -1604,6 +1606,7 @@ test "gh-compat: handle_run_read_command view --exit-status returns 1 for failur
     download_dir: ".",
     json_output: false,
     json_fields: [],
+    jq_expr: "",
     limit: 0,
     status_filter: "",
     exit_status: true,
@@ -1626,6 +1629,7 @@ test "gh-compat: handle_run_read_command view --exit-status returns 1 for failur
     download_dir: ".",
     json_output: false,
     json_fields: [],
+    jq_expr: "",
     limit: 0,
     status_filter: "",
     exit_status: false,
@@ -1934,6 +1938,7 @@ test "gh-compat: run delete removes run directory" {
     download_dir: ".",
     json_output: false,
     json_fields: [],
+    jq_expr: "",
     limit: 0,
     status_filter: "",
     exit_status: false,
@@ -1964,6 +1969,7 @@ test "gh-compat: run delete returns 1 for missing run" {
     download_dir: ".",
     json_output: false,
     json_fields: [],
+    jq_expr: "",
     limit: 0,
     status_filter: "",
     exit_status: false,
@@ -2027,6 +2033,77 @@ test "cli: parse workflow list with --json fields" {
     None => abort("workflow list parse failed")
   }
   inspect(options.json_fields, content="[\"name\"]")
+}
+
+///|
+test "cli: parse run view with --jq" {
+  let result = parse_run_read_args([
+    "actrun", "run", "view", "run-1", "--json", "jobs", "--jq", ".jobs[] | .name",
+  ])
+  inspect(result.errors, content="[]")
+  let options = match result.options {
+    Some(value) => value
+    None => abort("parse failed")
+  }
+  inspect(options.json_output, content="true")
+  inspect(options.json_fields, content="[\"jobs\"]")
+  inspect(options.jq_expr, content=".jobs[] | .name")
+}
+
+///|
+test "cli: parse run view with -q shorthand" {
+  let result = parse_run_read_args([
+    "actrun", "run", "view", "run-1", "-q", ".status",
+  ])
+  inspect(result.errors, content="[]")
+  let options = match result.options {
+    Some(value) => value
+    None => abort("parse failed")
+  }
+  inspect(options.json_output, content="true")
+  inspect(options.jq_expr, content=".status")
+}
+
+///|
+test "cli: apply_jq extracts field" {
+  let json = "{\"status\": \"completed\", \"conclusion\": \"success\"}"
+  let result = apply_jq(json, ".conclusion").unwrap()
+  inspect(result, content="\"success\"")
+}
+
+///|
+test "cli: apply_jq array iteration" {
+  let json = "[{\"name\": \"a\"}, {\"name\": \"b\"}]"
+  let result = apply_jq(json, ".[] | .name").unwrap()
+  inspect(result, content="\"a\"\n\"b\"")
+}
+
+///|
+test "cli: apply_jq object construction" {
+  let json = "{\"id\": \"build\", \"status\": \"completed\", \"conclusion\": \"success\"}"
+  let result = apply_jq(json, "{id: .id, conclusion: .conclusion}").unwrap()
+  inspect(
+    result.contains("\"id\"") && result.contains("\"conclusion\""),
+    content="true",
+  )
+}
+
+///|
+test "cli: apply_jq empty expr returns input" {
+  let json = "{\"x\": 1}"
+  let result = apply_jq(json, "").unwrap()
+  inspect(result, content="{\"x\": 1}")
+}
+
+///|
+test "cli: apply_json_pipeline combines fields and jq" {
+  let json = "{\"status\": \"completed\", \"conclusion\": \"success\", \"jobs\": []}"
+  let result = apply_json_pipeline(
+    json,
+    ["status", "conclusion"],
+    ".conclusion",
+  )
+  inspect(result, content="\"success\"")
 }
 
 // --- dotenv parser tests ---

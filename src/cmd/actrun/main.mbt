@@ -49,6 +49,7 @@ struct RunReadOptions {
   download_dir : String
   json_output : Bool
   json_fields : Array[String]
+  jq_expr : String
   limit : Int
   status_filter : String
   workflow_filter : String
@@ -282,6 +283,7 @@ fn usage_text() -> String {
   "\n" +
   "Output flags:\n" +
   "  --json [fields]              Output in JSON format (optionally filter by comma-separated fields)\n" +
+  "  -q, --jq <expression>        Filter JSON output using a jq expression\n" +
   "  --exit-status                Exit with non-zero status if run failed\n" +
   "  -v, --verbose                Show job steps (for view)\n" +
   "  -j, --job <id>               Filter by job ID (for view/logs)\n" +
@@ -3581,6 +3583,7 @@ fn parse_run_read_args(args : Array[String]) -> RunReadParseResult {
   let mut workflow_filter = ""
   let mut branch_filter = ""
   let mut event_filter = ""
+  let mut jq_expr = ""
   let mut exit_status = false
   let mut verbose = false
   let mut show_log = false
@@ -3632,6 +3635,8 @@ fn parse_run_read_args(args : Array[String]) -> RunReadParseResult {
       arg == "--limit" ||
       arg == "--status" ||
       arg == "--job" ||
+      arg == "--jq" ||
+      arg == "-q" ||
       arg == "--workflow" ||
       arg == "--branch" ||
       arg == "--event" ||
@@ -3659,6 +3664,9 @@ fn parse_run_read_args(args : Array[String]) -> RunReadParseResult {
         status_filter = value
       } else if arg == "--job" || arg == "-j" {
         job_id = value
+      } else if arg == "--jq" || arg == "-q" {
+        jq_expr = value
+        json_output = true
       } else if arg == "--workflow" || arg == "-w" {
         workflow_filter = value
       } else if arg == "--branch" || arg == "-b" {
@@ -3707,6 +3715,7 @@ fn parse_run_read_args(args : Array[String]) -> RunReadParseResult {
       json_output,
       json_fields,
       limit,
+      jq_expr,
       status_filter,
       exit_status,
       verbose,
@@ -6226,6 +6235,38 @@ fn filter_json_array_fields(
 }
 
 ///|
+fn apply_jq(json_text : String, jq_expr : String) -> String? {
+  if jq_expr.length() == 0 {
+    return Some(json_text)
+  }
+  let input = @json.parse(json_text) catch { _ => return None }
+  let results = @jq.run(jq_expr, input) catch { _ => return None }
+  let lines : Array[String] = []
+  for result in results {
+    lines.push(result.stringify())
+  }
+  Some(lines.join("\n"))
+}
+
+///|
+fn apply_json_pipeline(
+  json_text : String,
+  fields : Array[String],
+  jq_expr : String,
+) -> String {
+  let filtered = if fields.length() > 0 {
+    filter_json_fields(json_text, fields).unwrap_or(json_text)
+  } else {
+    json_text
+  }
+  if jq_expr.length() > 0 {
+    apply_jq(filtered, jq_expr).unwrap_or(filtered)
+  } else {
+    filtered
+  }
+}
+
+///|
 fn run_view_exit_code(run_json_text : String) -> Int {
   let payload = @json.parse(run_json_text) catch { _ => return 1 }
   guard payload is Object(_) else { return 1 }
@@ -6291,10 +6332,12 @@ async fn handle_run_watch_command(options : RunReadOptions) -> Int {
         run_state_exit_code(state)
       }
       if options.json_output {
-        match filter_json_fields(run_json_text, options.json_fields) {
-          Some(filtered) => println(filtered.trim_end(chars="\n").to_string())
-          None => println(run_json_text.trim_end(chars="\n").to_string())
-        }
+        let output = apply_json_pipeline(
+          run_json_text,
+          options.json_fields,
+          options.jq_expr,
+        )
+        println(output.trim_end(chars="\n").to_string())
         return exit_code
       }
       match
@@ -6349,7 +6392,12 @@ fn handle_run_read_command(options : RunReadOptions) -> Int {
           event_filter=options.event_filter,
         ) {
         Some(text) => {
-          println(text.trim_end(chars="\n").to_string())
+          let output = if options.jq_expr.length() > 0 {
+            apply_jq(text, options.jq_expr).unwrap_or(text)
+          } else {
+            text
+          }
+          println(output.trim_end(chars="\n").to_string())
           return 0
         }
         None => {
@@ -6432,10 +6480,12 @@ fn handle_run_read_command(options : RunReadOptions) -> Int {
       }
     }
     if options.json_output {
-      match filter_json_fields(run_json_text, options.json_fields) {
-        Some(filtered) => println(filtered.trim_end(chars="\n").to_string())
-        None => println(run_json_text.trim_end(chars="\n").to_string())
-      }
+      let output = apply_json_pipeline(
+        run_json_text,
+        options.json_fields,
+        options.jq_expr,
+      )
+      println(output.trim_end(chars="\n").to_string())
       return view_exit
     }
     match
