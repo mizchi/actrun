@@ -26,6 +26,8 @@ type DoctorCheck
 
 type DotenvParseResult
 
+type LocalContextConfig
+
 type LocalWorkspace
 
 type RunArtifactRecord

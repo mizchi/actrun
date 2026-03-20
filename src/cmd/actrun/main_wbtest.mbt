@@ -59,6 +59,40 @@ fn main_test_absolute_path(path : String) -> String {
 }
 
 ///|
+fn test_json_field(obj : Json, key : String) -> Json? {
+  if obj is Object(fields) {
+    fields.get(key)
+  } else {
+    None
+  }
+}
+
+///|
+fn test_json_string_field(obj : Json, key : String) -> String {
+  match test_json_field(obj, key) {
+    Some(String(value)) => value
+    _ => ""
+  }
+}
+
+///|
+fn test_json_bool_field(obj : Json, key : String) -> Bool {
+  match test_json_field(obj, key) {
+    Some(True) => true
+    Some(False) => false
+    _ => false
+  }
+}
+
+///|
+fn test_json_array_field(obj : Json, key : String) -> Array[Json] {
+  match test_json_field(obj, key) {
+    Some(Array(values)) => values
+    _ => []
+  }
+}
+
+///|
 test "cli: parse local workflow path" {
   let result = parse_cli_args(["actrun", ".github/workflows/ci.yml"])
   inspect(result.errors, content="[]")
@@ -143,7 +177,7 @@ test "cli: parse workflow run flags" {
     "actrun", "workflow", "run", ".github/workflows/ci.yml", "--repo", "/repo", "--workspace",
     "/tmp/work", "--run-root", "/tmp/runs", "--workspace-mode", "tmp", "--event",
     "push.json", "--repository", "mizchi/actrun", "--ref", "main", "--before", "def456",
-    "--after", "abc123", "--changed", "src/lib.mbt",
+    "--after", "abc123", "--changed", "src/lib.mbt", "--dump-context",
   ])
   inspect(result.errors, content="[]")
   let options = expect_cli_options(result)
@@ -158,6 +192,12 @@ test "cli: parse workflow run flags" {
   inspect(options.before_sha, content="def456")
   inspect(options.after_sha, content="abc123")
   inspect(options.changed_paths, content="[\"src/lib.mbt\"]")
+  inspect(options.dump_context, content="true")
+}
+
+///|
+test "cli: usage does not advertise dump-context" {
+  inspect(usage_text().contains("--dump-context"), content="false")
 }
 
 ///|
@@ -965,6 +1005,39 @@ async test "workspace: local mode uses source root directly" {
   guard ws is Some(workspace) else { abort("workspace setup failed") }
   inspect(workspace.execution_root, content="/some/path")
   inspect(workspace.cleanup_mode, content="none")
+}
+
+///|
+#cfg(target="native")
+async test "workspace: copied workflow under .github/workflows falls back to local" {
+  let repo_root = setup_workspace_test_repo("ws-mode-copied")
+  let copied_root = repo_root + "/_build-e2e/workflow-run-basic"
+  ensure_main_test_dir(repo_root + "/_build-e2e")
+  ensure_main_test_dir(copied_root)
+  ensure_main_test_dir(copied_root + "/.github")
+  ensure_main_test_dir(copied_root + "/.github/workflows")
+  @xfs.write_string_to_file(
+    copied_root + "/.github/workflows/ci.yml",
+    "name: ci\non: push\njobs: {}\n",
+  )
+  let options = expect_cli_options(
+    parse_cli_args(["actrun", copied_root + "/.github/workflows/ci.yml"]),
+  )
+  inspect(effective_workspace_mode(options), content="local")
+}
+
+///|
+#cfg(target="native")
+async test "workspace: repo root workflow keeps worktree mode" {
+  let repo_root = setup_workspace_test_repo("ws-mode-root")
+  @xfs.write_string_to_file(
+    repo_root + "/workflow.yml",
+    "name: ci\non: push\njobs: {}\n",
+  )
+  let options = expect_cli_options(
+    parse_cli_args(["actrun", repo_root + "/workflow.yml"]),
+  )
+  inspect(effective_workspace_mode(options), content="worktree")
 }
 
 ///|
@@ -2732,6 +2805,7 @@ test "config: merge cli overrides config" {
   let config : ActrunConfig = {
     workspace_mode: "worktree",
     local_skip_actions: ["actions/checkout"],
+    local_context: default_local_context_config(),
     trust_actions: true,
     nix_mode: "auto",
     nix_packages: ["python312"],
@@ -2765,6 +2839,7 @@ test "config: cli skip_actions overrides local_skip_actions" {
   let config : ActrunConfig = {
     workspace_mode: "",
     local_skip_actions: ["actions/checkout"],
+    local_context: default_local_context_config(),
     trust_actions: false,
     nix_mode: "",
     nix_packages: [],
@@ -2795,6 +2870,178 @@ test "config: default when no actrun.toml" {
   inspect(config.workspace_mode, content="")
   inspect(config.trust_actions, content="false")
   inspect(config.local_skip_actions, content="[]")
+  inspect(config.local_context.repository, content="")
+  inspect(config.local_context.ref_name, content="")
+  inspect(config.local_context.before_rev, content="")
+  inspect(config.local_context.after_rev, content="")
+  inspect(config.local_context.actor, content="")
+}
+
+///|
+test "config: local_context values loaded" {
+  ensure_main_test_dir("_build")
+  ensure_main_test_dir("_build/test-main")
+  let config_root = "_build/test-main/config-local-context"
+  remove_main_test_tree(config_root)
+  ensure_main_test_dir(config_root)
+  @xfs.write_string_to_file(
+    config_root + "/actrun.toml",
+    "[local_context]\n" +
+    "repository = \"demo/repo\"\n" +
+    "ref_name = \"feature/demo\"\n" +
+    "before_rev = \"HEAD~2\"\n" +
+    "after_rev = \"HEAD\"\n" +
+    "actor = \"local-user\"\n",
+  )
+  let config = load_actrun_config(config_root)
+  inspect(config.local_context.repository, content="demo/repo")
+  inspect(config.local_context.ref_name, content="feature/demo")
+  inspect(config.local_context.before_rev, content="HEAD~2")
+  inspect(config.local_context.after_rev, content="HEAD")
+  inspect(config.local_context.actor, content="local-user")
+}
+
+///|
+async test "local context: existing event values win over defaults" {
+  let merged = apply_local_context_defaults(
+    @ar.new_push_event(
+      "main",
+      ["README.md"],
+      before_sha="aaa111",
+      after_sha="bbb222",
+      repository="from/event",
+      actor="octocat",
+    ),
+    {
+      repository: "from/config",
+      ref_name: "feature/demo",
+      before_rev: "HEAD^",
+      after_rev: "HEAD",
+      actor: "local-user",
+    },
+    None,
+  )
+  inspect(merged.ref_name, content="main")
+  inspect(merged.before_sha, content="aaa111")
+  inspect(merged.after_sha, content="bbb222")
+  inspect(merged.repository, content="from/event")
+  inspect(merged.actor, content="octocat")
+  inspect(merged.changed_paths, content="[\"README.md\"]")
+}
+
+///|
+async test "dump context: includes resolved github env and masks secrets" {
+  let workflow_text = "name: dump\n" +
+    "on: push\n" +
+    "jobs:\n" +
+    "  build:\n" +
+    "    runs-on: ubuntu-latest\n" +
+    "    env:\n" +
+    "      FROM_VAR: ${{ vars.REGION }}\n" +
+    "      FROM_SECRET: ${{ secrets.API_TOKEN }}\n" +
+    "    steps:\n" +
+    "      - name: Show\n" +
+    "        run: echo hello\n"
+  let parsed = @ar.parse_workflow_yaml(workflow_text)
+  guard parsed.workflow is Some(workflow) else { fail("expected workflow") }
+  let lowered = @ar.lower_push_workflow_in_workspace(workflow, ".")
+  inspect(lowered.errors, content="[]")
+
+  let prev_var = main_test_set_env_var("ACTRUN_VAR_REGION", "ap-northeast-1")
+  let prev_secret = main_test_set_env_var(
+    "ACTRUN_SECRET_API_TOKEN", "secret-123",
+  )
+  let prev_gh_token = main_test_set_env_var(
+    "ACTRUN_SECRET_GITHUB_TOKEN", "gh-secret",
+  )
+  let json_text = dump_context_json(
+    workflow.name,
+    lowered.plan,
+    ".",
+    @ar.new_push_event(
+      "main",
+      ["src/lib.mbt"],
+      before_sha="def456",
+      after_sha="abc123",
+      repository="mizchi/actrun",
+      actor="octocat",
+    ),
+    {},
+  )
+  main_test_restore_env_var("ACTRUN_VAR_REGION", prev_var)
+  main_test_restore_env_var("ACTRUN_SECRET_API_TOKEN", prev_secret)
+  main_test_restore_env_var("ACTRUN_SECRET_GITHUB_TOKEN", prev_gh_token)
+
+  let payload = @json.parse(json_text)
+  inspect(test_json_string_field(payload, "workflow"), content="dump")
+  let event = test_json_field(payload, "event").unwrap_or(Json::null())
+  inspect(test_json_string_field(event, "repository"), content="mizchi/actrun")
+  inspect(test_json_string_field(event, "after_sha"), content="abc123")
+  let vars = test_json_field(payload, "vars").unwrap_or(Json::null())
+  inspect(test_json_string_field(vars, "REGION"), content="ap-northeast-1")
+  let secrets = test_json_field(payload, "secrets").unwrap_or(Json::null())
+  inspect(test_json_string_field(secrets, "API_TOKEN"), content="***")
+  inspect(test_json_string_field(secrets, "GITHUB_TOKEN"), content="***")
+  let jobs = test_json_array_field(payload, "jobs")
+  inspect(jobs.length(), content="1")
+  let job = jobs[0]
+  inspect(test_json_string_field(job, "id"), content="build")
+  let steps = test_json_array_field(job, "steps")
+  inspect(steps.length(), content="1")
+  let step = steps[0]
+  let github = test_json_field(step, "github").unwrap_or(Json::null())
+  inspect(test_json_string_field(github, "repository"), content="mizchi/actrun")
+  inspect(test_json_string_field(github, "sha"), content="abc123")
+  let env = test_json_field(step, "env").unwrap_or(Json::null())
+  inspect(test_json_string_field(env, "FROM_VAR"), content="ap-northeast-1")
+  inspect(test_json_string_field(env, "FROM_SECRET"), content="***")
+  let runner_env = test_json_field(step, "runner_env").unwrap_or(Json::null())
+  inspect(
+    test_json_string_field(runner_env, "GITHUB_REPOSITORY"),
+    content="mizchi/actrun",
+  )
+  inspect(test_json_string_field(runner_env, "GITHUB_SHA"), content="abc123")
+  inspect(test_json_string_field(runner_env, "GITHUB_TOKEN"), content="***")
+  inspect(test_json_bool_field(step, "if_result"), content="true")
+}
+
+///|
+#cfg(target="native")
+async test "local context: fills missing values from git repo" {
+  let repo_root = setup_workspace_test_repo("local-context-infer")
+  let (remote_code, _, remote_err) = @process.collect_output(
+    "git",
+    ["remote", "add", "origin", "https://github.com/mizchi/actrun.git"],
+    cwd=repo_root,
+  )
+  inspect(remote_code, content="0")
+  inspect(remote_err.text(), content="")
+  let (branch_code, _, branch_err) = @process.collect_output(
+    "git",
+    ["branch", "-M", "main"],
+    cwd=repo_root,
+  )
+  inspect(branch_code, content="0")
+  inspect(branch_err.text(), content="")
+  @xfs.write_string_to_file(repo_root + "/hello.txt", "hello\nworld\n")
+  let (commit_code, _, commit_err) = @process.collect_output(
+    "git",
+    ["commit", "-am", "update"],
+    cwd=repo_root,
+  )
+  inspect(commit_code, content="0")
+  inspect(commit_err.text(), content="")
+  let merged = apply_local_context_defaults(
+    @ar.new_push_event("", []),
+    default_local_context_config(),
+    Some(repo_root),
+  )
+  inspect(merged.repository, content="mizchi/actrun")
+  inspect(merged.ref_name, content="main")
+  inspect(merged.actor, content="test")
+  assert_true(merged.after_sha.length() >= 40)
+  assert_true(merged.before_sha.length() >= 40)
+  assert_true(merged.before_sha != merged.after_sha)
 }
 
 ///|
@@ -2812,6 +3059,7 @@ test "config: container_runtime from config" {
   let config : ActrunConfig = {
     workspace_mode: "",
     local_skip_actions: [],
+    local_context: default_local_context_config(),
     trust_actions: false,
     nix_mode: "",
     nix_packages: [],
@@ -2834,6 +3082,7 @@ test "config: cli container_runtime overrides config" {
   let config : ActrunConfig = {
     workspace_mode: "",
     local_skip_actions: [],
+    local_context: default_local_context_config(),
     trust_actions: false,
     nix_mode: "",
     nix_packages: [],

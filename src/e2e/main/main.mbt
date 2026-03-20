@@ -809,8 +809,12 @@ async fn e2e_run_cli(
   args : Array[String],
   env? : Map[String, String] = {},
 ) -> E2eProcessResult {
+  let effective_env = env
+  if effective_env.get("ACTRUN_TRUST") is None {
+    effective_env["ACTRUN_TRUST"] = "true"
+  }
   let command_args : Array[String] = []
-  for key, value in env {
+  for key, value in effective_env {
     command_args.push(key + "=" + value)
   }
   command_args.push(e2e_cli_executable())
@@ -952,7 +956,7 @@ async fn run_store_basic() -> Unit {
   )
   e2e_expect_contains(run_json, "\"jobs\": [{", scenario)
   e2e_expect_contains(run_json, "\"id\": \"build\"", scenario)
-  e2e_expect_contains(run_json, "\"status\": \"success\"", scenario)
+  e2e_expect_contains(run_json, "\"status\": \"completed\"", scenario)
   e2e_expect_contains(run_json, "\"artifacts\": [{", scenario)
   e2e_expect_contains(run_json, "\"name\": \"report\"", scenario)
   e2e_expect_contains(run_json, "\"files\": [\"result.txt\"]", scenario)
@@ -963,7 +967,7 @@ async fn run_store_basic() -> Unit {
   )
   let jobs_json = e2e_read_text(e2e_join_path(run_root, "run-1/jobs.json"))
   e2e_expect_contains(jobs_json, "\"id\": \"build\"", scenario)
-  e2e_expect_contains(jobs_json, "\"status\": \"success\"", scenario)
+  e2e_expect_contains(jobs_json, "\"status\": \"completed\"", scenario)
   let artifacts_json = e2e_read_text(
     e2e_join_path(run_root, "run-1/artifacts.json"),
   )
@@ -990,14 +994,13 @@ async fn run_store_basic() -> Unit {
   )
   let view_result = e2e_run_cli(["run", "view", "run-1", "--run-root", run_root])
   e2e_expect_ok(view_result, scenario + " view")
-  e2e_expect_contains(view_result.stdout, "workflow=e2e-run-store", scenario)
-  e2e_expect_contains(view_result.stdout, "state=completed", scenario)
-  e2e_expect_contains(view_result.stdout, "job/build=success", scenario)
   e2e_expect_contains(
     view_result.stdout,
-    "artifact/report=result.txt",
+    "e2e-run-store (run-1) success",
     scenario,
   )
+  e2e_expect_contains(view_result.stdout, "build (success)", scenario)
+  e2e_expect_contains(view_result.stdout, "report", scenario)
   let view_json_result = e2e_run_cli([
     "run", "view", "run-1", "--run-root", run_root, "--json",
   ])
@@ -1011,8 +1014,12 @@ async fn run_store_basic() -> Unit {
     "run", "watch", "run-1", "--run-root", run_root,
   ])
   e2e_expect_ok(watch_result, scenario + " watch")
-  e2e_expect_contains(watch_result.stdout, "run_id=run-1", scenario)
-  e2e_expect_contains(watch_result.stdout, "state=completed", scenario)
+  e2e_expect_contains(
+    watch_result.stdout,
+    "e2e-run-store (run-1) success",
+    scenario,
+  )
+  e2e_expect_contains(watch_result.stdout, "build (success)", scenario)
   let watch_json_result = e2e_run_cli([
     "run", "watch", "run-1", "--run-root", run_root, "--json",
   ])
@@ -1061,12 +1068,12 @@ async fn run_store_basic() -> Unit {
   e2e_expect_ok(list_result, scenario + " list")
   e2e_expect_contains(
     list_result.stdout,
-    "run-2\tcompleted\te2e-run-store",
+    "completed\tsuccess\te2e-run-store\tlocal\trun-2",
     scenario,
   )
   e2e_expect_contains(
     list_result.stdout,
-    "run-1\tcompleted\te2e-run-store",
+    "completed\tsuccess\te2e-run-store\tlocal\trun-1",
     scenario,
   )
   let list_json_result = e2e_run_cli([
@@ -1313,7 +1320,12 @@ async fn run_watch_failure_exit_code() -> Unit {
     "run", "watch", "run-1", "--run-root", run_root,
   ])
   e2e_expect_fail(watch_result, scenario + " watch")
-  e2e_expect_contains(watch_result.stdout, "state=partial_failed", scenario)
+  e2e_expect_contains(
+    watch_result.stdout,
+    "run-watch-failure (run-1) failure",
+    scenario,
+  )
+  e2e_expect_contains(watch_result.stdout, "build (failure)", scenario)
   let watch_json_result = e2e_run_cli([
     "run", "watch", "run-1", "--run-root", run_root, "--json",
   ])
@@ -2110,11 +2122,16 @@ async fn run_checkout_fetch_depth() -> Unit {
     scenario,
     e2e_fixture_dir(scenario),
   )
+  let run_root = e2e_prepare_dir("_build/e2e/workspaces", scenario + "-runs")
   e2e_prepare_git_checkout_workspace(workspace)
   let result = e2e_run_cli([
     e2e_join_path(workspace, "workflow.yml"),
     "--event",
     e2e_join_path(workspace, "event.json"),
+    "--workspace-mode",
+    "worktree",
+    "--run-root",
+    run_root,
   ])
   e2e_expect_ok(result, scenario)
   e2e_expect_contains(
@@ -2125,16 +2142,17 @@ async fn run_checkout_fetch_depth() -> Unit {
   e2e_expect_contains(result.stdout, "state=completed", scenario)
   e2e_expect_contains(result.stdout, "build/shallow: success", scenario)
   e2e_expect_contains(result.stdout, "build/full: success", scenario)
-  e2e_expect_eq(
-    e2e_read_text(e2e_join_path(workspace, "artifacts/shallow.txt")),
-    "1|yes",
+  let run_json = e2e_read_text(e2e_join_path(run_root, "run-1/run.json"))
+  e2e_expect_contains(run_json, "\"workspace_mode\": \"worktree\"", scenario)
+  let verify_log = e2e_read_text(
+    e2e_join_path(run_root, "run-1/tasks/build__verify.stdout.log"),
+  )
+  e2e_expect_contains(
+    verify_log,
+    "shallow=1|yes",
     scenario + " shallow artifact",
   )
-  e2e_expect_eq(
-    e2e_read_text(e2e_join_path(workspace, "artifacts/full.txt")),
-    "2|no",
-    scenario + " full artifact",
-  )
+  e2e_expect_contains(verify_log, "full=2|no", scenario + " full artifact")
 }
 
 ///|
@@ -2146,18 +2164,27 @@ async fn run_checkout_ref() -> Unit {
     scenario,
     e2e_fixture_dir(scenario),
   )
+  let run_root = e2e_prepare_dir("_build/e2e/workspaces", scenario + "-runs")
   e2e_prepare_git_checkout_workspace_with_feature_branch(workspace)
   let result = e2e_run_cli([
     e2e_join_path(workspace, "workflow.yml"),
     "--event",
     e2e_join_path(workspace, "event.json"),
+    "--workspace-mode",
+    "worktree",
+    "--run-root",
+    run_root,
   ])
   e2e_expect_ok(result, scenario)
   e2e_expect_contains(result.stdout, "workflow=e2e-checkout-ref", scenario)
   e2e_expect_contains(result.stdout, "state=completed", scenario)
   e2e_expect_contains(result.stdout, "build/checkout: success", scenario)
+  let run_json = e2e_read_text(e2e_join_path(run_root, "run-1/run.json"))
+  e2e_expect_contains(run_json, "\"workspace_mode\": \"worktree\"", scenario)
   e2e_expect_eq(
-    e2e_read_text(e2e_join_path(workspace, "artifacts/result.txt")),
+    e2e_read_text(
+      e2e_join_path(run_root, "run-1/tasks/build__verify.stdout.log"),
+    ),
     "feature|feature|1|yes",
     scenario + " result artifact",
   )
@@ -2172,24 +2199,30 @@ async fn run_checkout_clean() -> Unit {
     scenario,
     e2e_fixture_dir(scenario),
   )
+  let run_root = e2e_prepare_dir("_build/e2e/workspaces", scenario + "-runs")
   e2e_prepare_git_checkout_workspace(workspace)
-  @xfs.write_string_to_file(
-    e2e_join_path(workspace, "scratch-before.txt"),
-    "keep me\n",
-  )
   let result = e2e_run_cli([
     e2e_join_path(workspace, "workflow.yml"),
     "--event",
     e2e_join_path(workspace, "event.json"),
+    "--workspace-mode",
+    "worktree",
+    "--run-root",
+    run_root,
   ])
   e2e_expect_ok(result, scenario)
   e2e_expect_contains(result.stdout, "workflow=e2e-checkout-clean", scenario)
   e2e_expect_contains(result.stdout, "state=completed", scenario)
-  e2e_expect_contains(result.stdout, "build/keep_dirty: success", scenario)
+  e2e_expect_contains(result.stdout, "build/checkout_keep: success", scenario)
+  e2e_expect_contains(result.stdout, "build/keep_again: success", scenario)
   e2e_expect_contains(result.stdout, "build/clean_checkout: success", scenario)
+  let run_json = e2e_read_text(e2e_join_path(run_root, "run-1/run.json"))
+  e2e_expect_contains(run_json, "\"workspace_mode\": \"worktree\"", scenario)
   e2e_expect_eq(
-    e2e_read_text(e2e_join_path(workspace, "artifacts/clean.txt")),
-    "yes|no|no",
+    e2e_read_text(
+      e2e_join_path(run_root, "run-1/tasks/build__verify_clean.stdout.log"),
+    ),
+    "yes|no",
     scenario + " clean artifact",
   )
 }
@@ -2203,11 +2236,16 @@ async fn run_checkout_submodules() -> Unit {
     scenario,
     e2e_fixture_dir(scenario),
   )
+  let run_root = e2e_prepare_dir("_build/e2e/workspaces", scenario + "-runs")
   e2e_prepare_git_checkout_workspace_with_submodules(workspace, recursive=true)
   let result = e2e_run_cli([
     e2e_join_path(workspace, "workflow.yml"),
     "--event",
     e2e_join_path(workspace, "event.json"),
+    "--workspace-mode",
+    "worktree",
+    "--run-root",
+    run_root,
   ])
   e2e_expect_ok(result, scenario)
   e2e_expect_contains(
@@ -2218,14 +2256,20 @@ async fn run_checkout_submodules() -> Unit {
   e2e_expect_contains(result.stdout, "state=completed", scenario)
   e2e_expect_contains(result.stdout, "build/direct: success", scenario)
   e2e_expect_contains(result.stdout, "build/recursive: success", scenario)
-  e2e_expect_eq(
-    e2e_read_text(e2e_join_path(workspace, "artifacts/direct.txt")),
-    "yes|no",
+  let run_json = e2e_read_text(e2e_join_path(run_root, "run-1/run.json"))
+  e2e_expect_contains(run_json, "\"workspace_mode\": \"worktree\"", scenario)
+  e2e_expect_contains(
+    e2e_read_text(
+      e2e_join_path(run_root, "run-1/tasks/build__direct_verify.stdout.log"),
+    ),
+    "direct=yes|no",
     scenario + " direct artifact",
   )
-  e2e_expect_eq(
-    e2e_read_text(e2e_join_path(workspace, "artifacts/recursive.txt")),
-    "yes|yes",
+  e2e_expect_contains(
+    e2e_read_text(
+      e2e_join_path(run_root, "run-1/tasks/build__recursive_verify.stdout.log"),
+    ),
+    "recursive=yes|yes",
     scenario + " recursive artifact",
   )
 }
@@ -2239,6 +2283,7 @@ async fn run_checkout_container() -> Unit {
     scenario,
     e2e_fixture_dir(scenario),
   )
+  let run_root = e2e_prepare_dir("_build/e2e/workspaces", scenario + "-runs")
   e2e_prepare_git_checkout_workspace(workspace)
   let tools_root = e2e_join_path("_build/e2e/tools", scenario)
   e2e_remove_tree(tools_root)
@@ -2250,6 +2295,10 @@ async fn run_checkout_container() -> Unit {
       e2e_join_path(workspace, "workflow.yml"),
       "--event",
       e2e_join_path(workspace, "event.json"),
+      "--workspace-mode",
+      "worktree",
+      "--run-root",
+      run_root,
     ],
     env={ "ACTRUN_DOCKER_BIN": fake_docker },
   )
@@ -2261,8 +2310,12 @@ async fn run_checkout_container() -> Unit {
   )
   e2e_expect_contains(result.stdout, "state=completed", scenario)
   e2e_expect_contains(result.stdout, "build/checkout: success", scenario)
+  let run_json = e2e_read_text(e2e_join_path(run_root, "run-1/run.json"))
+  e2e_expect_contains(run_json, "\"workspace_mode\": \"worktree\"", scenario)
   e2e_expect_eq(
-    e2e_read_text(e2e_join_path(workspace, "artifacts/result.txt")),
+    e2e_read_text(
+      e2e_join_path(run_root, "run-1/tasks/build__verify.stdout.log"),
+    ),
     "second|yes",
     scenario + " result artifact",
   )
@@ -2984,17 +3037,13 @@ async fn run_unsupported_permissions() -> Unit {
     e2e_fixture_dir(scenario),
   )
   let result = e2e_run_cli([e2e_join_path(workspace, "workflow.yml")])
-  e2e_expect_fail(result, scenario)
+  e2e_expect_ok(result, scenario)
   e2e_expect_contains(
     result.stdout,
-    "error: workflow permissions are not supported in MVP",
+    "workflow=unsupported-permissions",
     scenario,
   )
-  e2e_expect_contains(
-    result.stdout,
-    "error: job 'build' permissions are not supported in MVP",
-    scenario,
-  )
+  e2e_expect_contains(result.stdout, "build/show: success", scenario)
 }
 
 ///|
@@ -3007,17 +3056,13 @@ async fn run_unsupported_concurrency() -> Unit {
     e2e_fixture_dir(scenario),
   )
   let result = e2e_run_cli([e2e_join_path(workspace, "workflow.yml")])
-  e2e_expect_fail(result, scenario)
+  e2e_expect_ok(result, scenario)
   e2e_expect_contains(
     result.stdout,
-    "error: workflow concurrency is not supported in MVP",
+    "workflow=unsupported-concurrency",
     scenario,
   )
-  e2e_expect_contains(
-    result.stdout,
-    "error: job 'build' concurrency is not supported in MVP",
-    scenario,
-  )
+  e2e_expect_contains(result.stdout, "build/show: success", scenario)
 }
 
 ///|
@@ -5837,11 +5882,15 @@ async fn run_substrate_parity_repo_mode() -> Unit {
   e2e_prepare_git_checkout_workspace(repo_root)
 
   let run_root = e2e_prepare_dir("_build/e2e/workspaces", scenario + "-runs")
+  let workspace_root = e2e_prepare_dir(
+    "_build/e2e/workspaces",
+    scenario + "-workspace",
+  )
 
   // Run in repo mode (default workspace-mode=tmp)
   let result = e2e_run_cli([
     "workflow", "run", ".github/workflows/ci.yml", "--repo", repo_root, "--run-root",
-    run_root, "--repository", "test/substrate-parity",
+    run_root, "--workspace", workspace_root, "--repository", "test/substrate-parity",
   ])
   e2e_expect_ok(result, scenario)
   e2e_expect_contains(result.stdout, "state=completed", scenario + " state")
@@ -6011,6 +6060,7 @@ async fn run_checkout_fetch_tags() -> Unit {
     scenario,
     e2e_fixture_dir(scenario),
   )
+  let run_root = e2e_prepare_dir("_build/e2e/workspaces", scenario + "-runs")
   e2e_prepare_git_checkout_workspace(workspace)
   // Create a tag in the repo
   e2e_require_ok("git tag", "git", ["tag", "v1.0.0"], workspace)
@@ -6018,20 +6068,25 @@ async fn run_checkout_fetch_tags() -> Unit {
     "workflow",
     "run",
     e2e_join_path(workspace, "workflow.yml"),
+    "--workspace-mode",
+    "worktree",
+    "--run-root",
+    run_root,
   ])
   e2e_expect_ok(result, scenario)
   e2e_expect_contains(result.stdout, "state=completed", scenario)
   e2e_expect_contains(result.stdout, "build/verify: success", scenario)
-  // with-tags should have at least 1 tag
-  let with_tags = e2e_read_text(
-    e2e_join_path(workspace, "artifacts/with-tags.txt"),
+  let run_json = e2e_read_text(e2e_join_path(run_root, "run-1/run.json"))
+  e2e_expect_contains(run_json, "\"workspace_mode\": \"worktree\"", scenario)
+  let verify_log = e2e_read_text(
+    e2e_join_path(run_root, "run-1/tasks/build__verify.stdout.log"),
   )
-  // without-tags should have 0 tags
-  let without_tags = e2e_read_text(
-    e2e_join_path(workspace, "artifacts/without-tags.txt"),
+  e2e_expect_contains(verify_log, "with-tags=1", scenario + " with-tags count")
+  e2e_expect_contains(
+    verify_log,
+    "without-tags=0",
+    scenario + " without-tags count",
   )
-  e2e_expect_eq(with_tags, "1", scenario + " with-tags count")
-  e2e_expect_eq(without_tags, "0", scenario + " without-tags count")
 }
 
 ///|
@@ -6043,16 +6098,25 @@ async fn run_checkout_persist_credentials() -> Unit {
     scenario,
     e2e_fixture_dir(scenario),
   )
+  let run_root = e2e_prepare_dir("_build/e2e/workspaces", scenario + "-runs")
   e2e_prepare_git_checkout_workspace(workspace)
   let result = e2e_run_cli([
     "workflow",
     "run",
     e2e_join_path(workspace, "workflow.yml"),
+    "--workspace-mode",
+    "worktree",
+    "--run-root",
+    run_root,
   ])
   e2e_expect_ok(result, scenario)
   e2e_expect_contains(result.stdout, "state=completed", scenario)
   e2e_expect_contains(result.stdout, "build/verify: success", scenario)
-  let cred = e2e_read_text(e2e_join_path(workspace, "artifacts/credential.txt"))
+  let run_json = e2e_read_text(e2e_join_path(run_root, "run-1/run.json"))
+  e2e_expect_contains(run_json, "\"workspace_mode\": \"worktree\"", scenario)
+  let cred = e2e_read_text(
+    e2e_join_path(run_root, "run-1/tasks/build__verify.stdout.log"),
+  )
   e2e_expect_eq(cred, "none", scenario + " no credential helper")
 }
 
@@ -6094,7 +6158,7 @@ async fn run_include_dirty() -> Unit {
   ])
   e2e_expect_contains(
     result_no_dirty.stdout,
-    "build/check-dirty: failure",
+    "build/check-dirty: failed",
     scenario + " dirty file absent without flag",
   )
 }

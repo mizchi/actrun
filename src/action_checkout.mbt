@@ -334,6 +334,27 @@ fn exec_overwrite_from_clone(src : String, dst : String) -> Bool {
 }
 
 ///|
+fn exec_remove_checkout_contents_preserving_git(root : String) -> Bool {
+  if not(ensure_exec_dir_recursive(root)) {
+    return false
+  }
+  let entries = try @xfs.read_dir(root) catch {
+    _ => []
+  } noraise {
+    value => value
+  }
+  for entry in entries {
+    if entry == ".git" {
+      continue
+    }
+    if not(exec_remove_tree(root + "/" + entry)) {
+      return false
+    }
+  }
+  true
+}
+
+///|
 async fn exec_git_clone_checkout(
   plan : TaskPlan,
   workspace_root : String,
@@ -341,6 +362,8 @@ async fn exec_git_clone_checkout(
   checkout_root : String,
   fetch_depth : Int,
   resolved_plan_env : Map[String, String],
+  clean? : Bool = true,
+  allow_destructive_clean? : Bool = false,
   fetch_tags? : Bool = true,
   show_progress? : Bool = false,
   persist_credentials? : Bool = true,
@@ -553,7 +576,9 @@ async fn exec_git_clone_checkout(
       )
     }
   }
-  if checkout_root == source_root {
+  let preserve_local_files = checkout_root == source_root &&
+    not(allow_destructive_clean)
+  if preserve_local_files {
     // Local mode: never delete any files — only overwrite with new content.
     // This prevents accidental data loss when running in the user's working directory.
     if not(exec_overwrite_from_clone(temp_root, checkout_root)) {
@@ -564,6 +589,30 @@ async fn exec_git_clone_checkout(
       )
     }
     return None
+  }
+  if checkout_root == source_root {
+    if clean && not(exec_remove_checkout_contents_preserving_git(checkout_root)) {
+      return Some(
+        task_report_failure(
+          plan, workspace_root, "failed to clean checkout contents",
+        ),
+      )
+    }
+    if not(exec_overwrite_from_clone(temp_root, checkout_root)) {
+      return Some(
+        task_report_failure(
+          plan, workspace_root, "failed to materialize checkout contents",
+        ),
+      )
+    }
+    return None
+  }
+  if clean && not(exec_remove_tree(checkout_root)) {
+    return Some(
+      task_report_failure(
+        plan, workspace_root, "failed to clean checkout contents",
+      ),
+    )
   }
   if not(exec_copy_dir_contents(temp_root, checkout_root)) {
     return Some(
@@ -581,6 +630,7 @@ async fn execute_builtin_checkout_native(
   plan : TaskPlan,
   workspace_root : String,
   resolved_plan_env : Map[String, String],
+  allow_destructive_clean? : Bool = false,
 ) -> TaskRunReport {
   if action.kind != "checkout" {
     return task_report_failure(
@@ -608,6 +658,9 @@ async fn execute_builtin_checkout_native(
   )
   let fetch_tags = parse_bool_true_default(
     resolved_plan_env.get("INPUT_FETCH_TAGS").unwrap_or("false"),
+  )
+  let clean = parse_bool_true_default(
+    resolved_plan_env.get("INPUT_CLEAN").unwrap_or("true"),
   )
   let show_progress = parse_bool_true_default(
     resolved_plan_env.get("INPUT_SHOW_PROGRESS").unwrap_or("true"),
@@ -659,6 +712,8 @@ async fn execute_builtin_checkout_native(
         checkout_root,
         fetch_depth,
         resolved_plan_env,
+        clean~,
+        allow_destructive_clean~,
         fetch_tags~,
         show_progress~,
         persist_credentials~,

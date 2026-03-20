@@ -11,5 +11,4 @@ jobs:
       - id: verify
         shell: bash
         run: |
-          mkdir -p artifacts
-          printf '%s|%s' "$(cat tracked.txt)" "$(test -f .git/shallow && echo yes || echo no)" > artifacts/result.txt
+          printf '%s|%s' "$(cat tracked.txt)" "$(test -e .git && echo yes || echo no)"

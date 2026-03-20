@@ -17,7 +17,9 @@ pub fn compute_bit_changed_paths(&@types.RepoFileSystem, String, PushEvent) -> B
 
 pub fn compute_bit_changed_paths_native(String, PushEvent) -> BitChangedPathsResult
 
-pub async fn execute_lowered_native(LoweringResult, workspace_root? : String, push_event? : PushEvent?, event_name? : String, dispatch_inputs? : Map[String, String], nix_mode? : String, nix_packages? : Array[String]) -> WorkflowRunReport
+pub async fn dump_workflow_context_json(String, ExecutionPlan, String, PushEvent, dispatch_inputs? : Map[String, String], event_name? : String) -> String
+
+pub async fn execute_lowered_native(LoweringResult, workspace_root? : String, push_event? : PushEvent?, event_name? : String, dispatch_inputs? : Map[String, String], nix_mode? : String, nix_packages? : Array[String], allow_destructive_checkout_clean? : Bool) -> WorkflowRunReport
 
 pub fn extract_add_mask_values(WorkflowRunReport) -> Array[String]
 

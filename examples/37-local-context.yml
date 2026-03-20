@@ -1,0 +1,25 @@
+name: local-context
+'on': push
+
+# When you need deterministic local GitHub context values, add actrun.toml:
+#
+# [local_context]
+# repository = "owner/repo"
+# ref_name = "feature/local-demo"
+# before_rev = "HEAD^"
+# after_rev = "HEAD"
+# actor = "your-name"
+#
+# Then run:
+#   actrun workflow run examples/37-local-context.yml
+
+jobs:
+  show:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Print github context and matching env vars
+        run: |
+          printf '%s\n' "repository=${{ github.repository }}|$GITHUB_REPOSITORY"
+          printf '%s\n' "ref_name=${{ github.ref_name }}|$GITHUB_REF_NAME"
+          printf '%s\n' "actor=${{ github.actor }}|$GITHUB_ACTOR"
+          printf '%s\n' "sha=${{ github.sha }}|$GITHUB_SHA"

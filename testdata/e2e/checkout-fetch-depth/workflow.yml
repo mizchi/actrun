@@ -16,6 +16,5 @@ jobs:
       - id: verify
         shell: bash
         run: |
-          mkdir -p artifacts
-          printf '%s|%s' "$(git -C shallow rev-list --count HEAD)" "$(test -f shallow/.git/shallow && echo yes || echo no)" > artifacts/shallow.txt
-          printf '%s|%s' "$(git -C full rev-list --count HEAD)" "$(test -f full/.git/shallow && echo yes || echo no)" > artifacts/full.txt
+          printf 'shallow=%s|%s\n' "$(git -C shallow rev-list --count HEAD)" "$(test -f shallow/.git/shallow && echo yes || echo no)"
+          printf 'full=%s|%s' "$(git -C full rev-list --count HEAD)" "$(test -f full/.git/shallow && echo yes || echo no)"

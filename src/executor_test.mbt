@@ -1211,6 +1211,102 @@ async test "executor: checkout clean false preserves untracked files" {
 
 ///|
 #cfg(target="native")
+async test "executor: isolated checkout clean default deletes files created between checkouts" {
+  let workspace = prepare_git_checkout_workspace(
+    "executor-checkout-clean-default-isolated",
+  )
+
+  let workflow = new_workflow("ci", [
+    new_job(
+      "build",
+      [
+        new_uses_step("checkout1", "actions/checkout@v4", with_values={
+          "clean": "false",
+        }),
+        new_run_step(
+          "create",
+          "printf '%s' 'remove-me' > scratch.txt",
+          shell=Some("bash"),
+        ),
+        new_uses_step("checkout2", "actions/checkout@v4"),
+        new_run_step(
+          "verify",
+          "printf '%s' \"$(test -f scratch.txt && echo survived || echo deleted)\"",
+          shell=Some("bash"),
+        ),
+      ],
+      defaults=new_run_defaults(shell=Some("bash")),
+    ),
+  ])
+
+  let lowered = lower_push_workflow(workflow)
+  inspect(lowered.errors, content="[]")
+
+  let report = execute_lowered_native(
+    lowered,
+    workspace_root=workspace,
+    allow_destructive_checkout_clean=true,
+  )
+  inspect(report.ok, content="true")
+  inspect(report.state, content="completed")
+  inspect(
+    expect_task_report(report, "build/verify").stdout
+    .trim(chars=" \n\r\t")
+    .to_string(),
+    content="deleted",
+  )
+}
+
+///|
+#cfg(target="native")
+async test "executor: isolated checkout clean false preserves files between checkouts" {
+  let workspace = prepare_git_checkout_workspace(
+    "executor-checkout-clean-false-isolated",
+  )
+
+  let workflow = new_workflow("ci", [
+    new_job(
+      "build",
+      [
+        new_uses_step("checkout1", "actions/checkout@v4"),
+        new_run_step(
+          "create",
+          "printf '%s' 'keep-me' > scratch.txt",
+          shell=Some("bash"),
+        ),
+        new_uses_step("checkout2", "actions/checkout@v4", with_values={
+          "clean": "false",
+        }),
+        new_run_step(
+          "verify",
+          "printf '%s' \"$(test -f scratch.txt && echo survived || echo deleted)\"",
+          shell=Some("bash"),
+        ),
+      ],
+      defaults=new_run_defaults(shell=Some("bash")),
+    ),
+  ])
+
+  let lowered = lower_push_workflow(workflow)
+  inspect(lowered.errors, content="[]")
+
+  let report = execute_lowered_native(
+    lowered,
+    workspace_root=workspace,
+    allow_destructive_checkout_clean=true,
+  )
+  inspect(report.ok, content="true")
+  inspect(report.state, content="completed")
+  inspect(
+    expect_task_report(report, "build/verify").stdout
+    .trim(chars=" \n\r\t")
+    .to_string(),
+    content="survived",
+  )
+}
+
+///|
+#cfg(target="native")
 async test "executor: checkout materialized on host is visible to job container run step" {
   let workspace = prepare_git_checkout_workspace(
     "executor-checkout-job-container",

@@ -177,6 +177,21 @@ nix_mode = ""   # auto-detect flake.nix
 
 The workflow's `actions/setup-node@v4` is skipped, and the `run:` steps execute inside `nix develop` where `node` is provided by the flake.
 
+## Local GitHub Context
+
+When `--event` is omitted, actrun first tries to infer common GitHub context values from the local git repository. If you need stable local values, add `[local_context]` to `actrun.toml`:
+
+```toml
+[local_context]
+repository = "owner/repo"
+ref_name = "feature/local-demo"
+before_rev = "HEAD^"
+after_rev = "HEAD"
+actor = "your-name"
+```
+
+This fills missing values for `github.repository`, `github.ref_name`, `github.sha`, `github.actor`, and the matching `GITHUB_*` variables. For precedence details and a runnable example, see [Local GitHub Context](local-context.md).
+
 ## Full actrun.toml Example
 
 ```toml
@@ -192,6 +207,14 @@ local_skip_actions = [
 
 # Trust third-party actions
 trust_actions = true
+
+# Optional local GitHub context override
+# [local_context]
+# repository = "owner/repo"
+# ref_name = "main"
+# before_rev = "HEAD^"
+# after_rev = "HEAD"
+# actor = "your-name"
 
 # Nix (auto-detected from flake.nix)
 # nix_mode = ""

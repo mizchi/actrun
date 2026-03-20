@@ -527,13 +527,10 @@ fn find_exec_substring(text : String, pattern : String, start : Int) -> Int? {
 }
 
 ///|
-fn prepare_step_file_commands(
+fn planned_step_file_commands(
   task_id : String,
   workspace_root : String,
-) -> StepFileCommands? {
-  guard ensure_exec_dir("_build") else { return None }
-  guard ensure_exec_dir("_build/actrun") else { return None }
-  guard ensure_exec_dir("_build/actrun/file_commands") else { return None }
+) -> StepFileCommands {
   let workspace_key = sanitize_task_id(
     absolute_exec_path(resolve_task_cwd(workspace_root, "")),
   )
@@ -543,26 +540,32 @@ fn prepare_step_file_commands(
     "__" +
     sanitize_task_id(task_id),
   )
-  let env_path = prefix + ".env"
-  let path_path = prefix + ".path"
-  let output_path = prefix + ".output"
-  let summary_path = prefix + ".summary"
-  let state_path = prefix + ".state"
-  let script_path = prefix + ".script"
-  guard write_exec_text(env_path, "") else { return None }
-  guard write_exec_text(path_path, "") else { return None }
-  guard write_exec_text(output_path, "") else { return None }
-  guard write_exec_text(summary_path, "") else { return None }
-  guard write_exec_text(state_path, "") else { return None }
-  guard write_exec_text(script_path, "") else { return None }
-  Some({
-    env_path,
-    path_path,
-    output_path,
-    summary_path,
-    state_path,
-    script_path,
-  })
+  {
+    env_path: prefix + ".env",
+    path_path: prefix + ".path",
+    output_path: prefix + ".output",
+    summary_path: prefix + ".summary",
+    state_path: prefix + ".state",
+    script_path: prefix + ".script",
+  }
+}
+
+///|
+fn prepare_step_file_commands(
+  task_id : String,
+  workspace_root : String,
+) -> StepFileCommands? {
+  guard ensure_exec_dir("_build") else { return None }
+  guard ensure_exec_dir("_build/actrun") else { return None }
+  guard ensure_exec_dir("_build/actrun/file_commands") else { return None }
+  let commands = planned_step_file_commands(task_id, workspace_root)
+  guard write_exec_text(commands.env_path, "") else { return None }
+  guard write_exec_text(commands.path_path, "") else { return None }
+  guard write_exec_text(commands.output_path, "") else { return None }
+  guard write_exec_text(commands.summary_path, "") else { return None }
+  guard write_exec_text(commands.state_path, "") else { return None }
+  guard write_exec_text(commands.script_path, "") else { return None }
+  Some(commands)
 }
 
 ///|
@@ -1119,6 +1122,27 @@ fn runner_secrets_context() -> Map[String, String] {
     }
   }
   values
+}
+
+///|
+fn json_string_map(values : Map[String, String]) -> Json {
+  let json_values : Map[String, Json] = {}
+  for key, value in values {
+    json_values[key] = Json::string(value)
+  }
+  Json::object(json_values)
+}
+
+///|
+fn mask_string_map(
+  values : Map[String, String],
+  secret_values : Array[String],
+) -> Map[String, String] {
+  let masked : Map[String, String] = {}
+  for key, value in values {
+    masked[key] = mask_secrets(value, secret_values)
+  }
+  masked
 }
 
 ///|
@@ -3209,6 +3233,7 @@ async fn execute_action_plan_native(
   push_event : PushEvent?,
   job_containers : Map[String, JobContainerSpec],
   job_services : Map[String, Map[String, JobContainerSpec]],
+  allow_destructive_checkout_clean : Bool,
 ) -> TaskExecutionResult {
   guard plan.action is Some(action) else {
     return failure_execution_result(
@@ -3246,7 +3271,11 @@ async fn execute_action_plan_native(
     if action.kind == "checkout" {
       return builtin_task_result(
         execute_builtin_checkout_native(
-          action, plan, workspace_root, merged_plan_env,
+          action,
+          plan,
+          workspace_root,
+          merged_plan_env,
+          allow_destructive_clean=allow_destructive_checkout_clean,
         ),
       )
     }
@@ -3418,6 +3447,214 @@ fn default_runner_env(
 }
 
 ///|
+fn push_event_json(push_event : PushEvent, event_name : String) -> Json {
+  let fields : Map[String, Json] = {
+    "event_name": Json::string(event_name),
+    "ref_name": Json::string(push_event.ref_name),
+    "before_sha": Json::string(push_event.before_sha),
+    "after_sha": Json::string(push_event.after_sha),
+    "repository": Json::string(push_event.repository),
+    "actor": Json::string(push_event.actor),
+    "changed_paths": Json::array(
+      push_event.changed_paths.map(fn(path) { Json::string(path) }),
+    ),
+  }
+  Json::object(fields)
+}
+
+///|
+async fn dump_plan_step_context_json(
+  workflow_name : String,
+  plan : TaskPlan,
+  execution_plan : ExecutionPlan,
+  workspace_root : String,
+  push_event : PushEvent,
+  dispatch_inputs : Map[String, String],
+  event_name : String,
+  secret_values : Array[String],
+) -> Json {
+  let state = empty_job_runtime_state()
+  let needs_outputs = job_needs_outputs(execution_plan, plan.job_id, {})
+  let needs_results = job_needs_results(execution_plan, plan.job_id, {})
+  let github_ctx = github_context(
+    workflow_name,
+    plan,
+    workspace_root,
+    Some(push_event),
+    event_name~,
+  )
+  let runner_ctx = runner_context(plan, workspace_root)
+  let job_ctx = plan_job_context(execution_plan.job_services, plan.job_id)
+  let resolved_env = resolve_plan_env(
+    plan, state, workspace_root, job_ctx, github_ctx, runner_ctx, needs_outputs,
+    needs_results,
+  )
+  let resolved_script = substitute_runtime_text(
+    plan.script,
+    state,
+    workspace_root,
+    resolved_env,
+    job_ctx,
+    github_ctx,
+    runner_ctx,
+    needs_outputs,
+    needs_results,
+    dispatch_inputs~,
+  )
+  let resolved_working_directory = substitute_runtime_optional(
+    Some(plan.working_directory),
+    state,
+    workspace_root,
+    resolved_env,
+    job_ctx,
+    github_ctx,
+    runner_ctx,
+    needs_outputs,
+    needs_results,
+    dispatch_inputs~,
+  ).unwrap_or(plan.working_directory)
+  let file_commands = planned_step_file_commands(plan.id, workspace_root)
+  let step_if_env = merge_runner_env(plan.env, state.env_updates)
+  step_if_env["ACTRUN_LOCAL"] = "true"
+  let if_result = evaluate_if_condition(
+    plan.if_condition,
+    new_if_condition_context(
+      step_outputs=state.step_outputs,
+      step_outcomes=state.step_outcomes,
+      step_conclusions=state.step_conclusions,
+      workspace_root~,
+      env_context=step_if_env,
+      job_context=job_ctx,
+      vars_context=runner_vars_context(),
+      github_context=github_ctx,
+      runner_context=runner_ctx,
+      needs_outputs~,
+      needs_results~,
+      success_value=step_if_success_value(state),
+      failure_value=step_if_failure_value(state),
+      cancelled_value=step_if_cancelled_value(state),
+    ),
+  )
+  let runner_env = default_runner_env(
+    workflow_name, plan, workspace_root, github_ctx, resolved_env, file_commands,
+    runner_ctx,
+  )
+  let fields : Map[String, Json] = {
+    "id": Json::string(plan.id),
+    "step_id": Json::string(plan.step_id),
+    "kind": Json::string(plan.kind),
+    "name": Json::string(plan.name),
+    "if": Json::string(plan.if_condition),
+    "if_result": Json::boolean(if_result),
+    "script": Json::string(mask_secrets(resolved_script, secret_values)),
+    "working_directory": Json::string(
+      mask_secrets(resolved_working_directory, secret_values),
+    ),
+    "github": json_string_map(mask_string_map(github_ctx, secret_values)),
+    "runner": json_string_map(mask_string_map(runner_ctx, secret_values)),
+    "env": json_string_map(mask_string_map(resolved_env, secret_values)),
+    "runner_env": json_string_map(mask_string_map(runner_env, secret_values)),
+  }
+  Json::object(fields)
+}
+
+///|
+pub async fn dump_workflow_context_json(
+  workflow_name : String,
+  plan : ExecutionPlan,
+  workspace_root : String,
+  push_event : PushEvent,
+  dispatch_inputs? : Map[String, String] = {},
+  event_name? : String = "push",
+) -> String {
+  let vars_ctx = runner_vars_context()
+  let secrets_ctx = runner_secrets_context()
+  let secret_values = collect_secret_values()
+  let jobs : Array[Json] = []
+  let job_order : Array[String] = []
+  let job_tasks : Map[String, Array[TaskPlan]] = {}
+  for task in plan.tasks {
+    if job_tasks.get(task.job_id) is None {
+      job_tasks[task.job_id] = []
+      job_order.push(task.job_id)
+    }
+    if task.kind != "barrier" {
+      job_tasks.get(task.job_id).unwrap().push(task)
+    }
+  }
+  for job_id in job_order {
+    let tasks = job_tasks.get(job_id).unwrap_or([])
+    let job_if = plan.job_if_conditions.get(job_id).unwrap_or("success()")
+    let needs_outputs = job_needs_outputs(plan, job_id, {})
+    let needs_results = job_needs_results(plan, job_id, {})
+    let job_if_result = match tasks.get(0) {
+      Some(first_task) => {
+        let github_ctx = github_context(
+          workflow_name,
+          first_task,
+          workspace_root,
+          Some(push_event),
+          event_name~,
+        )
+        let runner_ctx = runner_context(first_task, workspace_root)
+        let job_env : Map[String, String] = { "ACTRUN_LOCAL": "true" }
+        evaluate_if_condition(
+          job_if,
+          new_if_condition_context(
+            step_outputs={},
+            step_outcomes={},
+            step_conclusions={},
+            workspace_root~,
+            env_context=job_env,
+            job_context=plan_job_context(plan.job_services, job_id),
+            vars_context=vars_ctx,
+            github_context=github_ctx,
+            runner_context=runner_ctx,
+            needs_outputs~,
+            needs_results~,
+            success_value=job_if_success_value(needs_results),
+            failure_value=job_if_failure_value(needs_results),
+            cancelled_value=job_if_cancelled_value(needs_results),
+          ),
+        )
+      }
+      None => true
+    }
+    let step_items : Array[Json] = []
+    for task in tasks {
+      step_items.push(
+        dump_plan_step_context_json(
+          workflow_name, task, plan, workspace_root, push_event, dispatch_inputs,
+          event_name, secret_values,
+        ),
+      )
+    }
+    let job_fields : Map[String, Json] = {
+      "id": Json::string(job_id),
+      "if": Json::string(job_if),
+      "if_result": Json::boolean(job_if_result),
+      "needs": Json::array(
+        plan.job_needs
+        .get(job_id)
+        .unwrap_or([])
+        .map(fn(need) { Json::string(need) }),
+      ),
+      "steps": Json::array(step_items),
+    }
+    jobs.push(Json::object(job_fields))
+  }
+  let root : Map[String, Json] = {
+    "workflow": Json::string(workflow_name),
+    "event": push_event_json(push_event, event_name),
+    "inputs": json_string_map(mask_string_map(dispatch_inputs, secret_values)),
+    "vars": json_string_map(mask_string_map(vars_ctx, secret_values)),
+    "secrets": json_string_map(mask_string_map(secrets_ctx, secret_values)),
+    "jobs": Json::array(jobs),
+  }
+  Json::object(root).stringify(indent=2)
+}
+
+///|
 async fn execute_task_plan_native(
   workflow_name : String,
   plan : TaskPlan,
@@ -3430,6 +3667,7 @@ async fn execute_task_plan_native(
   job_services : Map[String, Map[String, JobContainerSpec]],
   dispatch_inputs~ : Map[String, String],
   nix_config? : NixMode = NixNone,
+  allow_destructive_checkout_clean? : Bool = false,
 ) -> TaskExecutionResult {
   if plan.kind == "barrier" {
     return {
@@ -3443,7 +3681,7 @@ async fn execute_task_plan_native(
   if plan.kind == "action" {
     return execute_action_plan_native(
       workflow_name, plan, workspace_root, state, needs_outputs, needs_results, push_event,
-      job_containers, job_services,
+      job_containers, job_services, allow_destructive_checkout_clean,
     )
   }
   guard prepare_step_file_commands(plan.id, workspace_root)
@@ -3581,6 +3819,7 @@ pub async fn execute_lowered_native(
   dispatch_inputs? : Map[String, String] = {},
   nix_mode? : String = "",
   nix_packages? : Array[String] = [],
+  allow_destructive_checkout_clean? : Bool = false,
 ) -> WorkflowRunReport {
   let issues = lowered_issues(lowered)
   if issues.length() > 0 {
@@ -3981,6 +4220,7 @@ pub async fn execute_lowered_native(
                 lowered.plan.job_services,
                 dispatch_inputs~,
                 nix_config~,
+                allow_destructive_checkout_clean~,
               )
               let report = result.report
               reports.push(report)

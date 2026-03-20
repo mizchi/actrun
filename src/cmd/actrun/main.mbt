@@ -19,6 +19,7 @@ struct CliOptions {
   skip_actions : Array[String]
   dispatch_inputs : Map[String, String]
   dry_run : Bool
+  dump_context : Bool
   trust_actions : Bool
   nix_mode : String
   nix_packages : Array[String]
@@ -346,7 +347,10 @@ fn default_run_root() -> String {
 }
 
 ///|
-fn default_workspace_mode(repo_root : String?) -> String {
+fn default_workspace_mode(
+  repo_root : String?,
+  _workflow_path : String,
+) -> String {
   if repo_root is Some(_) {
     "tmp"
   } else {
@@ -364,7 +368,21 @@ fn resolved_workspace_mode(options : CliOptions) -> String {
   if options.workspace_mode.length() > 0 {
     options.workspace_mode
   } else {
-    default_workspace_mode(options.repo_root)
+    default_workspace_mode(options.repo_root, options.workflow_path)
+  }
+}
+
+///|
+async fn effective_workspace_mode(options : CliOptions) -> String {
+  let mode = resolved_workspace_mode(options)
+  if options.repo_root is Some(_) || mode != "worktree" {
+    return mode
+  }
+  let source_root = local_workspace_root(options.workflow_path)
+  if not(git_is_repo_root(source_root)) {
+    "local"
+  } else {
+    mode
   }
 }
 
@@ -680,6 +698,151 @@ fn github_repository_from_repo_root(repo_root : String) -> String? {
     }
   }
   None
+}
+
+///|
+struct LocalContextConfig {
+  repository : String
+  ref_name : String
+  before_rev : String
+  after_rev : String
+  actor : String
+}
+
+///|
+fn default_local_context_config() -> LocalContextConfig {
+  { repository: "", ref_name: "", before_rev: "", after_rev: "", actor: "" }
+}
+
+///|
+async fn git_trimmed_stdout(
+  repo_root : String,
+  args : Array[String],
+) -> String? {
+  if repo_root.length() == 0 {
+    return None
+  }
+  let (code, stdout, _) = run_command("git", args, cwd=repo_root)
+  if code != 0 {
+    return None
+  }
+  let trimmed = stdout.trim(chars=" \t\r\n").to_string()
+  if trimmed.length() == 0 {
+    None
+  } else {
+    Some(trimmed)
+  }
+}
+
+///|
+async fn git_trimmed_stdout_allow_empty(
+  repo_root : String,
+  args : Array[String],
+) -> String? {
+  if repo_root.length() == 0 {
+    return None
+  }
+  let (code, stdout, _) = run_command("git", args, cwd=repo_root)
+  if code != 0 {
+    return None
+  }
+  Some(stdout.trim(chars=" \t\r\n").to_string())
+}
+
+///|
+async fn git_repo_root(path : String) -> String? {
+  git_trimmed_stdout(path, ["rev-parse", "--show-toplevel"])
+}
+
+///|
+async fn git_is_repo_root(path : String) -> Bool {
+  match git_trimmed_stdout_allow_empty(path, ["rev-parse", "--show-prefix"]) {
+    Some(prefix) => prefix.length() == 0
+    None => false
+  }
+}
+
+///|
+async fn git_current_branch(repo_root : String) -> String {
+  git_trimmed_stdout(repo_root, ["symbolic-ref", "--short", "HEAD"]).unwrap_or(
+    "",
+  )
+}
+
+///|
+async fn git_resolve_revision(repo_root : String, revision : String) -> String {
+  if revision.length() == 0 {
+    return ""
+  }
+  git_trimmed_stdout(repo_root, ["rev-parse", revision]).unwrap_or("")
+}
+
+///|
+async fn git_actor_name(repo_root : String) -> String {
+  match git_trimmed_stdout(repo_root, ["config", "user.name"]) {
+    Some(actor) => actor
+    None =>
+      @xsys.get_env_var("USER").unwrap_or(
+        @xsys.get_env_var("LOGNAME").unwrap_or(""),
+      )
+  }
+}
+
+///|
+async fn apply_local_context_defaults(
+  base : @ar.PushEvent,
+  local_context : LocalContextConfig,
+  git_root : String?,
+) -> @ar.PushEvent {
+  let resolved_git_root = git_root.unwrap_or("")
+  let repository = if base.repository.length() > 0 {
+    base.repository
+  } else if local_context.repository.length() > 0 {
+    local_context.repository
+  } else {
+    github_repository_from_repo_root(resolved_git_root).unwrap_or("")
+  }
+  let ref_name = if base.ref_name.length() > 0 {
+    base.ref_name
+  } else if local_context.ref_name.length() > 0 {
+    local_context.ref_name
+  } else {
+    git_current_branch(resolved_git_root)
+  }
+  let after_sha = if base.after_sha.length() > 0 {
+    base.after_sha
+  } else if local_context.after_rev.length() > 0 {
+    git_resolve_revision(resolved_git_root, local_context.after_rev)
+  } else {
+    git_resolve_revision(resolved_git_root, "HEAD")
+  }
+  let before_sha = if base.before_sha.length() > 0 {
+    base.before_sha
+  } else if local_context.before_rev.length() > 0 {
+    git_resolve_revision(resolved_git_root, local_context.before_rev)
+  } else {
+    let inferred = git_resolve_revision(resolved_git_root, "HEAD^")
+    if inferred.length() > 0 {
+      inferred
+    } else {
+      after_sha
+    }
+  }
+  let actor = if base.actor.length() > 0 {
+    base.actor
+  } else if local_context.actor.length() > 0 {
+    local_context.actor
+  } else {
+    git_actor_name(resolved_git_root)
+  }
+  @ar.new_push_event(
+    ref_name,
+    base.changed_paths,
+    before_sha~,
+    after_sha~,
+    repository~,
+    actor~,
+  )
 }
 
 ///|
@@ -1736,6 +1899,7 @@ fn persist_run_record(
 struct ActrunConfig {
   workspace_mode : String
   local_skip_actions : Array[String]
+  local_context : LocalContextConfig
   local_override_actions : Map[String, String]
   trust_actions : Bool
   nix_mode : String
@@ -1753,6 +1917,7 @@ fn default_actrun_config() -> ActrunConfig {
   {
     workspace_mode: "",
     local_skip_actions: [],
+    local_context: default_local_context_config(),
     local_override_actions: {},
     trust_actions: false,
     nix_mode: "",
@@ -1809,6 +1974,13 @@ async fn generate_actrun_config() -> String {
   config = config + "# trust_actions = true\n\n"
   config = config + "# Include uncommitted changes in worktree/tmp workspace\n"
   config = config + "# include_dirty = true\n\n"
+  config = config + "# Default local GitHub context (optional)\n"
+  config = config + "# [local_context]\n"
+  config = config + "# repository = \"owner/repo\"\n"
+  config = config + "# ref_name = \"main\"\n"
+  config = config + "# before_rev = \"HEAD^\"\n"
+  config = config + "# after_rev = \"HEAD\"\n"
+  config = config + "# actor = \"your-name\"\n\n"
   // nix
   if @xfs.path_exists("flake.nix") {
     config = config +
@@ -1919,6 +2091,7 @@ fn toml_get_table(
 let known_config_keys : Array[String] = [
   "workspace_mode", "local_skip_actions", "trust_actions", "nix_mode", "nix_packages",
   "container_runtime", "includes", "affected", "override", "lint", "include_dirty",
+  "local_context",
 ]
 
 ///|
@@ -1991,12 +2164,20 @@ fn load_actrun_config(dir : String) -> ActrunConfig {
       _ => ()
     }
   }
+  let local_context_table = toml_get_table(table, "local_context")
   // Parse [lint] section
   let lint_table = toml_get_table(table, "lint")
   let lint_rules = toml_get_string_array(lint_table, "ignore_rules")
   {
     workspace_mode: toml_get_string(table, "workspace_mode"),
     local_skip_actions: toml_get_string_array(table, "local_skip_actions"),
+    local_context: {
+      repository: toml_get_string(local_context_table, "repository"),
+      ref_name: toml_get_string(local_context_table, "ref_name"),
+      before_rev: toml_get_string(local_context_table, "before_rev"),
+      after_rev: toml_get_string(local_context_table, "after_rev"),
+      actor: toml_get_string(local_context_table, "actor"),
+    },
     trust_actions: toml_get_bool(table, "trust_actions"),
     nix_mode: toml_get_string(table, "nix_mode"),
     nix_packages: toml_get_string_array(table, "nix_packages"),
@@ -2054,6 +2235,7 @@ fn merge_config_into_options(
     },
     dispatch_inputs: options.dispatch_inputs,
     dry_run: options.dry_run,
+    dump_context: options.dump_context,
     trust_actions: if options.trust_actions {
       true
     } else {
@@ -3273,6 +3455,7 @@ fn parse_cli_args(args : Array[String]) -> CliParseResult {
   let skip_actions : Array[String] = []
   let dispatch_inputs : Map[String, String] = {}
   let mut dry_run = false
+  let mut dump_context = false
   let mut trust_actions = false
   let mut nix_mode = ""
   let nix_packages : Array[String] = []
@@ -3291,6 +3474,11 @@ fn parse_cli_args(args : Array[String]) -> CliParseResult {
     let arg = args[index]
     if arg == "--dry-run" {
       dry_run = true
+      index += 1
+      continue
+    }
+    if arg == "--dump-context" {
+      dump_context = true
       index += 1
       continue
     }
@@ -3517,6 +3705,7 @@ fn parse_cli_args(args : Array[String]) -> CliParseResult {
       skip_actions,
       dispatch_inputs,
       dry_run,
+      dump_context,
       trust_actions,
       nix_mode,
       nix_packages,
@@ -4651,6 +4840,28 @@ async fn handle_doctor_command() -> Int {
         println("    - " + action)
       }
     }
+    if config.local_context.repository.length() > 0 ||
+      config.local_context.ref_name.length() > 0 ||
+      config.local_context.before_rev.length() > 0 ||
+      config.local_context.after_rev.length() > 0 ||
+      config.local_context.actor.length() > 0 {
+      println("  local_context:")
+      if config.local_context.repository.length() > 0 {
+        println("    repository: " + config.local_context.repository)
+      }
+      if config.local_context.ref_name.length() > 0 {
+        println("    ref_name: " + config.local_context.ref_name)
+      }
+      if config.local_context.before_rev.length() > 0 {
+        println("    before_rev: " + config.local_context.before_rev)
+      }
+      if config.local_context.after_rev.length() > 0 {
+        println("    after_rev: " + config.local_context.after_rev)
+      }
+      if config.local_context.actor.length() > 0 {
+        println("    actor: " + config.local_context.actor)
+      }
+    }
     // nix_mode
     if config.nix_mode.length() > 0 {
       println("  nix_mode: " + config.nix_mode)
@@ -4783,6 +4994,9 @@ async fn run_in_docker_container(options : CliOptions) -> Int {
   }
   if options.dry_run {
     args.push("--dry-run")
+  }
+  if options.dump_context {
+    args.push("--dump-context")
   }
   if options.affected {
     args.push("--affected")
@@ -5101,6 +5315,25 @@ fn print_dry_run_plan_json(
     root_parts.push("\"warnings\": " + json_string_array(lowered.errors))
   }
   println("{ " + root_parts.join(", ") + " }")
+}
+
+///|
+async fn dump_context_json(
+  workflow_name : String,
+  plan : @ar.ExecutionPlan,
+  workspace_root : String,
+  push_event : @ar.PushEvent,
+  dispatch_inputs : Map[String, String],
+  event_name? : String = "push",
+) -> String {
+  @ar.dump_workflow_context_json(
+    workflow_name,
+    plan,
+    workspace_root,
+    push_event,
+    dispatch_inputs~,
+    event_name~,
+  )
 }
 
 ///|
@@ -6611,7 +6844,7 @@ async fn handle_workflow_run_command(raw_options : CliOptions) -> Int {
   let run_started_at_ms = @env.now()
   apply_cli_root_overrides(options)
   let run_root = options.run_root.unwrap_or(default_run_root())
-  let workspace_mode = resolved_workspace_mode(options)
+  let workspace_mode = effective_workspace_mode(options)
   if options.repo_root is Some(_) {
     if workspace_mode != "tmp" {
       print_errors([
@@ -6691,27 +6924,27 @@ async fn handle_workflow_run_command(raw_options : CliOptions) -> Int {
   }
   let mut trigger_event = merge_cli_push_event(base_event, options)
   let mut changed_paths = trigger_event.changed_paths
-  let mut repository = trigger_event.repository
   let mut origin_remote_url = ""
-  match options.repo_root {
+  let context_git_root = match options.repo_root {
     Some(repo_root) => {
-      origin_remote_url = origin_remote_url_from_repo_root(repo_root).unwrap_or(
+      let resolved_root = git_repo_root(repo_root).unwrap_or(repo_root)
+      origin_remote_url = origin_remote_url_from_repo_root(resolved_root).unwrap_or(
         "",
       )
-      if repository.length() == 0 {
-        repository = github_repository_from_repo_root(repo_root).unwrap_or("")
-      }
+      Some(resolved_root)
     }
+    None => git_repo_root(source_root)
+  }
+  trigger_event = apply_local_context_defaults(
+    trigger_event,
+    config.local_context,
+    context_git_root,
+  )
+  let mut repository = trigger_event.repository
+  match options.repo_root {
+    Some(_) => repository = trigger_event.repository
     None => ()
   }
-  trigger_event = @ar.new_push_event(
-    trigger_event.ref_name,
-    trigger_event.changed_paths,
-    before_sha=trigger_event.before_sha,
-    after_sha=trigger_event.after_sha,
-    repository~,
-    actor=trigger_event.actor,
-  )
 
   if options.repo_root is Some(repo_root) {
     let workspace_root = options.workspace_root.unwrap_or(
@@ -7081,6 +7314,35 @@ async fn handle_workflow_run_command(raw_options : CliOptions) -> Int {
     retry_workflow
   }
 
+  let effective_event_name = if options.trigger == "pull_request" {
+    "pull_request"
+  } else if options.trigger.length() > 0 {
+    options.trigger
+  } else {
+    "push"
+  }
+
+  if options.dump_context {
+    let lowered = @ar.lower_push_workflow_in_workspace(
+      filtered_workflow, execution_root,
+    )
+    if lowered.errors.length() > 0 {
+      print_errors(lowered.errors)
+      return 1
+    }
+    println(
+      dump_context_json(
+        workflow.name,
+        lowered.plan,
+        execution_root,
+        trigger_event,
+        options.dispatch_inputs,
+        event_name=effective_event_name,
+      ),
+    )
+    return 0
+  }
+
   if options.dry_run {
     if options.include_dirty {
       println("include_dirty: true (uncommitted changes will be synced)")
@@ -7166,14 +7428,6 @@ async fn handle_workflow_run_command(raw_options : CliOptions) -> Int {
     print_errors(lowered.errors)
     return 1
   }
-
-  let effective_event_name = if options.trigger == "pull_request" {
-    "pull_request"
-  } else if options.trigger.length() > 0 {
-    options.trigger
-  } else {
-    "push"
-  }
   let raw_report = @ar.execute_lowered_native(
     lowered,
     workspace_root=execution_root,
@@ -7182,6 +7436,7 @@ async fn handle_workflow_run_command(raw_options : CliOptions) -> Int {
     dispatch_inputs=options.dispatch_inputs,
     nix_mode=options.nix_mode,
     nix_packages=options.nix_packages,
+    allow_destructive_checkout_clean=workspace_mode != "local",
   )
   let report = @ar.mask_report_secrets(raw_report, @ar.collect_secret_values())
   if report.issues.length() > 0 {

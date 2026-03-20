@@ -68,6 +68,28 @@ actrun run view run-1
 actrun run logs run-1 --task build/test
 ```
 
+## 設定
+
+`actrun init` で `actrun.toml` を生成できます。
+
+```toml
+# Workspace mode: local, worktree, tmp, docker
+workspace_mode = "local"
+
+# ローカル実行では不要な action をスキップ
+local_skip_actions = ["actions/checkout"]
+
+# `--event` 未指定時のローカル GitHub context（必要なときだけ固定）
+# [local_context]
+# repository = "owner/repo"
+# ref_name = "main"
+# before_rev = "HEAD^"
+# after_rev = "HEAD"
+# actor = "your-name"
+```
+
+`--event` を渡さない場合でも、actrun は可能ならローカル git リポジトリから `github.repository` / `github.ref_name` / `github.sha` / `github.actor` を自動推定します。`[local_context]` はその上書きや固定が必要なときだけ使ってください。優先順位や利用例は [docs/local-context.md](docs/local-context.md) を参照してください。
+
 ## CLI リファレンス
 
 ### ワークフロー操作

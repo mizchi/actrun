@@ -30,6 +30,7 @@ EXAMPLES=(
   examples/30-step-if.yml
   examples/33-deep-dependencies.yml
   examples/35-matrix-fan-in.yml
+  examples/37-local-context.yml
 )
 
 if [ "$#" -gt 0 ]; then

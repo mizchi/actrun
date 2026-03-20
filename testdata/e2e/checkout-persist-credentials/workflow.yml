@@ -12,6 +12,5 @@ jobs:
       - id: verify
         shell: bash
         run: |
-          mkdir -p artifacts
           cred=$(git -C no-creds config --local --get-all credential.helper 2>/dev/null || echo "none")
-          printf '%s' "$cred" > artifacts/credential.txt
+          printf '%s' "$cred"

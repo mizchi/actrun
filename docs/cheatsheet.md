@@ -82,6 +82,23 @@ actrun ci.yml --trigger workflow_dispatch --input env=staging
 actrun ci.yml --trigger pull_request
 ```
 
+## Local GitHub Context
+
+```bash
+# Usually auto-detected from the local git checkout
+actrun ci.yml
+
+# Pin deterministic values in actrun.toml when needed
+#   [local_context]
+#   repository = "owner/repo"
+#   ref_name = "feature/local-demo"
+#   before_rev = "HEAD^"
+#   after_rev = "HEAD"
+#   actor = "your-name"
+```
+
+See `docs/local-context.md` for precedence and a full example.
+
 ## Cron Schedules
 
 ```bash
@@ -228,6 +245,14 @@ local_skip_actions = ["actions/checkout", "actions/setup-node"]
 
 # Trust third-party actions
 trust_actions = true
+
+# Optional local GitHub context override
+# [local_context]
+# repository = "owner/repo"
+# ref_name = "main"
+# before_rev = "HEAD^"
+# after_rev = "HEAD"
+# actor = "your-name"
 
 # Nix
 # nix_mode = ""

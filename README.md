@@ -103,6 +103,14 @@ container_runtime = "docker"
 # Include uncommitted changes in worktree/tmp workspace
 # include_dirty = true
 
+# Default local GitHub context when `--event` is omitted
+# [local_context]
+# repository = "owner/repo"
+# ref_name = "main"
+# before_rev = "HEAD^"
+# after_rev = "HEAD"
+# actor = "your-name"
+
 # Override actions with local commands
 # [override."actions/setup-node"]
 # run = "echo 'using local node' && node --version"
@@ -111,6 +119,8 @@ container_runtime = "docker"
 # [affected."ci.yml"]
 # patterns = ["src/**", "package.json"]
 ```
+
+When `--event` is omitted, actrun auto-detects `github.repository`, `github.ref_name`, `github.sha`, and `github.actor` from the local git repository when possible. Use `[local_context]` only when you need to pin or override those values. See [Local GitHub Context](docs/local-context.md) for precedence and examples.
 
 CLI flags always override `actrun.toml` settings. See [Cheatsheet](docs/cheatsheet.md) for quick reference and [Advanced Workflow](docs/advanced-workflow.md) for details.
 
