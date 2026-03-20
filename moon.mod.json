@@ -1,6 +1,6 @@
 {
   "name": "mizchi/actrun",
-  "version": "0.21.2",
+  "version": "0.21.3",
   "deps": {
     "moonbitlang/async": "0.16.6",
     "mizchi/bitflow": "0.3.1",
