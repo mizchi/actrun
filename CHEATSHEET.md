@@ -21,20 +21,35 @@ actrun workflow run .github/workflows/ci.yml --workspace-mode worktree
 actrun workflow run .github/workflows/ci.yml --workspace-mode tmp
 ```
 
-## Inspect Results
+## Inspect Results (gh-compatible)
 
 ```bash
-# List runs
+# List runs (gh-style output)
 actrun run list
+actrun run list --status failure --limit 5
+actrun run list --workflow ci --branch main --event push
 
 # View run summary
 actrun run view run-1
+actrun run view run-1 -v              # show steps (like gh -v)
+actrun run view run-1 --job build -v  # filter by job
 
-# View as JSON
-actrun run view run-1 --json
-
-# View specific task log
+# View logs (like gh run view --log)
+actrun run view run-1 --log
+actrun run view run-1 --log-failed
 actrun run logs run-1 --task build/test
+actrun run logs run-1 --job build --log-failed
+
+# JSON with field selection (like gh --json fields)
+actrun run view run-1 --json status,conclusion,jobs
+actrun run view run-1 --json workflowName,headBranch,startedAt
+actrun run list --json status,conclusion --limit 5
+
+# Exit code check (like gh --exit-status)
+actrun run view run-1 --exit-status && echo "passed"
+
+# Delete a run
+actrun run delete run-1
 
 # Watch until done
 actrun run watch run-1
@@ -43,8 +58,9 @@ actrun run watch run-1
 ## Artifacts & Cache
 
 ```bash
-# List artifacts
+# List artifacts (with field selection)
 actrun artifact list run-1
+actrun artifact list run-1 --json name
 
 # Download artifact
 actrun artifact download run-1 --name report --dir ./out
@@ -52,8 +68,9 @@ actrun artifact download run-1 --name report --dir ./out
 # Download all artifacts
 actrun run download run-1 --dir ./out
 
-# List cache entries
+# List cache entries (with limit and field selection)
 actrun cache list
+actrun cache list --limit 10 --json key,files
 
 # Delete cache
 actrun cache prune --key my-cache-key

@@ -153,26 +153,63 @@ ACTRUN_VAR_MY_VAR=value actrun ci.yml
 actrun ci.yml --env .env.local
 ```
 
-## View Results
+## View Results (gh-compatible)
 
 ```bash
 # List past runs
 actrun run list
 
+# Filter: by status, workflow, branch, event
+actrun run list --status failure
+actrun run list --workflow ci --branch main --event push
+actrun run list --limit 5
+
 # View run summary
 actrun run view run-1
 
-# View as JSON
-actrun run view run-1 --json
+# View with step details (like gh run view -v)
+actrun run view run-1 -v
 
-# View logs
+# Filter by job
+actrun run view run-1 --job build -v
+
+# View logs (like gh run view --log)
+actrun run view run-1 --log
+actrun run view run-1 --log-failed
+
+# View logs (separate command)
 actrun run logs run-1
-
-# View specific task logs
 actrun run logs run-1 --task build/step_1
+actrun run logs run-1 --job build
+actrun run logs run-1 --log-failed
+
+# Exit with non-zero if failed (like gh run view --exit-status)
+actrun run view run-1 --exit-status && echo "passed"
+
+# Delete a run
+actrun run delete run-1
 
 # Download artifacts
 actrun run download run-1
+```
+
+## JSON Output (gh-compatible)
+
+```bash
+# Full JSON
+actrun run view run-1 --json
+
+# Select specific fields (like gh --json fields)
+actrun run view run-1 --json status,conclusion,jobs
+
+# gh-compatible field names work
+actrun run view run-1 --json workflowName,headBranch,event,startedAt
+
+# Field selection on list commands
+actrun run list --json status,conclusion,workflowName --limit 5
+actrun workflow list --json name
+actrun cache list --json key,files
+actrun artifact list run-1 --json name
 ```
 
 ## Configuration (`actrun.toml`)

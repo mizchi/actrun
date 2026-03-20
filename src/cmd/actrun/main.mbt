@@ -51,8 +51,12 @@ struct RunReadOptions {
   json_fields : Array[String]
   limit : Int
   status_filter : String
+  workflow_filter : String
+  branch_filter : String
+  event_filter : String
   exit_status : Bool
   verbose : Bool
+  show_log : Bool
   log_failed : Bool
   job_id : String
 }
@@ -123,6 +127,7 @@ struct RunRecord {
   workspace_mode : String
   started_at_ms : UInt64
   finished_at_ms : UInt64
+  event : String
   state : String
   ok : Bool
   exit_code : Int
@@ -797,6 +802,92 @@ fn json_optional_string(value : String?) -> String {
 }
 
 ///|
+fn ms_to_iso8601(ms : UInt64) -> String {
+  if ms == 0UL {
+    return ""
+  }
+  let total_seconds = ms / 1000UL
+  let mut remaining = total_seconds.reinterpret_as_int64()
+  // Days since epoch
+  let mut days = remaining / 86400L
+  remaining = remaining % 86400L
+  let hours = remaining / 3600L
+  remaining = remaining % 3600L
+  let minutes = remaining / 60L
+  let seconds = remaining % 60L
+  // Compute year/month/day from days since 1970-01-01
+  let mut year = 1970L
+  while true {
+    let is_leap = (year % 4L == 0L && year % 100L != 0L) || year % 400L == 0L
+    let year_days = if is_leap { 366L } else { 365L }
+    if days < year_days {
+      break
+    }
+    days -= year_days
+    year += 1L
+  }
+  let is_leap = (year % 4L == 0L && year % 100L != 0L) || year % 400L == 0L
+  let month_days = [
+    31L,
+    if is_leap {
+      29L
+    } else {
+      28L
+    },
+    31L,
+    30L,
+    31L,
+    30L,
+    31L,
+    31L,
+    30L,
+    31L,
+    30L,
+    31L,
+  ]
+  let mut month = 1L
+  for md in month_days {
+    if days < md {
+      break
+    }
+    days -= md
+    month += 1L
+  }
+  let day = days + 1L
+  fn pad2(n : Int64) -> String {
+    if n < 10L {
+      "0" + n.to_string()
+    } else {
+      n.to_string()
+    }
+  }
+
+  year.to_string() +
+  "-" +
+  pad2(month) +
+  "-" +
+  pad2(day) +
+  "T" +
+  pad2(hours) +
+  ":" +
+  pad2(minutes) +
+  ":" +
+  pad2(seconds) +
+  "Z"
+}
+
+///|
+fn run_number_from_id(run_id : String) -> Int {
+  if run_id.has_prefix("run-") {
+    let num_str = run_id[4:].to_string()
+    let parsed = @strconv.parse_int64(num_str) catch { _ => return 0 }
+    parsed.to_int()
+  } else {
+    0
+  }
+}
+
+///|
 fn json_optional_int(value : Int?) -> String {
   match value {
     Some(number) => number.to_string()
@@ -1418,9 +1509,25 @@ fn run_record_json(
   } else {
     ""
   }
+  let run_number = run_number_from_id(record.run_id)
+  let started_at = ms_to_iso8601(record.started_at_ms)
+  let finished_at = ms_to_iso8601(record.finished_at_ms)
   "{\n" +
   "  \"run_id\": " +
   json_string(record.run_id) +
+  ",\n" +
+  "  \"number\": " +
+  json_int(run_number) +
+  ",\n" +
+  "  \"attempt\": 1,\n" +
+  "  \"name\": " +
+  json_string(record.workflow_name) +
+  ",\n" +
+  "  \"displayTitle\": " +
+  json_string(record.workflow_name) +
+  ",\n" +
+  "  \"workflowName\": " +
+  json_string(record.workflow_name) +
   ",\n" +
   "  \"workflow_name\": " +
   json_string(record.workflow_name) +
@@ -1437,8 +1544,17 @@ fn run_record_json(
   "  \"started_at_ms\": " +
   json_uint64(record.started_at_ms) +
   ",\n" +
+  "  \"startedAt\": " +
+  json_string(started_at) +
+  ",\n" +
   "  \"finished_at_ms\": " +
   json_uint64(record.finished_at_ms) +
+  ",\n" +
+  "  \"completedAt\": " +
+  json_string(finished_at) +
+  ",\n" +
+  "  \"event\": " +
+  json_string(record.event) +
   ",\n" +
   "  \"status\": " +
   json_string(gh_status) +
@@ -1458,11 +1574,17 @@ fn run_record_json(
   "  \"repository\": " +
   json_string(record.repository) +
   ",\n" +
+  "  \"headBranch\": " +
+  json_string(record.ref_name) +
+  ",\n" +
   "  \"ref_name\": " +
   json_string(record.ref_name) +
   ",\n" +
   "  \"before_sha\": " +
   json_string(record.before_sha) +
+  ",\n" +
+  "  \"headSha\": " +
+  json_string(record.after_sha) +
   ",\n" +
   "  \"after_sha\": " +
   json_string(record.after_sha) +
@@ -1583,6 +1705,7 @@ fn persist_run_record(
           workspace_mode: record.workspace_mode,
           started_at_ms: record.started_at_ms,
           finished_at_ms: record.finished_at_ms,
+          event: record.event,
           state: record.state,
           ok: record.ok,
           exit_code: record.exit_code,
@@ -3455,8 +3578,12 @@ fn parse_run_read_args(args : Array[String]) -> RunReadParseResult {
   let json_fields : Array[String] = []
   let mut limit = 0
   let mut status_filter = ""
+  let mut workflow_filter = ""
+  let mut branch_filter = ""
+  let mut event_filter = ""
   let mut exit_status = false
   let mut verbose = false
+  let mut show_log = false
   let mut log_failed = false
   let mut job_id = ""
   while index < args.length() {
@@ -3487,7 +3614,13 @@ fn parse_run_read_args(args : Array[String]) -> RunReadParseResult {
       index += 1
       continue
     }
+    if arg == "--log" {
+      show_log = true
+      index += 1
+      continue
+    }
     if arg == "--log-failed" {
+      show_log = true
       log_failed = true
       index += 1
       continue
@@ -3499,9 +3632,15 @@ fn parse_run_read_args(args : Array[String]) -> RunReadParseResult {
       arg == "--limit" ||
       arg == "--status" ||
       arg == "--job" ||
+      arg == "--workflow" ||
+      arg == "--branch" ||
+      arg == "--event" ||
       arg == "-L" ||
       arg == "-s" ||
-      arg == "-j" {
+      arg == "-j" ||
+      arg == "-w" ||
+      arg == "-b" ||
+      arg == "-e" {
       if index + 1 >= args.length() {
         errors.push("missing value for " + arg)
         break
@@ -3520,6 +3659,12 @@ fn parse_run_read_args(args : Array[String]) -> RunReadParseResult {
         status_filter = value
       } else if arg == "--job" || arg == "-j" {
         job_id = value
+      } else if arg == "--workflow" || arg == "-w" {
+        workflow_filter = value
+      } else if arg == "--branch" || arg == "-b" {
+        branch_filter = value
+      } else if arg == "--event" || arg == "-e" {
+        event_filter = value
       } else {
         task_id = Some(value)
       }
@@ -3565,8 +3710,12 @@ fn parse_run_read_args(args : Array[String]) -> RunReadParseResult {
       status_filter,
       exit_status,
       verbose,
+      show_log,
       log_failed,
       job_id,
+      workflow_filter,
+      branch_filter,
+      event_filter,
     }),
     errors: [],
   }
@@ -5034,15 +5183,66 @@ fn run_json_matches_status(json_text : String, status_filter : String) -> Bool {
 }
 
 ///|
+fn run_json_matches_filters(
+  json_text : String,
+  status_filter : String,
+  workflow_filter : String,
+  branch_filter : String,
+  event_filter : String,
+) -> Bool {
+  if not(run_json_matches_status(json_text, status_filter)) {
+    return false
+  }
+  if workflow_filter.length() == 0 &&
+    branch_filter.length() == 0 &&
+    event_filter.length() == 0 {
+    return true
+  }
+  let payload = @json.parse(json_text) catch { _ => return false }
+  guard payload is Object(_) else { return false }
+  if workflow_filter.length() > 0 {
+    let wf_name = run_json_string(payload, "workflow_name")
+    let wf_name2 = run_json_string(payload, "workflowName")
+    let name = run_json_string(payload, "name")
+    if wf_name != workflow_filter &&
+      wf_name2 != workflow_filter &&
+      name != workflow_filter {
+      return false
+    }
+  }
+  if branch_filter.length() > 0 {
+    let ref_name = run_json_string(payload, "ref_name")
+    let head_branch = run_json_string(payload, "headBranch")
+    if ref_name != branch_filter && head_branch != branch_filter {
+      return false
+    }
+  }
+  if event_filter.length() > 0 {
+    let event = run_json_string(payload, "event")
+    if event != event_filter {
+      return false
+    }
+  }
+  true
+}
+
+///|
 fn filtered_run_json_texts(
   run_root : String,
   status_filter : String,
   limit : Int,
+  workflow_filter? : String = "",
+  branch_filter? : String = "",
+  event_filter? : String = "",
 ) -> Array[String] {
   let all = run_json_texts_in_order(run_root)
   let result : Array[String] = []
   for text in all {
-    if not(run_json_matches_status(text, status_filter)) {
+    if not(
+        run_json_matches_filters(
+          text, status_filter, workflow_filter, branch_filter, event_filter,
+        ),
+      ) {
       continue
     }
     result.push(text)
@@ -5059,8 +5259,18 @@ fn collect_run_list_json(
   status_filter? : String = "",
   limit? : Int = 0,
   json_fields? : Array[String] = [],
+  workflow_filter? : String = "",
+  branch_filter? : String = "",
+  event_filter? : String = "",
 ) -> String? {
-  let items = filtered_run_json_texts(run_root, status_filter, limit)
+  let items = filtered_run_json_texts(
+    run_root,
+    status_filter,
+    limit,
+    workflow_filter~,
+    branch_filter~,
+    event_filter~,
+  )
   if json_fields.length() == 0 {
     return Some("[" + items.join(", ") + "]\n")
   }
@@ -5097,8 +5307,18 @@ fn format_run_list_text(
   run_root : String,
   status_filter? : String = "",
   limit? : Int = 0,
+  workflow_filter? : String = "",
+  branch_filter? : String = "",
+  event_filter? : String = "",
 ) -> String? {
-  let run_json_texts = filtered_run_json_texts(run_root, status_filter, limit)
+  let run_json_texts = filtered_run_json_texts(
+    run_root,
+    status_filter,
+    limit,
+    workflow_filter~,
+    branch_filter~,
+    event_filter~,
+  )
   let lines : Array[String] = []
   for run_json_text in run_json_texts {
     let payload = @json.parse(run_json_text) catch { _ => return None }
@@ -6124,6 +6344,9 @@ fn handle_run_read_command(options : RunReadOptions) -> Int {
           status_filter=options.status_filter,
           limit=options.limit,
           json_fields=options.json_fields,
+          workflow_filter=options.workflow_filter,
+          branch_filter=options.branch_filter,
+          event_filter=options.event_filter,
         ) {
         Some(text) => {
           println(text.trim_end(chars="\n").to_string())
@@ -6140,6 +6363,9 @@ fn handle_run_read_command(options : RunReadOptions) -> Int {
         run_root,
         status_filter=options.status_filter,
         limit=options.limit,
+        workflow_filter=options.workflow_filter,
+        branch_filter=options.branch_filter,
+        event_filter=options.event_filter,
       ) {
       Some(text) => {
         if text.length() > 0 {
@@ -6167,6 +6393,43 @@ fn handle_run_read_command(options : RunReadOptions) -> Int {
       run_view_exit_code(run_json_text)
     } else {
       0
+    }
+    // --log or --log-failed on view: show logs instead of summary
+    if options.show_log {
+      if options.json_output {
+        match
+          run_task_logs_json(
+            run_dir,
+            run_json_text,
+            log_failed=options.log_failed,
+            job_filter=options.job_id,
+          ) {
+          Some(text) => {
+            println(text)
+            return view_exit
+          }
+          None => {
+            print_errors(["failed to parse " + run_json_path])
+            return 1
+          }
+        }
+      }
+      match
+        format_run_logs_text(
+          run_dir,
+          run_json_text,
+          log_failed=options.log_failed,
+          job_filter=options.job_id,
+        ) {
+        Some(text) => {
+          println(text.trim_end(chars="\n").to_string())
+          return view_exit
+        }
+        None => {
+          print_errors(["failed to parse " + run_json_path])
+          return 1
+        }
+      }
     }
     if options.json_output {
       match filter_json_fields(run_json_text, options.json_fields) {
@@ -6498,6 +6761,7 @@ async fn handle_workflow_run_command(raw_options : CliOptions) -> Int {
       workspace_mode,
       started_at_ms: run_started_at_ms,
       finished_at_ms: @env.now(),
+      event: "push",
       state: "skipped",
       ok: true,
       exit_code: 0,
@@ -6883,6 +7147,7 @@ async fn handle_workflow_run_command(raw_options : CliOptions) -> Int {
       workspace_mode,
       started_at_ms: run_started_at_ms,
       finished_at_ms: @env.now(),
+      event: effective_event_name,
       state: report.state,
       ok: report.ok,
       exit_code: if report.ok {

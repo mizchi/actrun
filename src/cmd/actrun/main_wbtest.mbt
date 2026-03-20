@@ -473,6 +473,7 @@ test "cli: persist run record allocates sequential run ids" {
     workspace_mode: "worktree",
     started_at_ms: 1000UL,
     finished_at_ms: 2000UL,
+    event: "push",
     state: "completed",
     ok: true,
     exit_code: 0,
@@ -582,6 +583,7 @@ async test "cli: persist run record stores task logs and summaries" {
       workspace_mode: "worktree",
       started_at_ms: 1000UL,
       finished_at_ms: 2000UL,
+      event: "push",
       state: report.state,
       ok: report.ok,
       exit_code: 0,
@@ -711,8 +713,12 @@ async test "cli: persist run record stores task logs and summaries" {
     status_filter: "",
     exit_status: false,
     verbose: false,
+    show_log: false,
     log_failed: false,
     job_id: "",
+    workflow_filter: "",
+    branch_filter: "",
+    event_filter: "",
   })
   inspect(run_download_exit, content="0")
   inspect(
@@ -981,6 +987,7 @@ test "cli: run.json schema has all required top-level fields" {
     workspace_mode: "local",
     started_at_ms: 1000UL,
     finished_at_ms: 2000UL,
+    event: "push",
     state: "completed",
     ok: true,
     exit_code: 0,
@@ -1228,6 +1235,115 @@ test "cli: task_matches_job filters by job prefix" {
   inspect(task_matches_job("build/step_1", ""), content="true")
 }
 
+///|
+test "cli: parse run list with --workflow and --branch" {
+  let result = parse_run_read_args([
+    "actrun", "run", "list", "-w", "ci", "-b", "main", "-e", "push",
+  ])
+  inspect(result.errors, content="[]")
+  let options = match result.options {
+    Some(value) => value
+    None => abort("parse failed")
+  }
+  inspect(options.workflow_filter, content="ci")
+  inspect(options.branch_filter, content="main")
+  inspect(options.event_filter, content="push")
+}
+
+///|
+test "cli: parse run view with --log" {
+  let result = parse_run_read_args(["actrun", "run", "view", "run-1", "--log"])
+  inspect(result.errors, content="[]")
+  let options = match result.options {
+    Some(value) => value
+    None => abort("parse failed")
+  }
+  inspect(options.show_log, content="true")
+  inspect(options.log_failed, content="false")
+}
+
+///|
+test "cli: parse run view with --log-failed" {
+  let result = parse_run_read_args([
+    "actrun", "run", "view", "run-1", "--log-failed",
+  ])
+  inspect(result.errors, content="[]")
+  let options = match result.options {
+    Some(value) => value
+    None => abort("parse failed")
+  }
+  inspect(options.show_log, content="true")
+  inspect(options.log_failed, content="true")
+}
+
+///|
+test "cli: ms_to_iso8601 converts correctly" {
+  // 2025-01-01T00:00:00Z = 1735689600000 ms
+  inspect(ms_to_iso8601(1735689600000UL), content="2025-01-01T00:00:00Z")
+  inspect(ms_to_iso8601(0UL), content="")
+}
+
+///|
+test "cli: run_number_from_id extracts number" {
+  inspect(run_number_from_id("run-42"), content="42")
+  inspect(run_number_from_id("run-1"), content="1")
+  inspect(run_number_from_id("invalid"), content="0")
+}
+
+///|
+test "cli: run_record_json includes gh alias fields" {
+  let record : RunRecord = {
+    run_id: "run-3",
+    workflow_name: "ci",
+    workflow_path: ".github/workflows/ci.yml",
+    workspace_root: "/tmp",
+    workspace_mode: "local",
+    started_at_ms: 1735689600000UL,
+    finished_at_ms: 1735689660000UL,
+    event: "push",
+    state: "completed",
+    ok: true,
+    exit_code: 0,
+    repository: "owner/repo",
+    ref_name: "main",
+    before_sha: "aaa",
+    after_sha: "bbb",
+    changed_paths: [],
+  }
+  let json_text = run_record_json(record)
+  // gh alias fields
+  inspect(json_text.contains("\"workflowName\": \"ci\""), content="true")
+  inspect(json_text.contains("\"name\": \"ci\""), content="true")
+  inspect(json_text.contains("\"displayTitle\": \"ci\""), content="true")
+  inspect(json_text.contains("\"headBranch\": \"main\""), content="true")
+  inspect(json_text.contains("\"headSha\": \"bbb\""), content="true")
+  inspect(json_text.contains("\"event\": \"push\""), content="true")
+  inspect(json_text.contains("\"number\": 3"), content="true")
+  inspect(json_text.contains("\"attempt\": 1"), content="true")
+  inspect(
+    json_text.contains("\"startedAt\": \"2025-01-01T00:00:00Z\""),
+    content="true",
+  )
+  inspect(
+    json_text.contains("\"completedAt\": \"2025-01-01T00:01:00Z\""),
+    content="true",
+  )
+}
+
+///|
+test "cli: run_json_matches_filters workflow filter" {
+  let json = "{\"workflow_name\": \"ci\", \"status\": \"completed\", \"conclusion\": \"success\", \"state\": \"completed\", \"ref_name\": \"main\", \"event\": \"push\"}"
+  inspect(run_json_matches_filters(json, "", "ci", "", ""), content="true")
+  inspect(run_json_matches_filters(json, "", "deploy", "", ""), content="false")
+  inspect(run_json_matches_filters(json, "", "", "main", ""), content="true")
+  inspect(run_json_matches_filters(json, "", "", "dev", ""), content="false")
+  inspect(run_json_matches_filters(json, "", "", "", "push"), content="true")
+  inspect(
+    run_json_matches_filters(json, "", "", "", "pull_request"),
+    content="false",
+  )
+}
+
 // --- gh-compat integration tests ---
 
 ///|
@@ -1241,6 +1357,7 @@ test "gh-compat: run_record_json includes status and conclusion for completed ru
     workspace_mode: "local",
     started_at_ms: 1000UL,
     finished_at_ms: 2000UL,
+    event: "push",
     state: "completed",
     ok: true,
     exit_code: 0,
@@ -1266,6 +1383,7 @@ test "gh-compat: run_record_json conclusion is failure when ok=false" {
     workspace_mode: "local",
     started_at_ms: 1000UL,
     finished_at_ms: 2000UL,
+    event: "push",
     state: "partial_failed",
     ok: false,
     exit_code: 1,
@@ -1469,8 +1587,12 @@ test "gh-compat: handle_run_read_command view --exit-status returns 1 for failur
     status_filter: "",
     exit_status: true,
     verbose: false,
+    show_log: false,
     log_failed: false,
     job_id: "",
+    workflow_filter: "",
+    branch_filter: "",
+    event_filter: "",
   })
   inspect(exit_fail, content="1")
   let exit_success = handle_run_read_command({
@@ -1486,8 +1608,12 @@ test "gh-compat: handle_run_read_command view --exit-status returns 1 for failur
     status_filter: "",
     exit_status: true,
     verbose: false,
+    show_log: false,
     log_failed: false,
     job_id: "",
+    workflow_filter: "",
+    branch_filter: "",
+    event_filter: "",
   })
   inspect(exit_success, content="0")
   // Without --exit-status, always 0
@@ -1504,8 +1630,12 @@ test "gh-compat: handle_run_read_command view --exit-status returns 1 for failur
     status_filter: "",
     exit_status: false,
     verbose: false,
+    show_log: false,
     log_failed: false,
     job_id: "",
+    workflow_filter: "",
+    branch_filter: "",
+    event_filter: "",
   })
   inspect(exit_no_flag, content="0")
 }
@@ -1601,6 +1731,7 @@ async test "gh-compat: end-to-end workflow produces gh-compatible JSON" {
       workspace_mode: "local",
       started_at_ms: 1000UL,
       finished_at_ms: 2000UL,
+      event: "push",
       state: report.state,
       ok: report.ok,
       exit_code: 0,
@@ -1715,6 +1846,7 @@ async test "gh-compat: --log-failed and --job filter logs" {
       workspace_mode: "local",
       started_at_ms: 1000UL,
       finished_at_ms: 2000UL,
+      event: "push",
       state: report.state,
       ok: report.ok,
       exit_code: 0,
@@ -1806,8 +1938,12 @@ test "gh-compat: run delete removes run directory" {
     status_filter: "",
     exit_status: false,
     verbose: false,
+    show_log: false,
     log_failed: false,
     job_id: "",
+    workflow_filter: "",
+    branch_filter: "",
+    event_filter: "",
   })
   inspect(exit_code, content="0")
   inspect(@xfs.path_exists(run_root + "/run-1"), content="false")
@@ -1832,8 +1968,12 @@ test "gh-compat: run delete returns 1 for missing run" {
     status_filter: "",
     exit_status: false,
     verbose: false,
+    show_log: false,
     log_failed: false,
     job_id: "",
+    workflow_filter: "",
+    branch_filter: "",
+    event_filter: "",
   })
   inspect(exit_code, content="1")
 }
