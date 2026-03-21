@@ -1,0 +1,76 @@
+name: Update actrun version
+
+on:
+  schedule:
+    - cron: "0 0 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: update-actrun
+  cancel-in-progress: true
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get current version from flake.nix
+        id: current
+        run: |
+          version=$(sed -n 's/^[[:space:]]*version = "\(.*\)";$/\1/p' flake.nix | head -1)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Get latest release version
+        id: latest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag=$(gh api repos/mizchi/actrun/releases/latest --jq '.tag_name')
+          version="${tag#v}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Check if update is needed
+        id: check
+        env:
+          CURRENT_VERSION: ${{ steps.current.outputs.version }}
+          LATEST_VERSION: ${{ steps.latest.outputs.version }}
+        run: |
+          if [ "$CURRENT_VERSION" = "$LATEST_VERSION" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: DeterminateSystems/nix-installer-action@d96bc962e61b3049ce8128d03d57a1144fa96539
+        if: steps.check.outputs.skip == 'false'
+
+      - name: Update version and hashes
+        if: steps.check.outputs.skip == 'false'
+        env:
+          VERSION: ${{ steps.latest.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          linux_hash=$(nix-prefetch-url "https://github.com/mizchi/actrun/releases/download/v${VERSION}/actrun-linux-x64.tar.gz" | xargs nix hash convert --to sri --hash-algo sha256)
+          macos_hash=$(nix-prefetch-url "https://github.com/mizchi/actrun/releases/download/v${VERSION}/actrun-macos-arm64.tar.gz" | xargs nix hash convert --to sri --hash-algo sha256)
+
+          sed -i "0,/version = \".*\";/s/version = \".*\";/version = \"${VERSION}\";/" flake.nix
+
+          sed -i "/x86_64-linux/,/};/{s|hash = \".*\"|hash = \"${linux_hash}\"|}" flake.nix
+          sed -i "/aarch64-darwin/,/};/{s|hash = \".*\"|hash = \"${macos_hash}\"|}" flake.nix
+
+      - name: Create Pull Request
+        if: steps.check.outputs.skip == 'false'
+        env:
+          CURRENT_VERSION: ${{ steps.current.outputs.version }}
+          LATEST_VERSION: ${{ steps.latest.outputs.version }}
+        uses: peter-evans/create-pull-request@v7
+        with:
+          title: "Update actrun to v${{ steps.latest.outputs.version }}"
+          body: "Automated update of actrun from v${{ env.CURRENT_VERSION }} to v${{ env.LATEST_VERSION }}"
+          branch: "update-actrun-${{ env.LATEST_VERSION }}"
+          commit-message: "chore: update actrun to v${{ env.LATEST_VERSION }}"
