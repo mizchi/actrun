@@ -39,6 +39,8 @@
 
           nativeBuildInputs = pkgs.lib.optionals pkgs.stdenv.isLinux [ pkgs.autoPatchelfHook ];
 
+          propagatedBuildInputs = [ pkgs.git ];
+
           installPhase = ''
             install -Dm755 actrun $out/bin/actrun
           '';
