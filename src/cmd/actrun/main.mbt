@@ -23,6 +23,8 @@ struct CliOptions {
   trust_actions : Bool
   nix_mode : String
   nix_packages : Array[String]
+  sandbox_mode : String
+  sandbox_writable : Array[String]
   container_runtime : String
   affected : Bool
   affected_base : String
@@ -1904,6 +1906,8 @@ struct ActrunConfig {
   trust_actions : Bool
   nix_mode : String
   nix_packages : Array[String]
+  sandbox_mode : String
+  sandbox_writable : Array[String]
   container_runtime : String
   affected : Map[String, Array[String]]
   includes : Array[String]
@@ -1922,6 +1926,8 @@ fn default_actrun_config() -> ActrunConfig {
     trust_actions: false,
     nix_mode: "",
     nix_packages: [],
+    sandbox_mode: "",
+    sandbox_writable: [],
     container_runtime: "",
     affected: {},
     includes: [],
@@ -2090,6 +2096,7 @@ fn toml_get_table(
 ///|
 let known_config_keys : Array[String] = [
   "workspace_mode", "local_skip_actions", "trust_actions", "nix_mode", "nix_packages",
+  "sandbox_mode", "sandbox_writable",
   "container_runtime", "includes", "affected", "override", "lint", "include_dirty",
   "local_context",
 ]
@@ -2181,6 +2188,8 @@ fn load_actrun_config(dir : String) -> ActrunConfig {
     trust_actions: toml_get_bool(table, "trust_actions"),
     nix_mode: toml_get_string(table, "nix_mode"),
     nix_packages: toml_get_string_array(table, "nix_packages"),
+    sandbox_mode: toml_get_string(table, "sandbox_mode"),
+    sandbox_writable: toml_get_string_array(table, "sandbox_writable"),
     container_runtime: toml_get_string(table, "container_runtime"),
     affected: affected_result,
     local_override_actions: override_result,
@@ -2250,6 +2259,16 @@ fn merge_config_into_options(
       options.nix_packages
     } else {
       config.nix_packages
+    },
+    sandbox_mode: if options.sandbox_mode.length() > 0 {
+      options.sandbox_mode
+    } else {
+      config.sandbox_mode
+    },
+    sandbox_writable: if options.sandbox_writable.length() > 0 {
+      options.sandbox_writable
+    } else {
+      config.sandbox_writable
     },
     container_runtime: if options.container_runtime.length() > 0 {
       options.container_runtime
@@ -3459,6 +3478,8 @@ fn parse_cli_args(args : Array[String]) -> CliParseResult {
   let mut trust_actions = false
   let mut nix_mode = ""
   let nix_packages : Array[String] = []
+  let mut sandbox_mode = ""
+  let sandbox_writable : Array[String] = []
   let mut container_runtime = ""
   let mut affected = false
   let mut affected_base = ""
@@ -3494,6 +3515,11 @@ fn parse_cli_args(args : Array[String]) -> CliParseResult {
     }
     if arg == "--no-nix" {
       nix_mode = "off"
+      index += 1
+      continue
+    }
+    if arg == "--sandbox" {
+      sandbox_mode = "ronly"
       index += 1
       continue
     }
@@ -3574,6 +3600,7 @@ fn parse_cli_args(args : Array[String]) -> CliParseResult {
       arg == "--env" ||
       arg == "--nix-packages" ||
       arg == "--container-runtime" ||
+      arg == "--sandbox-writable" ||
       arg == "--job" ||
       arg == "--step" ||
       arg == "--trigger" {
@@ -3638,6 +3665,8 @@ fn parse_cli_args(args : Array[String]) -> CliParseResult {
         }
       } else if arg == "--container-runtime" {
         container_runtime = value
+      } else if arg == "--sandbox-writable" {
+        sandbox_writable.push(value)
       } else if arg == "--job" {
         job_filter = value
       } else if arg == "--step" {
@@ -3709,6 +3738,8 @@ fn parse_cli_args(args : Array[String]) -> CliParseResult {
       trust_actions,
       nix_mode,
       nix_packages,
+      sandbox_mode,
+      sandbox_writable,
       container_runtime,
       affected,
       affected_base,
@@ -4865,6 +4896,13 @@ async fn handle_doctor_command() -> Int {
     // nix_mode
     if config.nix_mode.length() > 0 {
       println("  nix_mode: " + config.nix_mode)
+    }
+    // sandbox_mode
+    if config.sandbox_mode.length() > 0 {
+      println("  sandbox_mode: " + config.sandbox_mode)
+      if config.sandbox_writable.length() > 0 {
+        println("  sandbox_writable: " + config.sandbox_writable.join(", "))
+      }
     }
     // nix_packages
     if config.nix_packages.length() > 0 {
@@ -7436,6 +7474,8 @@ async fn handle_workflow_run_command(raw_options : CliOptions) -> Int {
     dispatch_inputs=options.dispatch_inputs,
     nix_mode=options.nix_mode,
     nix_packages=options.nix_packages,
+    sandbox_mode=options.sandbox_mode,
+    sandbox_writable=options.sandbox_writable,
     allow_destructive_checkout_clean=workspace_mode != "local",
   )
   let report = @ar.mask_report_secrets(raw_report, @ar.collect_secret_values())

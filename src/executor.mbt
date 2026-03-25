@@ -7,6 +7,35 @@ priv enum NixMode {
 }
 
 ///|
+priv enum SandboxMode {
+  Ronly(Array[String]) // ronly with extra args (e.g. ["--writable", "/workspace"])
+  SandboxNone
+}
+
+///|
+fn sandbox_wrap_command(
+  config : SandboxMode,
+  cmd : String,
+  args : Array[String],
+) -> (String, Array[String]) {
+  match config {
+    Ronly(extra_args) => {
+      let ronly_args : Array[String] = []
+      for arg in extra_args {
+        ronly_args.push(arg)
+      }
+      ronly_args.push("--")
+      ronly_args.push(cmd)
+      for arg in args {
+        ronly_args.push(arg)
+      }
+      ("ronly", ronly_args)
+    }
+    SandboxNone => (cmd, args)
+  }
+}
+
+///|
 async fn detect_nix_config(
   workspace_root : String,
   nix_mode : String,
@@ -3667,6 +3696,7 @@ async fn execute_task_plan_native(
   job_services : Map[String, Map[String, JobContainerSpec]],
   dispatch_inputs~ : Map[String, String],
   nix_config? : NixMode = NixNone,
+  sandbox_config? : SandboxMode = SandboxNone,
   allow_destructive_checkout_clean? : Bool = false,
 ) -> TaskExecutionResult {
   if plan.kind == "barrier" {
@@ -3779,7 +3809,8 @@ async fn execute_task_plan_native(
     resolved_shell,
     file_commands.script_path,
   )
-  let (cmd, args) = nix_wrap_command(nix_config, raw_cmd, raw_args)
+  let (nix_cmd, nix_args) = nix_wrap_command(nix_config, raw_cmd, raw_args)
+  let (cmd, args) = sandbox_wrap_command(sandbox_config, nix_cmd, nix_args)
   let env = default_runner_env(
     workflow_name, plan, workspace_root, github_ctx, resolved_plan_env, file_commands,
     runner_ctx,
@@ -3819,6 +3850,8 @@ pub async fn execute_lowered_native(
   dispatch_inputs? : Map[String, String] = {},
   nix_mode? : String = "",
   nix_packages? : Array[String] = [],
+  sandbox_mode? : String = "",
+  sandbox_writable? : Array[String] = [],
   allow_destructive_checkout_clean? : Bool = false,
 ) -> WorkflowRunReport {
   let issues = lowered_issues(lowered)
@@ -3827,6 +3860,16 @@ pub async fn execute_lowered_native(
   }
   ignore(exec_remove_tree(artifact_store_root(workspace_root)))
   let nix_config = detect_nix_config(workspace_root, nix_mode, nix_packages)
+  let sandbox_config : SandboxMode = if sandbox_mode == "ronly" {
+    let extra_args : Array[String] = []
+    for path in sandbox_writable {
+      extra_args.push("--writable")
+      extra_args.push(path)
+    }
+    Ronly(extra_args)
+  } else {
+    SandboxNone
+  }
 
   let ir = lowered.ir
   let selected = selected_task_set(ir)
@@ -4220,6 +4263,7 @@ pub async fn execute_lowered_native(
                 lowered.plan.job_services,
                 dispatch_inputs~,
                 nix_config~,
+                sandbox_config~,
                 allow_destructive_checkout_clean~,
               )
               let report = result.report
