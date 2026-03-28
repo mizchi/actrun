@@ -17,6 +17,12 @@ docker run --rm -v "$PWD":/workspace -w /workspace ghcr.io/mizchi/actrun workflo
 # npm global install
 npm install -g @mizchi/actrun
 
+# Nix (run without installing)
+nix run github:mizchi/actrun -- workflow run .github/workflows/ci.yml
+
+# Nix (install into profile)
+nix profile install github:mizchi/actrun
+
 # moon install
 moon install mizchi/actrun/cmd/actrun
 
@@ -25,7 +31,22 @@ git clone https://github.com/mizchi/actrun.git && cd actrun
 moon build src/cmd/actrun --target native
 ```
 
-## Adding the overlay to your flake.nix
+## Nix
+
+### Run directly
+
+```bash
+nix run github:mizchi/actrun -- workflow run .github/workflows/ci.yml
+```
+
+### Build from source
+
+```bash
+nix build github:mizchi/actrun
+./result/bin/actrun workflow run .github/workflows/ci.yml
+```
+
+### Adding the overlay to your flake.nix
 
 ```nix
 {
