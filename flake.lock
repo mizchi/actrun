@@ -1,6 +1,58 @@
 {
   "nodes": {
+    "moon-registry": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1774712696,
+        "narHash": "sha256-5pXWbT0m+vZKOW9DJgRBFRKU2GogpmlLS+wkK2qXg+4=",
+        "ref": "refs/heads/main",
+        "rev": "39743040d5e9fc28e90fad0ea280a4d30040543c",
+        "revCount": 7564,
+        "type": "git",
+        "url": "https://mooncakes.io/git/index"
+      },
+      "original": {
+        "type": "git",
+        "url": "https://mooncakes.io/git/index"
+      }
+    },
+    "moonbit-overlay": {
+      "inputs": {
+        "nixpkgs": "nixpkgs",
+        "treefmt-nix": "treefmt-nix"
+      },
+      "locked": {
+        "lastModified": 1774725309,
+        "narHash": "sha256-6A+KPyYuubWS2CW8+0LN1/IMREZR1JA4CKIiwBze1ss=",
+        "owner": "ryoppippi",
+        "repo": "moonbit-overlay",
+        "rev": "4ffc0aab45588a519342178cca9231be94c9bab0",
+        "type": "github"
+      },
+      "original": {
+        "owner": "ryoppippi",
+        "ref": "fix/moonplatform-bugs",
+        "repo": "moonbit-overlay",
+        "type": "github"
+      }
+    },
     "nixpkgs": {
+      "locked": {
+        "lastModified": 1742272065,
+        "narHash": "sha256-ud8vcSzJsZ/CK+r8/v0lyf4yUntVmDq6Z0A41ODfWbE=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "3549532663732bfd89993204d40543e9edaec4f2",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixpkgs-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "nixpkgs_2": {
       "locked": {
         "lastModified": 1773628058,
         "narHash": "sha256-hpXH0z3K9xv0fHaje136KY872VT2T5uwxtezlAskQgY=",
@@ -18,7 +70,30 @@
     },
     "root": {
       "inputs": {
-        "nixpkgs": "nixpkgs"
+        "moon-registry": "moon-registry",
+        "moonbit-overlay": "moonbit-overlay",
+        "nixpkgs": "nixpkgs_2"
+      }
+    },
+    "treefmt-nix": {
+      "inputs": {
+        "nixpkgs": [
+          "moonbit-overlay",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1742370146,
+        "narHash": "sha256-XRE8hL4vKIQyVMDXykFh4ceo3KSpuJF3ts8GKwh5bIU=",
+        "owner": "numtide",
+        "repo": "treefmt-nix",
+        "rev": "adc195eef5da3606891cedf80c0d9ce2d3190808",
+        "type": "github"
+      },
+      "original": {
+        "owner": "numtide",
+        "repo": "treefmt-nix",
+        "type": "github"
       }
     }
   },
