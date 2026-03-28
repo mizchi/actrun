@@ -69,6 +69,28 @@
         }
       );
 
+      devShells = forAllSystems (
+        system:
+        let
+          pkgs = pkgsFor system;
+          moonHome = pkgs.moonPlatform.bundleWithRegistry {
+            cachedRegistry = pkgs.moonPlatform.buildCachedRegistry {
+              moonModJson = ./moon.mod.json;
+              registryIndexSrc = moon-registry;
+            };
+          };
+        in
+        {
+          default = pkgs.mkShellNoCC {
+            packages = [
+              moonHome
+              pkgs.git
+            ];
+            env.MOON_HOME = "${moonHome}";
+          };
+        }
+      );
+
       apps = forAllSystems (
         system:
         let
