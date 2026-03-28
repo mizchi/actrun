@@ -46,6 +46,26 @@ nix build github:mizchi/actrun
 ./result/bin/actrun workflow run .github/workflows/ci.yml
 ```
 
+### Development shell
+
+<details>
+<summary>With direnv (recommended)</summary>
+
+With [direnv](https://direnv.net/) and [nix-direnv](https://github.com/nix-community/nix-direnv):
+
+```bash
+echo "use flake" > .envrc
+direnv allow
+```
+
+</details>
+
+Or without direnv:
+
+```bash
+nix develop
+```
+
 ### Adding the overlay to your flake.nix
 
 ```nix

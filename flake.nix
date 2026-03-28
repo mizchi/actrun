@@ -85,6 +85,9 @@
             packages = [
               moonHome
               pkgs.git
+              pkgs.just
+              pkgs.pnpm
+              pkgs.nodejs
             ];
             env.MOON_HOME = "${moonHome}";
           };
