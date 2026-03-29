@@ -36,6 +36,9 @@ async fn detect_nix_config(
   if @xfs.path_exists(workspace_root + "/shell.nix") {
     return Shell
   }
+  if nix_mode == "auto" {
+    return Shell
+  }
   NixNone
 }
 
