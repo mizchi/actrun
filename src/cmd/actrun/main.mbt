@@ -2096,9 +2096,8 @@ fn toml_get_table(
 ///|
 let known_config_keys : Array[String] = [
   "workspace_mode", "local_skip_actions", "trust_actions", "nix_mode", "nix_packages",
-  "sandbox_mode", "sandbox_writable",
-  "container_runtime", "includes", "affected", "override", "lint", "include_dirty",
-  "local_context",
+  "sandbox_mode", "sandbox_writable", "container_runtime", "includes", "affected",
+  "override", "lint", "include_dirty", "local_context",
 ]
 
 ///|

@@ -47,7 +47,9 @@ test "nix_wrap_command: Packages wraps with nix-shell -p" {
 
 ///|
 test "sandbox_wrap_command: SandboxNone passes through" {
-  let (cmd, args) = sandbox_wrap_command(SandboxNone, "bash", ["--norc", "script.sh"])
+  let (cmd, args) = sandbox_wrap_command(SandboxNone, "bash", [
+    "--norc", "script.sh",
+  ])
   inspect(cmd, content="bash")
   inspect(
     args,
@@ -59,7 +61,9 @@ test "sandbox_wrap_command: SandboxNone passes through" {
 
 ///|
 test "sandbox_wrap_command: Ronly wraps with ronly --" {
-  let (cmd, args) = sandbox_wrap_command(Ronly([]), "bash", ["--norc", "script.sh"])
+  let (cmd, args) = sandbox_wrap_command(Ronly([]), "bash", [
+    "--norc", "script.sh",
+  ])
   inspect(cmd, content="ronly")
   inspect(
     args,
