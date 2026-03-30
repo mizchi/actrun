@@ -134,7 +134,7 @@ if (!started) {
         for (let j = 0; j < iovs_len; j++) {
           const ptr = view().getUint32(iovs_ptr + j * 8, true);
           const len = view().getUint32(iovs_ptr + j * 8 + 4, true);
-          const data = u8().slice(ptr, ptr + len);
+          const data = u8().subarray(ptr, ptr + len);
           if (fd === 1) writeStdout(data);
           else if (fd === 2) writeStderr(data);
           else {

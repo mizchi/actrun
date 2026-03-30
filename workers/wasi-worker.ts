@@ -110,7 +110,7 @@ class WasiP1Runner {
           for (let i = 0; i < iovsLen; i++) {
             const ptr = self.v().getUint32(iovs + i * 8, true);
             const len = self.v().getUint32(iovs + i * 8 + 4, true);
-            const data = self.u8().slice(ptr, ptr + len);
+            const data = self.u8().subarray(ptr, ptr + len);
             if (fd === 1) self.stdoutBuf.push(data);
             else if (fd === 2) self.stderrBuf.push(data);
             else {
@@ -154,7 +154,7 @@ class WasiP1Runner {
         ) => {
           const dir = self.fds.get(dirfd);
           if (!dir?.path) return 8;
-          const rel = decode(self.u8().slice(pp, pp + pl));
+          const rel = decode(self.u8().subarray(pp, pp + pl));
           const full = dir.path + "/" + rel;
           const nfd = self.nextFd++;
           self.fds.set(nfd, { path: full, isDir: false, writeBuf: [] });

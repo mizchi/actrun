@@ -593,13 +593,7 @@ fn shell_find_char(s : String, target : Char) -> Int? {
 
 ///|
 fn shell_text_slice(s : String, start : Int, end_ : Int) -> String {
-  let buf = StringBuilder::new()
-  let mut idx = start
-  while idx < end_ && idx < s.length() {
-    buf.write_char(Char::from_int(s.unsafe_get(idx).to_int()))
-    idx += 1
-  }
-  buf.to_string()
+  String::unsafe_substring(s, start~, end=end_)
 }
 
 ///|

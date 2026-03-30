@@ -3905,7 +3905,7 @@ async test "executor: wasm actions run via configured wasm runner" {
   inspect(
     module_report.stdout.trim(chars=" \n\r\t").to_string(),
     content=(
-      #|hello|/tmp/actrun-wasm-build_module
+      #|hello|/tmp/actrun-wasm-0-build_module
     ),
   )
   let verify = expect_task_report(report, "build/verify")

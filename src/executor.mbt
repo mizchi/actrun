@@ -380,15 +380,7 @@ fn apply_composite_output_mappings(
 
 ///|
 fn find_colon(text : String) -> Int? {
-  let target = ':'.to_int().to_uint16()
-  let mut idx = 0
-  while idx < text.length() {
-    if text.unsafe_get(idx) == target {
-      return Some(idx)
-    }
-    idx += 1
-  }
-  None
+  shell_find_char(text, ':')
 }
 
 ///|
@@ -2920,7 +2912,6 @@ async fn execute_wasm_action_native(
       "wasm module for '\{entrypoint}' was not found",
     )
   }
-  // Validate the WASM module using wite before execution
   let abs_module_path = absolute_exec_path(module_path)
   let skip_validate = resolved_plan_env
     .get("ACTRUN_WASM_SKIP_VALIDATE")
@@ -2948,14 +2939,11 @@ async fn execute_wasm_action_native(
       None => ()
     }
   }
-  // Create a sandboxed tempdir — WASM module only sees this directory,
-  // not the host filesystem. Inspired by moonix FsBridge pattern.
   guard create_wasm_sandbox(plan.id) is Some(sandbox) else {
     return failure_execution_result(
       plan, workspace_root, "failed to create wasm sandbox",
     )
   }
-  // Use file_commands that point to the sandbox for env path resolution
   let file_commands : StepFileCommands = {
     env_path: sandbox.env_path,
     path_path: sandbox.path_path,
@@ -2971,15 +2959,13 @@ async fn execute_wasm_action_native(
   let wasm_bin = configured_exec_bin(
     "ACTRUN_WASM_BIN", resolved_plan_env, "wasmtime",
   )
-  let abs_module_path = absolute_exec_path(module_path)
   let wasm_args = build_sandboxed_wasmtime_args(sandbox, env, abs_module_path)
-  // For deno/node/bun runners, prepend wasi-runner.mjs as the shim script
   let (cmd, args) = resolve_wasm_runner_command(
     wasm_bin, wasm_args, workspace_root,
   )
   let cwd = sandbox.tempdir
   let (code, stdout, stderr) = run_command(cmd, args, cwd~)
-  let result = read_sandbox_results(sandbox, code, stdout, stderr)
+  let result = read_sandbox_results(sandbox)
   cleanup_wasm_sandbox(sandbox)
   {
     report: {

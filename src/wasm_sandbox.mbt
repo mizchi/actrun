@@ -18,9 +18,6 @@ pub struct WasmSandbox {
 
 ///|
 pub struct WasmSandboxResult {
-  code : Int
-  stdout : String
-  stderr : String
   env_updates : Map[String, String]
   path_entries : Array[String]
   output_values : Map[String, String]
@@ -32,7 +29,8 @@ pub struct WasmSandboxResult {
 #cfg(target="native")
 pub fn create_wasm_sandbox(step_id : String) -> WasmSandbox? {
   let safe_id = sanitize_path_component(step_id)
-  let tempdir = "/tmp/actrun-wasm-" + safe_id
+  let pid = @xsys.get_env_var("PPID").unwrap_or("0")
+  let tempdir = "/tmp/actrun-wasm-" + pid + "-" + safe_id
   try @xfs.create_dir(tempdir) catch {
     _ => return None
   } noraise {
@@ -85,25 +83,19 @@ pub fn build_sandboxed_wasmtime_args(
   module_path : String,
 ) -> Array[String] {
   let args : Array[String] = ["run"]
-  // Override file command paths to point inside the sandbox
-  let sandboxed_env : Map[String, String] = {}
   for key, value in env {
-    match key {
-      "GITHUB_ENV" => sandboxed_env[key] = sandbox.env_path
-      "GITHUB_OUTPUT" => sandboxed_env[key] = sandbox.output_path
-      "GITHUB_PATH" => sandboxed_env[key] = sandbox.path_path
-      "GITHUB_STEP_SUMMARY" => sandboxed_env[key] = sandbox.summary_path
-      "GITHUB_STATE" => sandboxed_env[key] = sandbox.state_path
-      // Strip workspace path — module runs in sandbox only
-      "GITHUB_WORKSPACE" => sandboxed_env[key] = sandbox.tempdir
-      _ => sandboxed_env[key] = value
+    let actual = match key {
+      "GITHUB_ENV" => sandbox.env_path
+      "GITHUB_OUTPUT" => sandbox.output_path
+      "GITHUB_PATH" => sandbox.path_path
+      "GITHUB_STEP_SUMMARY" => sandbox.summary_path
+      "GITHUB_STATE" => sandbox.state_path
+      "GITHUB_WORKSPACE" => sandbox.tempdir
+      _ => value
     }
-  }
-  for key, value in sandboxed_env {
     args.push("--env")
-    args.push(key + "=" + value)
+    args.push(key + "=" + actual)
   }
-  // Only mount the sandbox tempdir — nothing else
   args.push("--dir")
   args.push(sandbox.tempdir)
   args.push(module_path)
@@ -182,26 +174,13 @@ fn find_wasi_runner_shim(workspace_root : String) -> String {
 ///|
 /// Read results from the sandbox after WASM execution.
 #cfg(target="native")
-pub fn read_sandbox_results(
-  sandbox : WasmSandbox,
-  code : Int,
-  stdout : String,
-  stderr : String,
-) -> WasmSandboxResult {
-  let env_updates = parse_env_updates(sandbox.env_path)
-  let path_entries = parse_path_updates(sandbox.path_path)
-  let output_values = parse_output_values(sandbox.output_path)
-  let state_updates = parse_state_values(sandbox.state_path)
-  let summary = parse_summary_text(sandbox.summary_path)
+pub fn read_sandbox_results(sandbox : WasmSandbox) -> WasmSandboxResult {
   {
-    code,
-    stdout,
-    stderr,
-    env_updates,
-    path_entries,
-    output_values,
-    state_updates,
-    summary,
+    env_updates: parse_env_updates(sandbox.env_path),
+    path_entries: parse_path_updates(sandbox.path_path),
+    output_values: parse_output_values(sandbox.output_path),
+    state_updates: parse_state_values(sandbox.state_path),
+    summary: parse_summary_text(sandbox.summary_path),
   }
 }
 
