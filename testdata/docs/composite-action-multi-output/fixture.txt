@@ -1,0 +1,7 @@
+id=docs-composite-action-multi-output
+source=docs
+mode=supported
+kind=run
+url=https://docs.github.com/en/actions/sharing-automations/creating-actions/creating-a-composite-action
+added_at=2026-03-30
+notes=composite action with multiple outputs from different inner steps

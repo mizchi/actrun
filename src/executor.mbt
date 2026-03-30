@@ -303,39 +303,76 @@ fn apply_composite_output_mappings(
   if outer_step_id.length() == 0 {
     return state
   }
-  guard mappings.get(outer_step_id) is Some(output_map) else { return state }
-  // Resolve each output mapping: "composite_step_id:output_key" → value
-  let outer_outputs : Map[String, String] = state.step_outputs
-    .get(outer_step_id)
-    .unwrap_or({})
-  for output_name, encoded in output_map {
-    // encoded format: "outer__inner:key"
-    guard find_colon(encoded) is Some(colon_idx) else { continue }
-    let source_step = exec_text_slice(encoded, 0, colon_idx)
-    let source_key = exec_text_slice(encoded, colon_idx + 1, encoded.length())
-    match state.step_outputs.get(source_step) {
-      Some(source_outputs) =>
-        match source_outputs.get(source_key) {
-          Some(value) => outer_outputs[output_name] = value
-          None => ()
-        }
-      None => ()
+  // Propagate outcome/conclusion from inner step to outer composite step
+  let updated_outcomes : Map[String, String] = {}
+  for key, value in state.step_outcomes {
+    updated_outcomes[key] = value
+  }
+  let updated_conclusions : Map[String, String] = {}
+  for key, value in state.step_conclusions {
+    updated_conclusions[key] = value
+  }
+  // Use current inner step's outcome/conclusion as the outer step's
+  // (last inner step to run determines the composite action's result)
+  match state.step_outcomes.get(step_id) {
+    Some(outcome) => {
+      let current_outer = updated_outcomes.get(outer_step_id).unwrap_or("")
+      // If any inner step failed, the outer step is failure
+      if current_outer != "failure" {
+        updated_outcomes[outer_step_id] = outcome
+      }
     }
+    None => ()
   }
-  if outer_outputs.length() == 0 {
-    return state
+  match state.step_conclusions.get(step_id) {
+    Some(conclusion) => {
+      let current_outer = updated_conclusions.get(outer_step_id).unwrap_or("")
+      if current_outer != "failure" {
+        updated_conclusions[outer_step_id] = conclusion
+      }
+    }
+    None => ()
   }
+  // Resolve composite output mappings if this outer step has them
   let updated_outputs : Map[String, Map[String, String]] = {}
   for key, value in state.step_outputs {
     updated_outputs[key] = value
   }
-  updated_outputs[outer_step_id] = outer_outputs
+  match mappings.get(outer_step_id) {
+    Some(output_map) => {
+      let outer_outputs : Map[String, String] = state.step_outputs
+        .get(outer_step_id)
+        .unwrap_or({})
+      for output_name, encoded in output_map {
+        // encoded format: "outer__inner:key"
+        guard find_colon(encoded) is Some(colon_idx) else { continue }
+        let source_step = exec_text_slice(encoded, 0, colon_idx)
+        let source_key = exec_text_slice(
+          encoded,
+          colon_idx + 1,
+          encoded.length(),
+        )
+        match state.step_outputs.get(source_step) {
+          Some(source_outputs) =>
+            match source_outputs.get(source_key) {
+              Some(value) => outer_outputs[output_name] = value
+              None => ()
+            }
+          None => ()
+        }
+      }
+      if outer_outputs.length() > 0 {
+        updated_outputs[outer_step_id] = outer_outputs
+      }
+    }
+    None => ()
+  }
   {
     env_updates: state.env_updates,
     path_entries: state.path_entries,
     step_outputs: updated_outputs,
-    step_outcomes: state.step_outcomes,
-    step_conclusions: state.step_conclusions,
+    step_outcomes: updated_outcomes,
+    step_conclusions: updated_conclusions,
     action_states: state.action_states,
     started_action_scopes: state.started_action_scopes,
   }

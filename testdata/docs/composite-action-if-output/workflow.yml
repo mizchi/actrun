@@ -1,0 +1,14 @@
+name: ci-composite-if-output
+on: push
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - id: detect
+        uses: ./.github/actions/emit
+      - id: deploy
+        if: steps.detect.outputs.changed == 'true'
+        run: printf 'deployed'
+      - id: skip
+        if: steps.detect.outputs.changed == 'false'
+        run: printf 'skipped'

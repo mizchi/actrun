@@ -1,0 +1,15 @@
+name: multi
+outputs:
+  first:
+    value: ${{ steps.a.outputs.first }}
+  second:
+    value: ${{ steps.b.outputs.second }}
+runs:
+  using: composite
+  steps:
+    - id: a
+      shell: bash
+      run: echo "first=alpha" >> "$GITHUB_OUTPUT"
+    - id: b
+      shell: bash
+      run: echo "second=beta" >> "$GITHUB_OUTPUT"

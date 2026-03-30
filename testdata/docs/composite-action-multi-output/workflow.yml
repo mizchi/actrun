@@ -1,0 +1,10 @@
+name: ci-composite-multi-output
+on: push
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - id: emit
+        uses: ./.github/actions/multi
+      - id: check
+        run: printf '%s|%s' '${{ steps.emit.outputs.first }}' '${{ steps.emit.outputs.second }}'

@@ -1,0 +1,7 @@
+name: set-env
+runs:
+  using: composite
+  steps:
+    - id: write
+      shell: bash
+      run: echo "MY_VAR=from-composite" >> "$GITHUB_ENV"

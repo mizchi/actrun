@@ -1,0 +1,10 @@
+name: ci-composite-outcome
+on: push
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - id: act
+        uses: ./.github/actions/fail-action
+      - id: check
+        run: printf '%s|%s' '${{ steps.act.outcome }}' '${{ steps.act.conclusion }}'

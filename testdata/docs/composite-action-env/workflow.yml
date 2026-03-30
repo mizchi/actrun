@@ -1,0 +1,9 @@
+name: ci-composite-env
+on: push
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./.github/actions/set-env
+      - id: check
+        run: printf '%s' "$MY_VAR"

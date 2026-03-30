@@ -1,0 +1,10 @@
+name: emit
+outputs:
+  changed:
+    value: ${{ steps.detect.outputs.changed }}
+runs:
+  using: composite
+  steps:
+    - id: detect
+      shell: bash
+      run: echo "changed=true" >> "$GITHUB_OUTPUT"

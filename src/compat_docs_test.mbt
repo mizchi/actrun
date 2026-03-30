@@ -2326,3 +2326,81 @@ async test "compat docs: composite action outputs propagated to steps context" {
   inspect(task.status, content="success")
   inspect(task.stdout, content="hello")
 }
+
+///|
+#cfg(target="native")
+async test "compat docs: composite action multiple outputs from different inner steps" {
+  let (fixture, workflow, workspace) = compat_prepare_suite_fixture_auto(
+    compat_docs_suite(),
+    "composite-action-multi-output",
+    copy_fixture=true,
+  )
+  let lowered = lower_push_workflow_in_workspace(workflow, workspace)
+  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let task = compat_expect_task_report(report, "test/check")
+
+  inspect(fixture.id, content="docs-composite-action-multi-output")
+  inspect(lowered.errors, content="[]")
+  inspect(report.ok, content="true")
+  inspect(task.status, content="success")
+  inspect(task.stdout, content="alpha|beta")
+}
+
+///|
+#cfg(target="native")
+async test "compat docs: composite action outcome and conclusion are accessible" {
+  let (fixture, workflow, workspace) = compat_prepare_suite_fixture_auto(
+    compat_docs_suite(),
+    "composite-action-outcome",
+    copy_fixture=true,
+  )
+  let lowered = lower_push_workflow_in_workspace(workflow, workspace)
+  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let task = compat_expect_task_report(report, "test/check")
+
+  inspect(fixture.id, content="docs-composite-action-outcome")
+  inspect(lowered.errors, content="[]")
+  inspect(report.ok, content="true")
+  inspect(task.status, content="success")
+  inspect(task.stdout, content="success|success")
+}
+
+///|
+#cfg(target="native")
+async test "compat docs: composite action output used in downstream if condition" {
+  let (fixture, workflow, workspace) = compat_prepare_suite_fixture_auto(
+    compat_docs_suite(),
+    "composite-action-if-output",
+    copy_fixture=true,
+  )
+  let lowered = lower_push_workflow_in_workspace(workflow, workspace)
+  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let deploy = compat_expect_task_report(report, "test/deploy")
+  let skip = compat_expect_task_report(report, "test/skip")
+
+  inspect(fixture.id, content="docs-composite-action-if-output")
+  inspect(lowered.errors, content="[]")
+  inspect(report.ok, content="true")
+  inspect(deploy.status, content="success")
+  inspect(deploy.stdout, content="deployed")
+  inspect(skip.status, content="skipped")
+}
+
+///|
+#cfg(target="native")
+async test "compat docs: GITHUB_ENV set inside composite action is visible to subsequent steps" {
+  let (fixture, workflow, workspace) = compat_prepare_suite_fixture_auto(
+    compat_docs_suite(),
+    "composite-action-env",
+    copy_fixture=true,
+  )
+  let lowered = lower_push_workflow_in_workspace(workflow, workspace)
+  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let task = compat_expect_task_report(report, "test/check")
+
+  inspect(fixture.id, content="docs-composite-action-env")
+  inspect(lowered.errors, content="[]")
+  inspect(report.ok, content="true")
+  inspect(task.status, content="success")
+  inspect(task.stdout, content="from-composite")
+}
