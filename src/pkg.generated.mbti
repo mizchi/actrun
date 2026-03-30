@@ -16,7 +16,7 @@ pub fn build_sandboxed_wasmtime_args(WasmSandbox, Map[String, String], String) -
 
 pub fn cleanup_run_temp_files(String) -> Unit
 
-pub async fn cleanup_wasm_sandbox(WasmSandbox) -> Unit
+pub fn cleanup_wasm_sandbox(WasmSandbox) -> Unit
 
 pub fn collect_secret_values() -> Array[String]
 
@@ -84,6 +84,8 @@ pub fn new_run_defaults(shell? : String?, working_directory? : String?) -> RunDe
 
 pub fn new_run_step(String, String, name? : String, shell? : String?, working_directory? : String?, env? : Map[String, String], if_condition? : String, with_values? : Map[String, String], continue_on_error? : String, timeout_minutes? : Int) -> StepSpec
 
+pub fn new_shell_env(Map[String, String], cwd? : String, write_file? : (String, String, Bool) -> Bool, read_file? : (String) -> String?, file_exists? : (String) -> Bool, is_dir? : (String) -> Bool, mkdir? : (String) -> Bool, remove? : (String) -> Bool) -> ShellEnv
+
 pub fn new_task_plan(String, String, String, String, String, String, String, String, String, Array[String], Map[String, String], action? : ResolvedAction?, action_scope? : String?, requires_action_started? : Bool, continue_on_error? : String, timeout_minutes? : Int) -> TaskPlan
 
 pub fn new_uses_step(String, String, name? : String, env? : Map[String, String], if_condition? : String, with_values? : Map[String, String], continue_on_error? : String, timeout_minutes? : Int) -> StepSpec
@@ -116,7 +118,7 @@ pub fn plan_workflow(String, workspace_root? : String) -> PlanResult
 
 pub async fn prefetch_workflow_github_actions_native(WorkflowSpec, String, git_bin? : String?, github_base_url? : String?) -> GitHubActionPrefetchResult
 
-pub fn read_sandbox_results(WasmSandbox, Int, String, String) -> WasmSandboxResult
+pub fn read_sandbox_results(WasmSandbox) -> WasmSandboxResult
 
 pub fn registry_module_path(String, String) -> String
 
@@ -124,9 +126,17 @@ pub fn resolve_action_ref(ActionRef) -> ActionResolutionResult
 
 pub fn resolve_action_uses(String) -> ActionResolutionResult
 
+pub fn resolve_wasm_runner_command(String, Array[String], String) -> (String, Array[String])
+
 pub fn select_workflow_job(WorkflowSpec, String) -> WorkflowSpec
 
 pub fn select_workflow_step(WorkflowSpec, String, String) -> WorkflowSpec
+
+pub fn shell_exec(ShellEnv, String) -> Int
+
+pub fn shell_stderr(ShellEnv) -> String
+
+pub fn shell_stdout(ShellEnv) -> String
 
 pub fn step_matches_skip_pattern(StepSpec, Array[String]) -> Bool
 
@@ -348,6 +358,21 @@ pub struct RunDefaults {
   working_directory : String?
 }
 
+pub struct ShellEnv {
+  vars : Map[String, String]
+  mut cwd : String
+  stdout_buf : Array[String]
+  stderr_buf : Array[String]
+  mut exit_code : Int
+  mut exit_called : Bool
+  write_file : (String, String, Bool) -> Bool
+  read_file : (String) -> String?
+  file_exists : (String) -> Bool
+  is_dir : (String) -> Bool
+  mkdir : (String) -> Bool
+  remove : (String) -> Bool
+}
+
 pub struct StepSpec {
   id : String
   name : String
@@ -473,9 +498,6 @@ pub struct WasmSandbox {
 }
 
 pub struct WasmSandboxResult {
-  code : Int
-  stdout : String
-  stderr : String
   env_updates : Map[String, String]
   path_entries : Array[String]
   output_values : Map[String, String]

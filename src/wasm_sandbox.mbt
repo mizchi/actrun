@@ -118,7 +118,7 @@ pub fn build_sandboxed_wasmtime_args(
 /// Resolve the WASM runner command.
 /// - "wasmtime" (default): use wasmtime directly with CLI args
 /// - "deno": use deno with wasi-runner.mjs shim
-/// - "node"/"bun": use node/bun with wasi-runner.mjs shim
+/// - "node"/"nodejs"/"bun" (including `.exe` variants): use JS runtime with wasi-runner.mjs shim
 /// - anything else: use as-is (custom runner with wasmtime-compatible CLI)
 #cfg(target="native")
 pub fn resolve_wasm_runner_command(
@@ -126,8 +126,8 @@ pub fn resolve_wasm_runner_command(
   wasm_args : Array[String],
   workspace_root : String,
 ) -> (String, Array[String]) {
-  let bin_name = basename_of(wasm_bin)
-  if bin_name == "deno" || bin_name == "node" || bin_name == "bun" {
+  let bin_name = normalized_exec_name(wasm_bin)
+  if is_js_wasi_runtime(bin_name) {
     let shim_path = find_wasi_runner_shim(workspace_root)
     let args : Array[String] = []
     if bin_name == "deno" {
@@ -141,6 +141,24 @@ pub fn resolve_wasm_runner_command(
     (wasm_bin, args)
   } else {
     (wasm_bin, wasm_args)
+  }
+}
+
+///|
+fn is_js_wasi_runtime(bin_name : String) -> Bool {
+  bin_name == "deno" ||
+  bin_name == "node" ||
+  bin_name == "nodejs" ||
+  bin_name == "bun"
+}
+
+///|
+fn normalized_exec_name(path : String) -> String {
+  let bin_name = basename_of(path)
+  if bin_name.has_suffix(".exe") && bin_name.length() > 4 {
+    exec_text_slice(bin_name, 0, bin_name.length() - 4)
+  } else {
+    bin_name
   }
 }
 
@@ -163,8 +181,7 @@ fn basename_of(path : String) -> String {
 }
 
 ///|
-fn find_wasi_runner_shim(workspace_root : String) -> String {
-  // Look for wasi-runner.mjs relative to cwd first, then workspace
+fn wasi_runner_shim_candidates(workspace_root : String) -> Array[String] {
   let candidates = [
     "scripts/wasi-runner.mjs", "node_modules/@mizchi/actrun/scripts/wasi-runner.mjs",
   ]
@@ -174,6 +191,15 @@ fn find_wasi_runner_shim(workspace_root : String) -> String {
       workspace_root + "/node_modules/@mizchi/actrun/scripts/wasi-runner.mjs",
     )
   }
+  candidates.push("/usr/local/lib/actrun/wasi-runner.mjs")
+  candidates
+}
+
+///|
+fn find_wasi_runner_shim(workspace_root : String) -> String {
+  // Look for wasi-runner.mjs relative to cwd first, then workspace,
+  // then installed locations used by packaged/containerized actrun.
+  let candidates = wasi_runner_shim_candidates(workspace_root)
   for candidate in candidates {
     if @xfs.path_exists(candidate) {
       return absolute_exec_path(candidate)
