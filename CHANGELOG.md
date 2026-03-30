@@ -1,5 +1,89 @@
 # Changelog
 
+## 0.27.0
+
+### Security
+
+- Fix expression injection via matrix values in `if` conditions — matrix values are now quoted as string literals to prevent injection like `'true' || always()` from bypassing conditionals
+- Add path traversal protection for local action references (`uses: ./path`) — reject paths that escape the workspace via `..` segments
+- Clean up script files after step execution to avoid leaving interpolated secrets on disk
+
+### Bug Fixes
+
+- **Composite action outputs not propagated** — `steps.<composite-id>.outputs.*` now works correctly for composite actions (#18, reported by @bmthd)
+- **Composite action outcome/conclusion not set** — `steps.<composite-id>.outcome` and `steps.<composite-id>.conclusion` are now propagated from inner steps
+- **JS SyntaxError on startup** — fix `${}` in MoonBit-generated JS template literals causing `SyntaxError: Missing } in template expression` (#17, reported by @bmthd)
+- **Matrix substitution in complex expressions** — `${{ matrix.key != 'true' }}` no longer replaces the entire expression with empty string; matrix refs within larger expressions are now substituted inline while preserving the `${{ }}` wrapper
+- **Job-level `if` not matrix-substituted** — `if: ${{ matrix.skip != 'true' }}` at the job level now works correctly
+
+### Tests
+
+- 13 new matrix strategy test fixtures: three axes, job/step if/env/name, continue-on-error, include extra keys, matrix chain, working-directory, unquoted YAML values
+- 5 composite action test fixtures: single output, multiple outputs, outcome/conclusion, output in if condition, GITHUB_ENV propagation
+- 28 unit tests for `substitute_matrix_text` edge cases (special characters, complex expressions, injection attempts)
+- 3 executor tests for output/env with special characters and heredoc format
+
+## 0.26.0
+
+### Documentation
+
+- Add performance benchmark to README and `docs/perf.md`
+- Benchmarks cover startup overhead, workspace modes, Node.js CPU, and file I/O across local, nix-packages, and apple-container modes
+
+## 0.25.0
+
+### Bug Fixes
+
+- Fix matrix substitution in complex expressions and job-level `if` (#22)
+
+## 0.24.0
+
+### Features
+
+- Add `--sandbox ronly` support for read-only step execution
+- Add Nix flake with `nix run github:mizchi/actrun`, `nix build`, and `devShell` (PR #19 by @ryoppippi)
+- Fix `--nix` flag to actually force nix-shell wrapping (PR #20 by @ryoppippi)
+
+## 0.23.0
+
+### Features
+
+- Add local GitHub context auto-detection (`github.repository`, `github.ref_name`, `github.sha`, `github.actor`) from local git
+- Add `[local_context]` override in `actrun.toml`
+- Install via Nix overlay (PR #15 by @myuron)
+
+## 0.22.0
+
+### Features
+
+- Add `--jq` flag powered by pure MoonBit jq implementation (`mizchi/jq`)
+
+## 0.21.0
+
+### Features
+
+- Add `--jq` flag for JSON filtering in `run view`, `run logs`, etc.
+
+## 0.20.0
+
+### Features
+
+- Align CLI output format with `gh` for run/workflow/cache/artifact commands
+- Add `--log` flag to `run view`, run list filters, JSON aliases
+
+## 0.19.0
+
+### Features
+
+- Add `--include-dirty` flag for worktree/tmp workspace modes (#13)
+
+## 0.18.0
+
+### Features
+
+- Add experimental `actrun export` to convert GitHub Actions workflows to standalone shell scripts
+- Export supports: expression resolution, matrix defaults, parallel execution, reusable workflow inlining, `GITHUB_OUTPUT` conversion
+
 ## 0.17.0
 
 ### Security
