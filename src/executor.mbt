@@ -2944,14 +2944,7 @@ async fn execute_wasm_action_native(
       plan, workspace_root, "failed to create wasm sandbox",
     )
   }
-  let file_commands : StepFileCommands = {
-    env_path: sandbox.env_path,
-    path_path: sandbox.path_path,
-    output_path: sandbox.output_path,
-    summary_path: sandbox.summary_path,
-    state_path: sandbox.state_path,
-    script_path: "",
-  }
+  let file_commands = sandbox.to_file_commands()
   let env = default_runner_env(
     workflow_name, plan, workspace_root, github_ctx, resolved_plan_env, file_commands,
     runner_ctx,

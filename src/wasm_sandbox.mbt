@@ -17,6 +17,18 @@ pub struct WasmSandbox {
 }
 
 ///|
+fn WasmSandbox::to_file_commands(self : WasmSandbox) -> StepFileCommands {
+  {
+    env_path: self.env_path,
+    path_path: self.path_path,
+    output_path: self.output_path,
+    summary_path: self.summary_path,
+    state_path: self.state_path,
+    script_path: "",
+  }
+}
+
+///|
 pub struct WasmSandboxResult {
   env_updates : Map[String, String]
   path_entries : Array[String]
@@ -187,6 +199,15 @@ pub fn read_sandbox_results(sandbox : WasmSandbox) -> WasmSandboxResult {
 ///|
 /// Clean up the sandbox tempdir after use.
 #cfg(target="native")
-pub async fn cleanup_wasm_sandbox(sandbox : WasmSandbox) -> Unit {
-  let _ = run_command("rm", ["-rf", sandbox.tempdir])
+pub fn cleanup_wasm_sandbox(sandbox : WasmSandbox) -> Unit {
+  remove_file(sandbox.env_path)
+  remove_file(sandbox.output_path)
+  remove_file(sandbox.path_path)
+  remove_file(sandbox.summary_path)
+  remove_file(sandbox.state_path)
+  try @xfs.remove_dir(sandbox.tempdir) catch {
+    _ => ()
+  } noraise {
+    _ => ()
+  }
 }

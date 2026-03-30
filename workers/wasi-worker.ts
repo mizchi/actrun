@@ -193,6 +193,8 @@ class WasiExit extends Error {
   constructor(public code: number) { super(`exit(${code})`); }
 }
 
+const sharedDecoder = new TextDecoder();
+
 function concat(bufs: Uint8Array[]): Uint8Array {
   const total = bufs.reduce((s, b) => s + b.length, 0);
   const r = new Uint8Array(total);
@@ -200,7 +202,7 @@ function concat(bufs: Uint8Array[]): Uint8Array {
   for (const b of bufs) { r.set(b, o); o += b.length; }
   return r;
 }
-const decode = (b: Uint8Array) => new TextDecoder().decode(b);
+const decode = (b: Uint8Array) => sharedDecoder.decode(b);
 
 // --- HTTP Server ---
 

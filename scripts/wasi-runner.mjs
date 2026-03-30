@@ -175,7 +175,7 @@ if (!started) {
                    _rights_base, _rights_inheriting, _fdflags, fd_ptr) => {
         const dirEntry = fds.get(dirfd);
         if (!dirEntry?.path) return 8;
-        const relPath = decoder.decode(u8().slice(path_ptr, path_ptr + path_len));
+        const relPath = decoder.decode(u8().subarray(path_ptr, path_ptr + path_len));
         const fullPath = dirEntry.path + "/" + relPath;
         if (!preopens.some(d => fullPath.startsWith(d))) return 76;
         const newFd = nextFd++;
