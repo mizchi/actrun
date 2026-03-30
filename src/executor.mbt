@@ -280,6 +280,81 @@ fn append_paths(newer : Array[String], older : Array[String]) -> Array[String] {
 }
 
 ///|
+fn apply_composite_output_mappings(
+  state : JobRuntimeState,
+  step_id : String,
+  mappings : Map[String, Map[String, String]],
+) -> JobRuntimeState {
+  // Check all composite output mappings to see if this step_id is a composite
+  // inner step that completes a composite action's last step.
+  // step_id format for composite inner steps: "outer__inner"
+  // We need to find the outer_step_id and check if it has output mappings.
+  let mut outer_step_id = ""
+  let mut idx = step_id.length()
+  while idx >= 2 {
+    idx -= 1
+    if idx > 0 &&
+      step_id.unsafe_get(idx - 1) == '_'.to_int().to_uint16() &&
+      step_id.unsafe_get(idx) == '_'.to_int().to_uint16() {
+      outer_step_id = exec_text_slice(step_id, 0, idx - 1)
+      break
+    }
+  }
+  if outer_step_id.length() == 0 {
+    return state
+  }
+  guard mappings.get(outer_step_id) is Some(output_map) else { return state }
+  // Resolve each output mapping: "composite_step_id:output_key" → value
+  let outer_outputs : Map[String, String] = state.step_outputs
+    .get(outer_step_id)
+    .unwrap_or({})
+  for output_name, encoded in output_map {
+    // encoded format: "outer__inner:key"
+    guard find_colon(encoded) is Some(colon_idx) else { continue }
+    let source_step = exec_text_slice(encoded, 0, colon_idx)
+    let source_key = exec_text_slice(encoded, colon_idx + 1, encoded.length())
+    match state.step_outputs.get(source_step) {
+      Some(source_outputs) =>
+        match source_outputs.get(source_key) {
+          Some(value) => outer_outputs[output_name] = value
+          None => ()
+        }
+      None => ()
+    }
+  }
+  if outer_outputs.length() == 0 {
+    return state
+  }
+  let updated_outputs : Map[String, Map[String, String]] = {}
+  for key, value in state.step_outputs {
+    updated_outputs[key] = value
+  }
+  updated_outputs[outer_step_id] = outer_outputs
+  {
+    env_updates: state.env_updates,
+    path_entries: state.path_entries,
+    step_outputs: updated_outputs,
+    step_outcomes: state.step_outcomes,
+    step_conclusions: state.step_conclusions,
+    action_states: state.action_states,
+    started_action_scopes: state.started_action_scopes,
+  }
+}
+
+///|
+fn find_colon(text : String) -> Int? {
+  let target = ':'.to_int().to_uint16()
+  let mut idx = 0
+  while idx < text.length() {
+    if text.unsafe_get(idx) == target {
+      return Some(idx)
+    }
+    idx += 1
+  }
+  None
+}
+
+///|
 fn apply_job_runtime_updates(
   state : JobRuntimeState,
   step_id : String,
@@ -4312,7 +4387,7 @@ pub async fn execute_lowered_native(
               }
               let outcome = task_outcome(report)
               let conclusion = task_conclusion(outcome, continue_on_error)
-              let next_state = apply_job_runtime_updates(
+              let mut next_state = apply_job_runtime_updates(
                 current_state,
                 plan.step_id,
                 Some(outcome),
@@ -4322,6 +4397,11 @@ pub async fn execute_lowered_native(
                 result.path_entries,
                 result.output_values,
                 result.state_updates,
+              )
+              next_state = apply_composite_output_mappings(
+                next_state,
+                plan.step_id,
+                lowered.plan.composite_output_mappings,
               )
               job_states[plan.job_id] = next_state
               if conclusion == "success" {

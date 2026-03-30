@@ -1651,9 +1651,39 @@ fn parse_local_action_inputs(
 }
 
 ///|
+fn parse_action_outputs(
+  value : YamlValue?,
+  errors : Array[String],
+  ctx : String,
+) -> Map[String, String] {
+  let outputs : Map[String, String] = {}
+  guard value is Some(actual) else { return outputs }
+  match actual {
+    Obj(fields) =>
+      for field in fields {
+        match field.value {
+          Obj(output_fields) =>
+            outputs[field.key] = yaml_as_optional_string(
+              yaml_obj_get(output_fields, "value"),
+              errors,
+              ctx + "." + field.key + ".value",
+            ).unwrap_or("")
+          Str(text) => outputs[field.key] = text
+          Null => outputs[field.key] = ""
+          _ =>
+            errors.push(ctx + "." + field.key + " must be a mapping or string")
+        }
+      }
+    _ => errors.push(ctx + " must be a mapping")
+  }
+  outputs
+}
+
+///|
 priv struct ActionManifestSpec {
   name : String
   inputs : Map[String, String]
+  outputs : Map[String, String]
   runtime : String
   steps : Array[StepSpec]
   main : String
@@ -1732,6 +1762,11 @@ fn parse_action_manifest_yaml(text : String) -> ActionManifestParseResult {
     yaml_obj_get(root_fields, "inputs"),
     errors,
     "inputs",
+  )
+  let outputs = parse_action_outputs(
+    yaml_obj_get(root_fields, "outputs"),
+    errors,
+    "outputs",
   )
   let runs_fields = match yaml_obj_get(root_fields, "runs") {
     Some(runs_value) => yaml_as_obj(runs_value, errors, "runs")
@@ -1831,6 +1866,7 @@ fn parse_action_manifest_yaml(text : String) -> ActionManifestParseResult {
       action: Some({
         name,
         inputs,
+        outputs,
         runtime: action_using,
         steps,
         main,
@@ -1867,7 +1903,12 @@ pub fn parse_local_action_yaml(text : String) -> LocalActionParseResult {
   } else {
     {
       action: Some(
-        new_local_action(action.steps, name=action.name, inputs=action.inputs),
+        new_local_action(
+          action.steps,
+          name=action.name,
+          inputs=action.inputs,
+          outputs=action.outputs,
+        ),
       ),
       errors,
     }

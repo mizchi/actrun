@@ -1,0 +1,10 @@
+name: emit
+outputs:
+  value:
+    value: ${{ steps.write.outputs.value }}
+runs:
+  using: composite
+  steps:
+    - id: write
+      shell: bash
+      run: echo "value=hello" >> "$GITHUB_OUTPUT"

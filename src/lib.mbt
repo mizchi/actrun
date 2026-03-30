@@ -627,6 +627,7 @@ pub struct ExecutionPlan {
   job_matrix_fail_fast : Map[String, Bool]
   job_containers : Map[String, JobContainerSpec]
   job_services : Map[String, Map[String, JobContainerSpec]]
+  composite_output_mappings : Map[String, Map[String, String]]
 }
 
 ///|
@@ -656,6 +657,7 @@ pub struct WorkflowParseResult {
 pub struct LocalActionSpec {
   name : String
   inputs : Map[String, String]
+  outputs : Map[String, String]
   steps : Array[StepSpec]
 }
 
@@ -664,8 +666,9 @@ pub fn new_local_action(
   steps : Array[StepSpec],
   name? : String = "",
   inputs? : Map[String, String] = {},
+  outputs? : Map[String, String] = {},
 ) -> LocalActionSpec {
-  { name, inputs, steps }
+  { name, inputs, outputs, steps }
 }
 
 ///|
