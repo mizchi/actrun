@@ -541,32 +541,46 @@ ACTRUN_NIX=false actrun workflow run .github/workflows/ci.yml
 
 ## Performance
 
-Benchmark on Apple Silicon (M-series). All nix measurements use warm nix store cache.
+Benchmark on Apple Silicon (M-series). Nix measurements use warm nix store cache.
+
+### Startup overhead (1 job, 1 step, `echo ok`)
+
+| Mode | Startup |
+|------|--------:|
+| `local` | ~0.13s |
+| `nix-packages` | ~0.70s |
+| `apple-container` | ~0.93s |
 
 ### Workspace modes (2 jobs, 7 steps, file I/O)
 
 | Mode | Run 1 | Run 2 | Run 3 |
 |------|------:|------:|------:|
 | `local` | 0.277s | 0.420s | 0.265s |
-| `local + nix-packages` | 4.262s | 3.813s | 3.831s |
 | `worktree` | 0.260s | 0.258s | 0.256s |
-| `worktree + nix-packages` | 3.883s | 3.814s | 3.919s |
 | `tmp` | 0.631s | 0.599s | 0.586s |
-| `tmp + nix-packages` | 4.263s | 4.198s | 4.222s |
 
-### Container runtime (1 job, 4 steps, alpine:3.20)
+### CPU-heavy workload (prime sieve to 50000, sh)
 
-| Mode | Run 1 | Run 2 | Run 3 |
-|------|------:|------:|------:|
-| `local` (no container) | 0.225s | 0.176s | 0.202s |
-| `apple-container` | 3.454s | 3.447s | 3.315s |
+| Mode | Startup | Total | Exec |
+|------|--------:|------:|-----:|
+| `local` | ~0.13s | ~5.35s | ~5.22s |
+| `nix-packages` | ~0.70s | ~4.27s | ~3.57s |
+| `apple-container` | ~0.93s | ~3.18s | ~2.25s |
+
+Shell implementation affects execution speed significantly:
+
+| Mode | Shell | Version |
+|------|-------|---------|
+| `local` | macOS `/bin/sh` | bash 3.2.57 (POSIX mode) |
+| `nix-packages` | nix bash | bash 5.3.9 |
+| `apple-container` | Alpine `/bin/sh` | BusyBox 1.36.1 ash |
 
 ### Summary
 
-- **local / worktree** are the fastest (~0.2-0.3s) — ideal for iterative development
-- **tmp** adds ~0.3s for `git clone`
-- **nix-packages** adds ~4s per run for `nix develop` shell startup (warm cache). First run may take longer to fetch packages from the nix store
-- **apple-container** adds ~3s for container lifecycle (create, start, exec, stop) per step group
+- **local / worktree** have minimal startup (~0.13s) — ideal for iterative development
+- **nix-packages** adds ~0.6s startup for `nix develop` shell initialization (warm cache; first run fetches packages)
+- **apple-container** adds ~0.9s startup for container lifecycle, but BusyBox ash executes shell scripts ~2.3x faster than macOS bash 3.2
+- For CPU-heavy shell workloads, **apple-container is the fastest end-to-end** despite higher startup cost
 
 ```bash
 # Try it yourself
