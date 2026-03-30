@@ -15,6 +15,7 @@ import {
   "moonbitlang/x/sys" @xsys,
   "moonbit-community/yaml" @yaml,
   "mizchi/wite" @wite,
+  "mizchi/actrun/sh" @sh,
 }
 
 import {
