@@ -12,6 +12,9 @@ on:
     paths:
       - .github/workflows/copilot-setup-steps.yml
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   # The job MUST be called `copilot-setup-steps` or it will not be picked up by Copilot.
   copilot-setup-steps:
