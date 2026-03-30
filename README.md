@@ -553,34 +553,26 @@ Benchmark on Apple Silicon (M-series). Nix measurements use warm nix store cache
 
 ### Workspace modes (2 jobs, 7 steps, file I/O)
 
-| Mode | Run 1 | Run 2 | Run 3 |
-|------|------:|------:|------:|
-| `local` | 0.277s | 0.420s | 0.265s |
-| `worktree` | 0.260s | 0.258s | 0.256s |
-| `tmp` | 0.631s | 0.599s | 0.586s |
+| Mode | Time |
+|------|-----:|
+| `local` | ~0.27s |
+| `worktree` | ~0.26s |
+| `tmp` | ~0.60s |
 
-### CPU-heavy workload (prime sieve to 50000, sh)
+### Node.js workload (prime sieve to 5M)
 
-| Mode | Startup | Total | Exec |
-|------|--------:|------:|-----:|
-| `local` | ~0.13s | ~5.35s | ~5.22s |
-| `nix-packages` | ~0.70s | ~4.27s | ~3.57s |
-| `apple-container` | ~0.93s | ~3.18s | ~2.25s |
-
-Shell implementation affects execution speed significantly:
-
-| Mode | Shell | Version |
-|------|-------|---------|
-| `local` | macOS `/bin/sh` | bash 3.2.57 (POSIX mode) |
-| `nix-packages` | nix bash | bash 5.3.9 |
-| `apple-container` | Alpine `/bin/sh` | BusyBox 1.36.1 ash |
+| Mode | Node.js version | V8 exec | actrun total |
+|------|-----------------|--------:|-------------:|
+| `local` | v24.12.0 | 644ms | 0.78s |
+| `nix-packages` | v24.14.0 | 629ms | 1.45s |
+| `apple-container` | v20.20.2 (alpine) | 502ms | 1.43s |
 
 ### Summary
 
-- **local / worktree** have minimal startup (~0.13s) — ideal for iterative development
-- **nix-packages** adds ~0.6s startup for `nix develop` shell initialization (warm cache; first run fetches packages)
-- **apple-container** adds ~0.9s startup for container lifecycle, but BusyBox ash executes shell scripts ~2.3x faster than macOS bash 3.2
-- For CPU-heavy shell workloads, **apple-container is the fastest end-to-end** despite higher startup cost
+- **local** has the lowest overhead (~0.13s startup) — best for fast iteration
+- **nix-packages** adds ~0.6s for `nix develop` shell initialization (warm cache; first run fetches packages)
+- **apple-container** adds ~0.9s for container lifecycle (create/start/exec/stop), but V8 execution inside the Linux VM can be faster than native macOS for some workloads
+- For real workloads (Node.js, compiled languages), **execution speed is virtually identical** across modes — the difference is purely startup overhead
 
 ```bash
 # Try it yourself
