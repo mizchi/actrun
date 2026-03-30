@@ -1,4 +1,15 @@
 ///|
+// Build shell variable reference "${VAR}" from parts.
+// This avoids "$" + "{" adjacency in string literals, which the MoonBit JS
+// backend can collapse into a JS template-literal interpolation `${...}`,
+// producing invalid syntax like `${${fn(x)}}`.
+fn shell_var_ref(name : String) -> String {
+  let dollar = "$"
+  let open = "{"
+  dollar + open + name + "}"
+}
+
+///|
 /// Convert a workflow to a shell script (experimental)
 pub fn workflow_to_shell(
   workflow : @ar.WorkflowSpec,
@@ -163,7 +174,9 @@ fn emit_job_function_parallel(job : @ar.JobSpec, out : Array[String]) -> Unit {
         let first_row = m.rows[0]
         for key, value in first_row {
           out.push(
-            "  : \"$\u007bMATRIX_" + to_shell_var(key) + ":=" + value + "}\"",
+            "  : \"" +
+            shell_var_ref("MATRIX_" + to_shell_var(key) + ":=" + value) +
+            "\"",
           )
         }
       }
@@ -338,7 +351,9 @@ fn emit_job_function(job : @ar.JobSpec, out : Array[String]) -> Unit {
         let first_row = m.rows[0]
         for key, value in first_row {
           out.push(
-            "  : \"$\u007bMATRIX_" + to_shell_var(key) + ":=" + value + "}\"",
+            "  : \"" +
+            shell_var_ref("MATRIX_" + to_shell_var(key) + ":=" + value) +
+            "\"",
           )
         }
       }
@@ -633,7 +648,11 @@ fn emit_checkout(
       indent +
       "git clone" +
       depth +
-      " \"$\u007bGITHUB_SERVER_URL:-https://github.com}/$\u007bGITHUB_REPOSITORY}\" " +
+      " \"" +
+      shell_var_ref("GITHUB_SERVER_URL:-https://github.com") +
+      "/" +
+      shell_var_ref("GITHUB_REPOSITORY") +
+      "\" " +
       shell_quote(resolved_path),
     )
     if ref_val.length() > 0 {
@@ -736,7 +755,9 @@ fn emit_upload_artifact(
     out.push(indent + "# Upload artifact: " + artifact_name)
     out.push(
       indent +
-      "mkdir -p \"$\u007bACTRUN_ARTIFACT_DIR:-.artifacts}/" +
+      "mkdir -p \"" +
+      shell_var_ref("ACTRUN_ARTIFACT_DIR:-.artifacts") +
+      "/" +
       artifact_name +
       "\"",
     )
@@ -744,7 +765,9 @@ fn emit_upload_artifact(
       indent +
       "cp -r " +
       shell_quote(path) +
-      " \"$\u007bACTRUN_ARTIFACT_DIR:-.artifacts}/" +
+      " \"" +
+      shell_var_ref("ACTRUN_ARTIFACT_DIR:-.artifacts") +
+      "/" +
       artifact_name +
       "/\"",
     )
@@ -766,7 +789,9 @@ fn emit_download_artifact(
     out.push(indent + "# Download artifact: " + name)
     out.push(
       indent +
-      "cp -r \"$\u007bACTRUN_ARTIFACT_DIR:-.artifacts}/" +
+      "cp -r \"" +
+      shell_var_ref("ACTRUN_ARTIFACT_DIR:-.artifacts") +
+      "/" +
       name +
       "/.\" " +
       shell_quote(dest),
@@ -905,7 +930,7 @@ fn expr_to_shell_var(expr : String) -> String {
   if expr.contains("(") {
     return resolve_function_call(expr)
   }
-  "$\u007b" + expr + "}"
+  shell_var_ref(expr)
 }
 
 ///|
@@ -1052,7 +1077,7 @@ fn resolve_github_context(expr : String) -> String {
           String::unsafe_substring(expr, start=13, end=expr.length())
         "$(jq -r '" + jq_path + "' \"$GITHUB_EVENT_PATH\")"
       } else {
-        "$\u007b" + to_shell_var(expr) + "}"
+        shell_var_ref(to_shell_var(expr))
       }
   }
 }
@@ -1068,7 +1093,7 @@ fn resolve_step_ref(expr : String) -> String {
   } else if parts.length() >= 2 && parts[1] == "conclusion" {
     "$_STEP_" + to_shell_var(parts[0]) + "_CONCLUSION"
   } else {
-    "$\u007bsteps." + rest + "}"
+    shell_var_ref("steps." + rest)
   }
 }
 
@@ -1081,7 +1106,7 @@ fn resolve_needs_ref(expr : String) -> String {
   } else if parts.length() >= 2 && parts[1] == "result" {
     "$_NEEDS_" + to_shell_var(parts[0]) + "_RESULT"
   } else {
-    "$\u007bneeds." + rest + "}"
+    shell_var_ref("needs." + rest)
   }
 }
 

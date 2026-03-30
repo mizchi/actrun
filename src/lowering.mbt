@@ -521,7 +521,8 @@ fn substitute_matrix_text(
                   expression, matrix_values,
                 )
                 if substituted != expression {
-                  chunks.push("${{" + substituted + "}}")
+                  let dollar = "$"
+                  chunks.push(dollar + "{{" + substituted + "}}")
                 } else {
                   chunks.push(text_slice(text, open_idx, close_idx + 2))
                 }
