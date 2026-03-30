@@ -2095,6 +2095,7 @@ fn lower_manifest_backed_action(
   task_plans : Array[TaskPlan],
   deferred_post_tasks : Array[DeferredActionTask],
   errors : Array[String],
+  composite_output_mappings? : Map[String, Map[String, String]] = {},
 ) -> String {
   guard find_local_action_manifest(workspace_root, cached_root)
     is Some((_, manifest_text)) else {
@@ -2129,6 +2130,7 @@ fn lower_manifest_backed_action(
       deferred_post_tasks,
       errors,
       action_context_env~,
+      composite_output_mappings~,
     )
   }
   if action_manifest.runtime.has_prefix("node") {
@@ -2440,6 +2442,7 @@ fn lower_local_action(
   deferred_post_tasks : Array[DeferredActionTask],
   errors : Array[String],
   action_context_env? : Map[String, String] = {},
+  composite_output_mappings? : Map[String, Map[String, String]] = {},
 ) -> String {
   if workspace_root.length() == 0 {
     errors.push(
@@ -2473,14 +2476,27 @@ fn lower_local_action(
       join_path(workspace_root, action_path_root),
     )
     return lower_manifest_backed_action(
-      workflow, job, job_env, outer_step, outer_step_id, previous_task_id, local_action_ref,
-      abs_action_root, workspace_root, tasks, task_plans, deferred_post_tasks, errors,
+      workflow,
+      job,
+      job_env,
+      outer_step,
+      outer_step_id,
+      previous_task_id,
+      local_action_ref,
+      abs_action_root,
+      workspace_root,
+      tasks,
+      task_plans,
+      deferred_post_tasks,
+      errors,
+      composite_output_mappings~,
     )
   }
   let action = new_local_action(
     action_manifest.steps,
     name=action_manifest.name,
     inputs=action_manifest.inputs,
+    outputs=action_manifest.outputs,
   )
 
   let mut local_previous_task_id = previous_task_id
@@ -2555,6 +2571,7 @@ fn lower_local_action(
             deferred_post_tasks,
             errors,
             action_context_env~,
+            composite_output_mappings~,
           )
           inner_index += 1
           continue
@@ -2596,9 +2613,20 @@ fn lower_local_action(
       }
       if manifest_backed_action_root(action_ref) is Some(cached_root) {
         local_previous_task_id = lower_manifest_backed_action(
-          workflow, job, outer_env, nested_outer_step, resolved_step_id, local_previous_task_id,
-          action_ref, cached_root, workspace_root, tasks, task_plans, deferred_post_tasks,
+          workflow,
+          job,
+          outer_env,
+          nested_outer_step,
+          resolved_step_id,
+          local_previous_task_id,
+          action_ref,
+          cached_root,
+          workspace_root,
+          tasks,
+          task_plans,
+          deferred_post_tasks,
           errors,
+          composite_output_mappings~,
         )
         inner_index += 1
         continue
@@ -2665,7 +2693,58 @@ fn lower_local_action(
     local_previous_task_id = task_id
     inner_index += 1
   }
+  // Register composite action output mappings
+  // outputs map: output_name → expression (e.g., "${{ steps.write.outputs.value }}")
+  // We resolve inner step references relative to the outer step scope
+  if action.outputs.length() > 0 {
+    let resolved_outputs : Map[String, String] = {}
+    for output_name, expression in action.outputs {
+      // Rewrite inner step references to composite step IDs
+      // e.g., "steps.write.outputs.value" → look up "outer__write" in step_outputs
+      resolved_outputs[output_name] = resolve_composite_output_expression(
+        expression, outer_step_id,
+      )
+    }
+    composite_output_mappings[outer_step_id] = resolved_outputs
+  }
   local_previous_task_id
+}
+
+///|
+fn resolve_composite_output_expression(
+  expression : String,
+  outer_step_id : String,
+) -> String {
+  // Parse "${{ steps.<inner_id>.outputs.<key> }}" and return "outer__inner:key"
+  // as a compact representation the executor can resolve
+  let trimmed = expression.trim(chars=" \t\n\r").to_string()
+  let prefix = "${{"
+  let suffix = "}}"
+  guard trimmed.has_prefix(prefix) && trimmed.has_suffix(suffix) else {
+    return expression
+  }
+  let inner = text_slice(
+      trimmed,
+      prefix.length(),
+      trimmed.length() - suffix.length(),
+    )
+    .trim(chars=" \t\n\r")
+    .to_string()
+  let steps_prefix = "steps."
+  guard inner.has_prefix(steps_prefix) else { return expression }
+  let rest = text_slice(inner, steps_prefix.length(), inner.length())
+  let outputs_marker = ".outputs."
+  guard find_substring(rest, outputs_marker, 0) is Some(dot_idx) else {
+    return expression
+  }
+  let inner_step_id = text_slice(rest, 0, dot_idx)
+  let output_key = text_slice(
+    rest,
+    dot_idx + outputs_marker.length(),
+    rest.length(),
+  )
+  let composite_id = composite_step_id(outer_step_id, inner_step_id)
+  composite_id + ":" + output_key
 }
 
 ///|
@@ -2687,6 +2766,7 @@ pub fn lower_push_workflow_in_workspace(
   let job_matrix_fail_fast : Map[String, Bool] = {}
   let job_containers : Map[String, JobContainerSpec] = {}
   let job_services : Map[String, Map[String, JobContainerSpec]] = {}
+  let composite_output_mappings : Map[String, Map[String, String]] = {}
   let entry_targets : Array[String] = []
   let seen_jobs : Map[String, Bool] = {}
   if workflow.workflow_call {
@@ -2812,8 +2892,19 @@ pub fn lower_push_workflow_in_workspace(
         match action_ref {
           LocalPath(path) => {
             previous_task_id = lower_local_action(
-              workflow, job, job_env, step, resolved_step_id, previous_task_id, path,
-              workspace_root, tasks, task_plans, deferred_post_tasks, errors,
+              workflow,
+              job,
+              job_env,
+              step,
+              resolved_step_id,
+              previous_task_id,
+              path,
+              workspace_root,
+              tasks,
+              task_plans,
+              deferred_post_tasks,
+              errors,
+              composite_output_mappings~,
             )
             step_index += 1
             continue
@@ -2845,9 +2936,20 @@ pub fn lower_push_workflow_in_workspace(
         if workspace_root.length() > 0 &&
           manifest_backed_action_root(action_ref) is Some(cached_root) {
           previous_task_id = lower_manifest_backed_action(
-            workflow, job, job_env, step, resolved_step_id, previous_task_id, action_ref,
-            cached_root, workspace_root, tasks, task_plans, deferred_post_tasks,
+            workflow,
+            job,
+            job_env,
+            step,
+            resolved_step_id,
+            previous_task_id,
+            action_ref,
+            cached_root,
+            workspace_root,
+            tasks,
+            task_plans,
+            deferred_post_tasks,
             errors,
+            composite_output_mappings~,
           )
           step_index += 1
           continue
@@ -2943,6 +3045,7 @@ pub fn lower_push_workflow_in_workspace(
       job_matrix_fail_fast,
       job_containers,
       job_services,
+      composite_output_mappings,
     },
     errors,
   }

@@ -2307,3 +2307,22 @@ test "compat docs: parse push paths-ignore fixture" {
     content="true",
   )
 }
+
+///|
+#cfg(target="native")
+async test "compat docs: composite action outputs propagated to steps context" {
+  let (fixture, workflow, workspace) = compat_prepare_suite_fixture_auto(
+    compat_docs_suite(),
+    "composite-action-output",
+    copy_fixture=true,
+  )
+  let lowered = lower_push_workflow_in_workspace(workflow, workspace)
+  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let task = compat_expect_task_report(report, "test/check")
+
+  inspect(fixture.id, content="docs-composite-action-output")
+  inspect(lowered.errors, content="[]")
+  inspect(report.ok, content="true")
+  inspect(task.status, content="success")
+  inspect(task.stdout, content="hello")
+}

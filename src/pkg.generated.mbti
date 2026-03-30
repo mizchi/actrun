@@ -59,7 +59,7 @@ pub fn new_job_container_spec(String, credentials? : JobContainerCredentialsSpec
 
 pub fn new_job_matrix(Array[Map[String, String]], fail_fast? : Bool, max_parallel? : Int?) -> JobMatrixSpec
 
-pub fn new_local_action(Array[StepSpec], name? : String, inputs? : Map[String, String]) -> LocalActionSpec
+pub fn new_local_action(Array[StepSpec], name? : String, inputs? : Map[String, String], outputs? : Map[String, String]) -> LocalActionSpec
 
 pub fn new_permissions_spec(values? : Map[String, String]) -> PermissionsSpec
 
@@ -173,6 +173,7 @@ pub struct ExecutionPlan {
   job_matrix_fail_fast : Map[String, Bool]
   job_containers : Map[String, JobContainerSpec]
   job_services : Map[String, Map[String, JobContainerSpec]]
+  composite_output_mappings : Map[String, Map[String, String]]
 }
 
 pub struct GitHubActionPrefetchResult {
@@ -232,6 +233,7 @@ pub struct LocalActionParseResult {
 pub struct LocalActionSpec {
   name : String
   inputs : Map[String, String]
+  outputs : Map[String, String]
   steps : Array[StepSpec]
 }
 

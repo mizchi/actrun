@@ -1,0 +1,10 @@
+name: ci-composite-output
+on: push
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - id: emit
+        uses: ./.github/actions/emit
+      - id: check
+        run: printf '%s' '${{ steps.emit.outputs.value }}'
