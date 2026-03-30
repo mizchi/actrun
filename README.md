@@ -559,20 +559,29 @@ Benchmark on Apple Silicon (M-series). Nix measurements use warm nix store cache
 | `worktree` | ~0.26s |
 | `tmp` | ~0.60s |
 
-### Node.js workload (prime sieve to 5M)
+### Node.js CPU (prime sieve to 5M)
 
-| Mode | Node.js version | V8 exec | actrun total |
-|------|-----------------|--------:|-------------:|
+| Mode | Node.js | V8 exec | actrun total |
+|------|---------|--------:|-------------:|
 | `local` | v24.12.0 | 644ms | 0.78s |
 | `nix-packages` | v24.14.0 | 629ms | 1.45s |
 | `apple-container` | v20.20.2 (alpine) | 502ms | 1.43s |
 
+### Node.js file I/O (write/read/stat via `fs` module)
+
+| Operation | local | nix-packages | apple-container |
+|-----------|------:|-------------:|----------------:|
+| Write 1k files | 52ms | 47ms | 14ms |
+| Read 1k files | 12ms | 10ms | 4ms |
+| Write 10MB | 1ms | 1ms | 3ms |
+| Read 10MB | 1ms | 2ms | 3ms |
+| Stat 1k files | 3ms | 2ms | 2ms |
+
 ### Summary
 
 - **local** has the lowest overhead (~0.13s startup) — best for fast iteration
-- **nix-packages** adds ~0.6s for `nix develop` shell initialization (warm cache; first run fetches packages)
-- **apple-container** adds ~0.9s for container lifecycle (create/start/exec/stop), but V8 execution inside the Linux VM can be faster than native macOS for some workloads
-- For real workloads (Node.js, compiled languages), **execution speed is virtually identical** across modes — the difference is purely startup overhead
+- **nix-packages** adds ~0.6s for `nix develop` shell initialization (warm cache; first run fetches packages). Execution speed is identical to local
+- **apple-container** adds ~0.9s for container lifecycle (create/start/exec/stop). Many-file I/O (write/read) is ~3-4x faster inside the Linux VM due to ext4 vs APFS metadata overhead. Large sequential I/O is comparable
 
 ```bash
 # Try it yourself
