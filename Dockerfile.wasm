@@ -1,0 +1,59 @@
+# Minimal actrun container for WASM+WASI-only CI
+#
+# Contract:
+#   - `run:` steps execute in bash with coreutils
+#   - `uses: wasm://<name>@<version>` runs WASI modules via wasmtime
+#   - No Node.js, no Docker-in-Docker, no Python
+#   - Portable CI: if it compiles to WASI, it runs here
+#
+# Usage:
+#   docker build -f Dockerfile.wasm -t actrun-wasm .
+#   docker run --rm -v "$PWD":/workspace -w /workspace actrun-wasm workflow run .github/workflows/ci.yml
+
+# --- Build stage: compile actrun native binary (amd64 only) ---
+FROM --platform=linux/amd64 ubuntu:24.04 AS builder
+
+RUN apt-get update && \
+    apt-get install -y curl git build-essential && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+ENV PATH="/root/.moon/bin:$PATH"
+
+WORKDIR /src
+COPY . .
+RUN git clone --depth 1 https://github.com/bit-vcs/bit.git ../../bit-vcs/bit
+RUN moon update && \
+    moon build --release --target native src/cmd/actrun && \
+    cp _build/native/release/build/cmd/actrun/actrun.exe /usr/local/bin/actrun
+
+# --- Runtime stage: minimal WASM-only environment ---
+FROM ubuntu:24.04 AS runtime
+
+ARG WASMTIME_VERSION=29.0.1
+ARG TARGETARCH
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+      bash \
+      coreutils \
+      git \
+      ca-certificates \
+      curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install wasmtime
+RUN ARCH=$(case "$TARGETARCH" in amd64) echo x86_64;; arm64) echo aarch64;; *) echo "$TARGETARCH";; esac) && \
+    curl -fsSL "https://github.com/bytecodealliance/wasmtime/releases/download/v${WASMTIME_VERSION}/wasmtime-v${WASMTIME_VERSION}-${ARCH}-linux.tar.xz" \
+      | tar -xJ --strip-components=1 -C /usr/local/bin "wasmtime-v${WASMTIME_VERSION}-${ARCH}-linux/wasmtime"
+
+COPY --from=builder /usr/local/bin/actrun /usr/local/bin/actrun
+
+# Verify installations
+RUN actrun --help > /dev/null 2>&1 && \
+    wasmtime --version && \
+    echo "actrun-wasm container ready"
+
+ENV ACTRUN_LOCAL=true
+WORKDIR /workspace
+ENTRYPOINT ["actrun"]
