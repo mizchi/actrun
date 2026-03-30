@@ -1,0 +1,24 @@
+name: ci-matrix-chain
+on: push
+jobs:
+  build:
+    strategy:
+      matrix:
+        target:
+          - native
+          - js
+    runs-on: ubuntu-latest
+    steps:
+      - id: compile
+        run: printf '%s' '${{ matrix.target }}'
+  test:
+    needs: build
+    strategy:
+      matrix:
+        suite:
+          - unit
+          - integration
+    runs-on: ubuntu-latest
+    steps:
+      - id: run
+        run: printf '%s' '${{ matrix.suite }}'

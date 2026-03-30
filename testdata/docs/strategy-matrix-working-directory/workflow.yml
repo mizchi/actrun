@@ -1,0 +1,16 @@
+name: ci-matrix-working-directory
+on: push
+jobs:
+  build:
+    strategy:
+      matrix:
+        package:
+          - frontend
+          - backend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/${{ matrix.package }}
+    steps:
+      - id: show
+        run: printf '%s' '${{ matrix.package }}'

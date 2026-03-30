@@ -1,0 +1,15 @@
+name: ci-matrix-job-env
+on: push
+jobs:
+  build:
+    strategy:
+      matrix:
+        node:
+          - "18"
+          - "20"
+    runs-on: ubuntu-latest
+    env:
+      NODE_VERSION: ${{ matrix.node }}
+    steps:
+      - id: show
+        run: printf '%s' "$NODE_VERSION"

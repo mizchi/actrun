@@ -400,13 +400,66 @@ fn input_expr_name(expression : String) -> String? {
 }
 
 ///|
+fn is_matrix_ident_code(c : UInt16) -> Bool {
+  (c >= 'a'.to_int().to_uint16() && c <= 'z'.to_int().to_uint16()) ||
+  (c >= 'A'.to_int().to_uint16() && c <= 'Z'.to_int().to_uint16()) ||
+  (c >= '0'.to_int().to_uint16() && c <= '9'.to_int().to_uint16()) ||
+  c == '_'.to_int().to_uint16() ||
+  c == '-'.to_int().to_uint16()
+}
+
+///|
 fn matrix_expr_name(expression : String) -> String? {
   let trimmed = expression.trim(chars=" \t\n\r").to_string()
   if trimmed.has_prefix("matrix.") && trimmed.length() > 7 {
-    Some(text_slice(trimmed, 7, trimmed.length()))
+    let key = text_slice(trimmed, 7, trimmed.length())
+    let mut i = 0
+    while i < key.length() {
+      if not(is_matrix_ident_code(key.unsafe_get(i))) {
+        return None
+      }
+      i += 1
+    }
+    Some(key)
   } else {
     None
   }
+}
+
+///|
+fn substitute_matrix_refs_in_expr(
+  expression : String,
+  matrix_values : Map[String, String],
+) -> String {
+  let prefix = "matrix."
+  let chunks : Array[String] = []
+  let mut idx = 0
+  while idx < expression.length() {
+    match find_substring(expression, prefix, idx) {
+      Some(pos) => {
+        chunks.push(text_slice(expression, idx, pos))
+        let key_start = pos + prefix.length()
+        let mut key_end = key_start
+        while key_end < expression.length() &&
+              is_matrix_ident_code(expression.unsafe_get(key_end)) {
+          key_end += 1
+        }
+        if key_end > key_start {
+          let key = text_slice(expression, key_start, key_end)
+          chunks.push(matrix_values.get(key).unwrap_or(""))
+          idx = key_end
+        } else {
+          chunks.push(prefix)
+          idx = key_start
+        }
+      }
+      None => {
+        chunks.push(text_slice(expression, idx, expression.length()))
+        idx = expression.length()
+      }
+    }
+  }
+  chunks.join("")
 }
 
 ///|
@@ -459,8 +512,20 @@ fn substitute_matrix_text(
           Some(close_idx) => {
             let expression = text_slice(text, open_idx + 3, close_idx)
             match matrix_expr_name(expression) {
-              Some(name) => chunks.push(matrix_values.get(name).unwrap_or(""))
-              None => chunks.push(text_slice(text, open_idx, close_idx + 2))
+              Some(name) =>
+                // Entire expression is matrix.KEY — replace fully
+                chunks.push(matrix_values.get(name).unwrap_or(""))
+              None => {
+                // Check if expression contains matrix.KEY references inline
+                let substituted = substitute_matrix_refs_in_expr(
+                  expression, matrix_values,
+                )
+                if substituted != expression {
+                  chunks.push("${{" + substituted + "}}")
+                } else {
+                  chunks.push(text_slice(text, open_idx, close_idx + 2))
+                }
+              }
             }
             idx = close_idx + 2
           }
@@ -1007,7 +1072,7 @@ fn substitute_matrix_job(
     actual_id,
     steps,
     name=substitute_matrix_text(job.name, matrix_values),
-    if_condition=job.if_condition,
+    if_condition=substitute_matrix_text(job.if_condition, matrix_values),
     needs=actual_needs,
     outputs=substitute_matrix_map(job.outputs, matrix_values),
     permissions=job.permissions,

@@ -1,0 +1,14 @@
+name: ci-matrix-step-name
+on: push
+jobs:
+  build:
+    strategy:
+      matrix:
+        target:
+          - native
+          - js
+    runs-on: ubuntu-latest
+    steps:
+      - id: show
+        name: Build ${{ matrix.target }}
+        run: printf '%s' '${{ matrix.target }}'

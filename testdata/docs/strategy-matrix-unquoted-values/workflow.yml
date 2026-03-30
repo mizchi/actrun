@@ -1,0 +1,12 @@
+name: ci-matrix-unquoted-values
+on: push
+jobs:
+  build:
+    strategy:
+      matrix:
+        node: [18, 20]
+        experimental: [true, false]
+    runs-on: ubuntu-latest
+    steps:
+      - id: show
+        run: printf '%s|%s' '${{ matrix.node }}' '${{ matrix.experimental }}'

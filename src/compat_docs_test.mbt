@@ -1125,6 +1125,217 @@ test "compat docs: lower matrix needs fixture" {
 }
 
 ///|
+test "compat docs: lower matrix three axes fixture" {
+  let (fixture, workflow, lowered) = compat_expect_lowered_docs_fixture(
+    "strategy-matrix-three-axes",
+  )
+
+  inspect(fixture.id, content="docs-strategy-matrix-three-axes")
+  inspect(workflow.jobs[0].matrix.unwrap().rows.length(), content="8")
+  inspect(lowered.errors, content="[]")
+  let first = compat_expect_task_plan(lowered.plan, "build__matrix_1/show")
+  let last = compat_expect_task_plan(lowered.plan, "build__matrix_8/show")
+  inspect(first.script, content="printf '%s|%s|%s' 'ubuntu-latest' '18' 'cjs'")
+  inspect(last.script, content="printf '%s|%s|%s' 'macos-latest' '20' 'esm'")
+}
+
+///|
+test "compat docs: lower matrix job if fixture" {
+  let (fixture, _, lowered) = compat_expect_lowered_docs_fixture(
+    "strategy-matrix-job-if",
+  )
+  let first = compat_expect_task_plan(lowered.plan, "build__matrix_1/show")
+  let second = compat_expect_task_plan(lowered.plan, "build__matrix_2/show")
+
+  inspect(fixture.id, content="docs-strategy-matrix-job-if")
+  inspect(lowered.errors, content="[]")
+  inspect(first.script, content="printf '%s' 'deploy'")
+  inspect(second.script, content="printf '%s' 'lint'")
+  inspect(
+    lowered.plan.job_if_conditions.get("build__matrix_1").unwrap_or(""),
+    content=(
+      #|${{ false != 'true' }}
+    ),
+  )
+  inspect(
+    lowered.plan.job_if_conditions.get("build__matrix_2").unwrap_or(""),
+    content=(
+      #|${{ true != 'true' }}
+    ),
+  )
+}
+
+///|
+test "compat docs: lower matrix job env fixture" {
+  let (fixture, _, lowered) = compat_expect_lowered_docs_fixture(
+    "strategy-matrix-job-env",
+  )
+  let first = compat_expect_task_plan(lowered.plan, "build__matrix_1/show")
+  let second = compat_expect_task_plan(lowered.plan, "build__matrix_2/show")
+
+  inspect(fixture.id, content="docs-strategy-matrix-job-env")
+  inspect(lowered.errors, content="[]")
+  inspect(first.env.get("NODE_VERSION").unwrap_or(""), content="18")
+  inspect(second.env.get("NODE_VERSION").unwrap_or(""), content="20")
+}
+
+///|
+test "compat docs: lower matrix step env fixture" {
+  let (fixture, _, lowered) = compat_expect_lowered_docs_fixture(
+    "strategy-matrix-step-env",
+  )
+  let first = compat_expect_task_plan(lowered.plan, "build__matrix_1/show")
+  let second = compat_expect_task_plan(lowered.plan, "build__matrix_2/show")
+
+  inspect(fixture.id, content="docs-strategy-matrix-step-env")
+  inspect(lowered.errors, content="[]")
+  inspect(first.env.get("NODE_VERSION").unwrap_or(""), content="18")
+  inspect(second.env.get("NODE_VERSION").unwrap_or(""), content="20")
+}
+
+///|
+test "compat docs: lower matrix step name fixture" {
+  let (fixture, _, lowered) = compat_expect_lowered_docs_fixture(
+    "strategy-matrix-step-name",
+  )
+  let first = compat_expect_task_plan(lowered.plan, "build__matrix_1/show")
+  let second = compat_expect_task_plan(lowered.plan, "build__matrix_2/show")
+
+  inspect(fixture.id, content="docs-strategy-matrix-step-name")
+  inspect(lowered.errors, content="[]")
+  inspect(first.name, content="Build native")
+  inspect(second.name, content="Build js")
+}
+
+///|
+test "compat docs: lower matrix job name fixture" {
+  let (fixture, _, lowered) = compat_expect_lowered_docs_fixture(
+    "strategy-matrix-job-name",
+  )
+  let first = compat_expect_task_plan(lowered.plan, "build__matrix_1/show")
+  let second = compat_expect_task_plan(lowered.plan, "build__matrix_2/show")
+
+  inspect(fixture.id, content="docs-strategy-matrix-job-name")
+  inspect(lowered.errors, content="[]")
+  inspect(first.runs_on, content="[\"ubuntu-latest\"]")
+  inspect(second.runs_on, content="[\"macos-latest\"]")
+}
+
+///|
+test "compat docs: lower matrix step if fixture" {
+  let (fixture, _, lowered) = compat_expect_lowered_docs_fixture(
+    "strategy-matrix-step-if",
+  )
+  let first_show = compat_expect_task_plan(lowered.plan, "build__matrix_1/show")
+  let first_deploy = compat_expect_task_plan(
+    lowered.plan,
+    "build__matrix_1/deploy",
+  )
+  let second_deploy = compat_expect_task_plan(
+    lowered.plan,
+    "build__matrix_2/deploy",
+  )
+
+  inspect(fixture.id, content="docs-strategy-matrix-step-if")
+  inspect(lowered.errors, content="[]")
+  inspect(first_show.script, content="printf '%s' 'native'")
+  inspect(
+    first_deploy.if_condition,
+    content=(
+      #|${{ true == 'true' }}
+    ),
+  )
+  inspect(
+    second_deploy.if_condition,
+    content=(
+      #|${{ false == 'true' }}
+    ),
+  )
+}
+
+///|
+test "compat docs: lower matrix include extra key fixture" {
+  let (fixture, workflow, lowered) = compat_expect_lowered_docs_fixture(
+    "strategy-matrix-include-extra-key",
+  )
+
+  inspect(fixture.id, content="docs-strategy-matrix-include-extra-key")
+  inspect(workflow.jobs[0].matrix.unwrap().rows.length(), content="4")
+  inspect(lowered.errors, content="[]")
+  // ubuntu-latest + 20 should have experimental=true
+  let row2 = compat_expect_task_plan(lowered.plan, "build__matrix_2/show")
+  inspect(row2.script, content="printf '%s|%s|%s' 'ubuntu-latest' '20' 'true'")
+  // ubuntu-latest + 18 should have experimental empty
+  let row1 = compat_expect_task_plan(lowered.plan, "build__matrix_1/show")
+  inspect(row1.script, content="printf '%s|%s|%s' 'ubuntu-latest' '18' ''")
+}
+
+///|
+test "compat docs: lower matrix chain fixture" {
+  let (fixture, _, lowered) = compat_expect_lowered_docs_fixture(
+    "strategy-matrix-chain",
+  )
+
+  inspect(fixture.id, content="docs-strategy-matrix-chain")
+  inspect(lowered.errors, content="[]")
+  // test matrix rows should depend on all build matrix rows
+  let test1 = flow_task_by_id(lowered.ir, "test__matrix_1/run")
+  let test2 = flow_task_by_id(lowered.ir, "test__matrix_2/run")
+  inspect(
+    test1.needs,
+    content="[\"build__matrix_1/__finish\", \"build__matrix_2/__finish\"]",
+  )
+  inspect(
+    test2.needs,
+    content="[\"build__matrix_1/__finish\", \"build__matrix_2/__finish\"]",
+  )
+}
+
+///|
+test "compat docs: lower matrix working directory fixture" {
+  let (fixture, _, lowered) = compat_expect_lowered_docs_fixture(
+    "strategy-matrix-working-directory",
+  )
+  let first = compat_expect_task_plan(lowered.plan, "build__matrix_1/show")
+  let second = compat_expect_task_plan(lowered.plan, "build__matrix_2/show")
+
+  inspect(fixture.id, content="docs-strategy-matrix-working-directory")
+  inspect(lowered.errors, content="[]")
+  inspect(first.working_directory, content="packages/frontend")
+  inspect(second.working_directory, content="packages/backend")
+}
+
+///|
+test "compat docs: lower matrix continue on error fixture" {
+  let (fixture, _, lowered) = compat_expect_lowered_docs_fixture(
+    "strategy-matrix-continue-on-error",
+  )
+  let first = compat_expect_task_plan(lowered.plan, "build__matrix_1/test")
+  let second = compat_expect_task_plan(lowered.plan, "build__matrix_2/test")
+
+  inspect(fixture.id, content="docs-strategy-matrix-continue-on-error")
+  inspect(lowered.errors, content="[]")
+  inspect(first.continue_on_error, content="false")
+  inspect(second.continue_on_error, content="true")
+}
+
+///|
+test "compat docs: lower matrix unquoted values fixture" {
+  let (fixture, workflow, lowered) = compat_expect_lowered_docs_fixture(
+    "strategy-matrix-unquoted-values",
+  )
+
+  inspect(fixture.id, content="docs-strategy-matrix-unquoted-values")
+  // 2 node × 2 experimental = 4 rows
+  inspect(workflow.jobs[0].matrix.unwrap().rows.length(), content="4")
+  inspect(lowered.errors, content="[]")
+  let first = compat_expect_task_plan(lowered.plan, "build__matrix_1/show")
+  let last = compat_expect_task_plan(lowered.plan, "build__matrix_4/show")
+  inspect(first.script, content="printf '%s|%s' '18' 'true'")
+  inspect(last.script, content="printf '%s|%s' '20' 'false'")
+}
+
+///|
 #cfg(target="native")
 async test "compat docs: matrix fail-fast cancels later rows" {
   let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(

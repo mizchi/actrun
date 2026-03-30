@@ -1,0 +1,20 @@
+name: ci-matrix-include-extra-key
+on: push
+jobs:
+  build:
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+        node:
+          - "18"
+          - "20"
+        include:
+          - os: ubuntu-latest
+            node: "20"
+            experimental: "true"
+    runs-on: ${{ matrix.os }}
+    steps:
+      - id: show
+        run: printf '%s|%s|%s' '${{ matrix.os }}' '${{ matrix.node }}' '${{ matrix.experimental }}'

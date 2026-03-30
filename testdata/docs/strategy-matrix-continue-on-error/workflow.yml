@@ -1,0 +1,16 @@
+name: ci-matrix-continue-on-error
+on: push
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - target: stable
+            experimental: "false"
+          - target: nightly
+            experimental: "true"
+    runs-on: ubuntu-latest
+    steps:
+      - id: test
+        continue-on-error: ${{ matrix.experimental }}
+        run: printf '%s' '${{ matrix.target }}'

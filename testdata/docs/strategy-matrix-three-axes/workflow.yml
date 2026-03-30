@@ -1,0 +1,19 @@
+name: ci-matrix-three-axes
+on: push
+jobs:
+  build:
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+        node:
+          - "18"
+          - "20"
+        target:
+          - cjs
+          - esm
+    runs-on: ${{ matrix.os }}
+    steps:
+      - id: show
+        run: printf '%s|%s|%s' '${{ matrix.os }}' '${{ matrix.node }}' '${{ matrix.target }}'

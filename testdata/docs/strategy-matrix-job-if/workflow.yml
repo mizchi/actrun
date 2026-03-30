@@ -1,0 +1,16 @@
+name: ci-matrix-job-if
+on: push
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - target: deploy
+            skip: "false"
+          - target: lint
+            skip: "true"
+    if: ${{ matrix.skip != 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - id: show
+        run: printf '%s' '${{ matrix.target }}'

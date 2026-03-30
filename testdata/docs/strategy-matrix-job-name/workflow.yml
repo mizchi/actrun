@@ -1,0 +1,14 @@
+name: ci-matrix-job-name
+on: push
+jobs:
+  build:
+    name: Build (${{ matrix.os }})
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - id: show
+        run: printf '%s' '${{ matrix.os }}'

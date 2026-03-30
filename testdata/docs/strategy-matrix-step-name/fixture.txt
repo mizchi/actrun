@@ -1,0 +1,7 @@
+id=docs-strategy-matrix-step-name
+source=docs
+mode=supported
+kind=lower
+url=https://docs.github.com/en/actions/using-jobs/using-a-matrix-for-your-jobs
+added_at=2026-03-30
+notes=matrix variable substitution in step name
