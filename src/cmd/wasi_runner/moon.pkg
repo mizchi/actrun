@@ -1,0 +1,9 @@
+import {
+  "mizchi/actrun/wasi_runner" @wr,
+  "moonbitlang/core/env" @env,
+}
+
+options(
+  "is-main": true,
+  targets: { "run_js.mbt": [ "js" ], "run_native.mbt": [ "native" ] },
+)

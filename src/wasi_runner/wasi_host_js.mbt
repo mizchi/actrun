@@ -9,7 +9,7 @@ extern "js" fn js_run_wasi_module(
   env_json : String,
   workdir : String,
 ) -> String =
-  #| async function(moduleBytesJson, envJson, workdir) {
+  #| function(moduleBytesJson, envJson, workdir) {
   #|   const env = JSON.parse(envJson);
   #|   const bytesArr = JSON.parse(moduleBytesJson);
   #|   const bytes = new Uint8Array(bytesArr);
@@ -131,8 +131,8 @@ extern "js" fn js_run_wasi_module(
   #|     fd_filestat_get: () => 0,
   #|   }};
   #|
-  #|   const mod = await WebAssembly.compile(bytes);
-  #|   const inst = await WebAssembly.instantiate(mod, imports);
+  #|   const mod = new WebAssembly.Module(bytes);
+  #|   const inst = new WebAssembly.Instance(mod, imports);
   #|   memory = inst.exports.memory;
   #|   try { inst.exports._start(); } catch(e) {
   #|     if (!(e instanceof WasiExit)) throw e;
@@ -161,8 +161,18 @@ extern "js" fn js_run_wasi_module(
 
 ///|
 #cfg(target="js")
+/// Low-level: run WASI module from pre-serialized JSON strings.
+pub fn run_wasi_module_js_raw(
+  bytes_json : String,
+  env_json : String,
+  workdir : String,
+) -> String {
+  js_run_wasi_module(bytes_json, env_json, workdir)
+}
+
+///|
+#cfg(target="js")
 /// Run a WASM module with WASI P1 and return the result as JSON string.
-/// The caller should parse the JSON to extract outputs.
 pub async fn run_wasi_module_js(
   module_bytes : Bytes,
   env : Map[String, String],
