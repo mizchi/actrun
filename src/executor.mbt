@@ -2896,66 +2896,6 @@ fn resolve_wasm_module_path(
 }
 
 ///|
-fn build_wasmtime_args(
-  env : Map[String, String],
-  workspace_root : String,
-  module_path : String,
-) -> Array[String] {
-  let args : Array[String] = ["run"]
-  // Pass environment variables via --env KEY=VAL
-  // Collect unique directory prefixes from env values for --dir grants
-  let granted_dirs : Map[String, Bool] = {}
-  for key, value in env {
-    args.push("--env")
-    args.push(key + "=" + value)
-  }
-  // Grant filesystem access to workspace
-  let abs_workspace = absolute_exec_path(workspace_root)
-  granted_dirs[abs_workspace] = true
-  // Grant access to directories referenced by file commands (GITHUB_OUTPUT etc.)
-  let file_env_keys = [
-    "GITHUB_ENV", "GITHUB_OUTPUT", "GITHUB_PATH", "GITHUB_STEP_SUMMARY", "GITHUB_STATE",
-  ]
-  for fkey in file_env_keys {
-    match env.get(fkey) {
-      Some(path) if path.length() > 0 => {
-        // Extract parent directory from file path
-        let dir = parent_dir(path)
-        if dir.length() > 0 {
-          granted_dirs[dir] = true
-        }
-      }
-      _ => ()
-    }
-  }
-  for dir, _ in granted_dirs {
-    args.push("--dir")
-    args.push(dir)
-  }
-  // Grant /tmp access for temp files
-  args.push("--dir")
-  args.push("/tmp")
-  args.push(module_path)
-  args
-}
-
-///|
-fn parent_dir(path : String) -> String {
-  let slash = '/'.to_int().to_uint16()
-  let mut last_slash = -1
-  let mut idx = 0
-  while idx < path.length() {
-    if path.unsafe_get(idx) == slash {
-      last_slash = idx
-    }
-    idx += 1
-  }
-  if last_slash > 0 {
-    exec_text_slice(path, 0, last_slash)
-  } else {
-    ""
-  }
-}
 
 ///|
 async fn execute_wasm_action_native(
@@ -2972,12 +2912,6 @@ async fn execute_wasm_action_native(
       plan, workspace_root, "wasm action is missing an entrypoint",
     )
   }
-  guard prepare_step_file_commands(plan.id, workspace_root)
-    is Some(file_commands) else {
-    return failure_execution_result(
-      plan, workspace_root, "failed to prepare step file commands",
-    )
-  }
   guard resolve_wasm_module_path(resolved_plan_env, workspace_root, entrypoint)
     is Some(module_path) else {
     return failure_execution_result(
@@ -2986,6 +2920,22 @@ async fn execute_wasm_action_native(
       "wasm module for '\{entrypoint}' was not found",
     )
   }
+  // Create a sandboxed tempdir — WASM module only sees this directory,
+  // not the host filesystem. Inspired by moonix FsBridge pattern.
+  guard create_wasm_sandbox(plan.id) is Some(sandbox) else {
+    return failure_execution_result(
+      plan, workspace_root, "failed to create wasm sandbox",
+    )
+  }
+  // Use file_commands that point to the sandbox for env path resolution
+  let file_commands : StepFileCommands = {
+    env_path: sandbox.env_path,
+    path_path: sandbox.path_path,
+    output_path: sandbox.output_path,
+    summary_path: sandbox.summary_path,
+    state_path: sandbox.state_path,
+    script_path: "",
+  }
   let env = default_runner_env(
     workflow_name, plan, workspace_root, github_ctx, resolved_plan_env, file_commands,
     runner_ctx,
@@ -2993,13 +2943,12 @@ async fn execute_wasm_action_native(
   let wasm_bin = configured_exec_bin(
     "ACTRUN_WASM_BIN", resolved_plan_env, "wasmtime",
   )
-  let cwd = action.action_path.unwrap_or(resolve_task_cwd(workspace_root, ""))
-  // Build wasmtime args: --env KEY=VAL for each env var, --dir for filesystem
   let abs_module_path = absolute_exec_path(module_path)
-  let wasm_args = build_wasmtime_args(env, workspace_root, abs_module_path)
-  // Don't use env_command_args — wasmtime receives env via --env flags, not
-  // host environment. Using env would break values containing spaces.
+  let wasm_args = build_sandboxed_wasmtime_args(sandbox, env, abs_module_path)
+  let cwd = sandbox.tempdir
   let (code, stdout, stderr) = run_command(wasm_bin, wasm_args, cwd~)
+  let result = read_sandbox_results(sandbox, code, stdout, stderr)
+  cleanup_wasm_sandbox(sandbox)
   {
     report: {
       id: plan.id,
@@ -3010,17 +2959,17 @@ async fn execute_wasm_action_native(
         "failed"
       },
       code,
-      shell: plan.shell,
-      script: plan.script,
+      shell: wasm_bin,
+      script: abs_module_path,
       cwd,
       stdout,
       stderr,
-      summary: parse_summary_text(file_commands.summary_path),
+      summary: result.summary,
     },
-    env_updates: parse_env_updates(file_commands.env_path),
-    path_entries: parse_path_updates(file_commands.path_path),
-    output_values: parse_output_values(file_commands.output_path),
-    state_updates: parse_state_values(file_commands.state_path),
+    env_updates: result.env_updates,
+    path_entries: result.path_entries,
+    output_values: result.output_values,
+    state_updates: result.state_updates,
   }
 }
 

@@ -10,13 +10,19 @@ import {
 // Values
 pub fn backend_capabilities_for(String) -> BackendCapabilities
 
+pub fn build_sandboxed_wasmtime_args(WasmSandbox, Map[String, String], String) -> Array[String]
+
 pub fn cleanup_run_temp_files(String) -> Unit
+
+pub async fn cleanup_wasm_sandbox(WasmSandbox) -> Unit
 
 pub fn collect_secret_values() -> Array[String]
 
 pub fn compute_bit_changed_paths(&@types.RepoFileSystem, String, PushEvent) -> BitChangedPathsResult
 
 pub fn compute_bit_changed_paths_native(String, PushEvent) -> BitChangedPathsResult
+
+pub fn create_wasm_sandbox(String) -> WasmSandbox?
 
 pub async fn dump_workflow_context_json(String, ExecutionPlan, String, PushEvent, dispatch_inputs? : Map[String, String], event_name? : String) -> String
 
@@ -103,6 +109,8 @@ pub fn plan_result_to_json(PlanResult) -> String
 pub fn plan_workflow(String, workspace_root? : String) -> PlanResult
 
 pub async fn prefetch_workflow_github_actions_native(WorkflowSpec, String, git_bin? : String?, github_base_url? : String?) -> GitHubActionPrefetchResult
+
+pub fn read_sandbox_results(WasmSandbox, Int, String, String) -> WasmSandboxResult
 
 pub fn registry_module_path(String, String) -> String
 
@@ -422,6 +430,26 @@ pub struct TaskRunReport {
   cwd : String
   stdout : String
   stderr : String
+  summary : String
+}
+
+pub struct WasmSandbox {
+  tempdir : String
+  env_path : String
+  output_path : String
+  path_path : String
+  summary_path : String
+  state_path : String
+}
+
+pub struct WasmSandboxResult {
+  code : Int
+  stdout : String
+  stderr : String
+  env_updates : Map[String, String]
+  path_entries : Array[String]
+  output_values : Map[String, String]
+  state_updates : Map[String, String]
   summary : String
 }
 
