@@ -2915,7 +2915,7 @@ async fn execute_wasm_action_native(
   let abs_module_path = absolute_exec_path(module_path)
   let skip_validate = resolved_plan_env
     .get("ACTRUN_WASM_SKIP_VALIDATE")
-    .unwrap_or("") ==
+    .unwrap_or(@xsys.get_env_var("ACTRUN_WASM_SKIP_VALIDATE").unwrap_or("")) ==
     "true"
   if not(skip_validate) {
     let wasm_bytes_opt : Bytes? = try

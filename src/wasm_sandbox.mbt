@@ -43,6 +43,9 @@ pub fn create_wasm_sandbox(step_id : String) -> WasmSandbox? {
   let safe_id = sanitize_path_component(step_id)
   let pid = @xsys.get_env_var("PPID").unwrap_or("0")
   let tempdir = "/tmp/actrun-wasm-" + pid + "-" + safe_id
+  if @xfs.path_exists(tempdir) {
+    ignore(exec_remove_tree(tempdir))
+  }
   try @xfs.create_dir(tempdir) catch {
     _ => return None
   } noraise {
@@ -226,14 +229,5 @@ pub fn read_sandbox_results(sandbox : WasmSandbox) -> WasmSandboxResult {
 /// Clean up the sandbox tempdir after use.
 #cfg(target="native")
 pub fn cleanup_wasm_sandbox(sandbox : WasmSandbox) -> Unit {
-  remove_file(sandbox.env_path)
-  remove_file(sandbox.output_path)
-  remove_file(sandbox.path_path)
-  remove_file(sandbox.summary_path)
-  remove_file(sandbox.state_path)
-  try @xfs.remove_dir(sandbox.tempdir) catch {
-    _ => ()
-  } noraise {
-    _ => ()
-  }
+  ignore(exec_remove_tree(sandbox.tempdir))
 }
