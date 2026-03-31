@@ -639,9 +639,16 @@ async fn e2e_prepare_fake_wasm_bin(
     "printf '%s\\n' \"$@\" >> '" +
     absolute_log_path +
     "'\n" +
-    "module=\"$1\"\n" +
-    "shift || true\n" +
-    "exec sh \"$module\" \"$@\"\n"
+    "shift\n" +
+    "MODULE=''\n" +
+    "while [ $# -gt 0 ]; do\n" +
+    "  case \"$1\" in\n" +
+    "    --env) export \"$2\"; shift 2;;\n" +
+    "    --dir) shift 2;;\n" +
+    "    *) MODULE=\"$1\"; shift;;\n" +
+    "  esac\n" +
+    "done\n" +
+    "exec sh \"$MODULE\"\n"
   @xfs.write_string_to_file(wasm_path, script)
   e2e_make_executable(wasm_path)
   e2e_absolute_path(wasm_path)
@@ -3383,7 +3390,7 @@ async fn run_wasm_action_basic() -> Unit {
       "--wasm-action-root",
       e2e_join_path(workspace, "wasm-actions"),
     ],
-    env={ "ACTRUN_WASM_BIN": wasm_bin },
+    env={ "ACTRUN_WASM_BIN": wasm_bin, "ACTRUN_WASM_SKIP_VALIDATE": "true" },
   )
   e2e_expect_ok(result, scenario)
   e2e_expect_contains(result.stdout, "workflow=e2e-wasm-action", scenario)
@@ -3395,13 +3402,13 @@ async fn run_wasm_action_basic() -> Unit {
     "from-wasm",
     scenario + " verify artifact",
   )
-  e2e_expect_eq(
-    e2e_read_text(e2e_join_path(workspace, "wasm-artifact.txt")),
-    "hello|" + workspace + "\n",
-    scenario + " wasm artifact",
-  )
   let wasm_log = e2e_read_text(wasm_log_path)
   e2e_expect_contains(wasm_log, "main.wasm", scenario + " wasm log")
+  e2e_expect_contains(
+    wasm_log,
+    "GITHUB_WORKSPACE=/tmp/actrun-wasm-",
+    scenario + " sandbox workspace",
+  )
 }
 
 ///|

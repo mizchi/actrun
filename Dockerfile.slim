@@ -1,0 +1,59 @@
+# Minimal GitHub Actions-compatible actrun container
+#
+# Based on Alpine for smallest possible image (~50MB total).
+# Includes only what's needed for actrun + builtin action emulation:
+#   - actrun native binary
+#   - bash + coreutils (run: steps)
+#   - git (checkout, workspace)
+#   - ca-certificates (HTTPS for action fetching)
+#
+# Does NOT include:
+#   - Node.js (third-party node actions won't work)
+#   - Docker (container: / services: won't work)
+#   - Python, Go, etc.
+#
+# For third-party node actions, use the full Dockerfile instead.
+#
+# Usage:
+#   docker build -f Dockerfile.slim -t actrun-slim .
+#   docker run --rm -v "$PWD":/workspace -w /workspace actrun-slim workflow run ci.yml
+
+# --- Build stage ---
+FROM --platform=linux/amd64 ubuntu:24.04 AS builder
+
+RUN apt-get update && \
+    apt-get install -y curl git build-essential && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+ENV PATH="/root/.moon/bin:$PATH"
+
+WORKDIR /src
+COPY . .
+RUN git clone --depth 1 https://github.com/bit-vcs/bit.git ../../bit-vcs/bit
+RUN moon update && \
+    moon build --release --target native src/cmd/actrun && \
+    cp _build/native/release/build/cmd/actrun/actrun.exe /usr/local/bin/actrun
+
+# --- Runtime stage: Alpine-based minimal image ---
+FROM --platform=linux/amd64 alpine:3.20
+
+RUN apk add --no-cache \
+    bash \
+    coreutils \
+    git \
+    ca-certificates \
+    gcompat
+
+COPY --from=builder /usr/local/bin/actrun /usr/local/bin/actrun
+COPY scripts/wasi-runner.mjs /usr/local/lib/actrun/wasi-runner.mjs
+
+# Verify
+RUN actrun --help > /dev/null 2>&1 && \
+    git --version && \
+    bash --version | head -1 && \
+    echo "actrun-slim ready"
+
+ENV ACTRUN_LOCAL=true
+WORKDIR /workspace
+ENTRYPOINT ["actrun"]

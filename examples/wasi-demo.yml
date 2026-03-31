@@ -1,0 +1,31 @@
+# Experimental / internal example.
+# This workflow uses the legacy `wasm://...` action path.
+# It is not part of the public release contract. See docs/public-api.md.
+name: wasi-demo
+'on': push
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - id: echo
+        uses: wasm://echo@v1
+        with:
+          message: "hello from WASI"
+
+      - id: verify-echo
+        run: printf '%s' '${{ steps.echo.outputs.result }}'
+
+      - id: add
+        uses: wasm://adder@v1
+        with:
+          a: "17"
+          b: "25"
+
+      - id: verify-add
+        run: printf '%s' '${{ steps.add.outputs.sum }}'
+
+      - id: set-env
+        uses: wasm://env-setter@v1
+
+      - id: verify-env
+        run: printf '%s' "$GREETING"

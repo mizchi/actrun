@@ -111,10 +111,10 @@ test "cli: parse repo mode flags" {
     "actrun", ".github/workflows/ci.yml", "--repo", "/repo", "--workspace", "/tmp/work",
     "--run-root", "/tmp/runs", "--artifact-root", "/tmp/artifacts", "--cache-root",
     "/tmp/cache", "--github-action-cache-root", "/tmp/gha-cache", "--registry-root",
-    "/tmp/registry", "--wasm-action-root", "/tmp/wasm", "--workspace-mode", "tmp",
-    "--event", "push.json", "--ref", "feature/demo", "--before", "def456", "--after",
-    "abc123", "--repository", "mizchi/actrun", "--changed", "src/lib.mbt", "--changed",
-    "README.md",
+    "/tmp/registry", "--wasm-action-root", "/tmp/wasm", "--wasm-runner", "deno",
+    "--workspace-mode", "tmp", "--event", "push.json", "--ref", "feature/demo", "--before",
+    "def456", "--after", "abc123", "--repository", "mizchi/actrun", "--changed",
+    "src/lib.mbt", "--changed", "README.md",
   ])
   inspect(result.errors, content="[]")
 
@@ -130,6 +130,7 @@ test "cli: parse repo mode flags" {
   )
   inspect(options.registry_root.unwrap_or(""), content="/tmp/registry")
   inspect(options.wasm_action_root.unwrap_or(""), content="/tmp/wasm")
+  inspect(options.wasm_runner, content="deno")
   inspect(options.workspace_mode, content="tmp")
   inspect(options.event_path.unwrap_or(""), content="push.json")
   inspect(options.ref_name, content="feature/demo")
@@ -198,6 +199,11 @@ test "cli: parse workflow run flags" {
 ///|
 test "cli: usage does not advertise dump-context" {
   inspect(usage_text().contains("--dump-context"), content="false")
+}
+
+///|
+test "cli: usage does not advertise wasm-action-root" {
+  inspect(usage_text().contains("--wasm-action-root"), content="false")
 }
 
 ///|
@@ -390,7 +396,8 @@ test "cli: root override flags are exported to runner env" {
     parse_cli_args([
       "actrun", ".github/workflows/ci.yml", "--artifact-root", "/tmp/artifacts",
       "--cache-root", "/tmp/cache", "--github-action-cache-root", "/tmp/gha-cache",
-      "--registry-root", "/tmp/registry", "--wasm-action-root", "/tmp/wasm",
+      "--registry-root", "/tmp/registry", "--wasm-action-root", "/tmp/wasm", "--wasm-runner",
+      "v8",
     ]),
   )
   let prev_artifact = main_test_set_env_var(
@@ -406,6 +413,7 @@ test "cli: root override flags are exported to runner env" {
   let prev_wasm = main_test_set_env_var(
     "ACTRUN_WASM_ACTION_ROOT", "/previous/wasm",
   )
+  let prev_wasm_runner = main_test_set_env_var("ACTRUN_WASM_RUNNER", "wasmtime")
 
   apply_cli_root_overrides(options)
 
@@ -429,12 +437,27 @@ test "cli: root override flags are exported to runner env" {
     @xsys.get_env_var("ACTRUN_WASM_ACTION_ROOT").unwrap_or(""),
     content="/tmp/wasm",
   )
+  inspect(@xsys.get_env_var("ACTRUN_WASM_RUNNER").unwrap_or(""), content="v8")
 
   main_test_restore_env_var("ACTRUN_ARTIFACT_ROOT", prev_artifact)
   main_test_restore_env_var("ACTRUN_CACHE_ROOT", prev_cache)
   main_test_restore_env_var("ACTRUN_GITHUB_ACTION_CACHE_ROOT", prev_gha)
   main_test_restore_env_var("ACTRUN_ACTION_REGISTRY_ROOT", prev_registry)
   main_test_restore_env_var("ACTRUN_WASM_ACTION_ROOT", prev_wasm)
+  main_test_restore_env_var("ACTRUN_WASM_RUNNER", prev_wasm_runner)
+}
+
+///|
+test "cli: reject unknown wasm runner" {
+  let result = parse_cli_args([
+    "actrun", ".github/workflows/ci.yml", "--wasm-runner", "custom",
+  ])
+  inspect(
+    result.errors,
+    content=(
+      #|["unsupported wasm runner: custom (expected: wasmtime, deno, v8)"]
+    ),
+  )
 }
 
 ///|

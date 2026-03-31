@@ -1,0 +1,4 @@
+#!/bin/sh
+set -eu
+printf 'result=%s\n' "${INPUT_MESSAGE:-default-message}" >> "$GITHUB_OUTPUT"
+printf 'wasm:%s\n' "${INPUT_MESSAGE:-default-message}"

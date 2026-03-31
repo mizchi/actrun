@@ -1,0 +1,47 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "mizchi/actrun/wasi_runner"
+
+// Values
+
+// Errors
+
+// Types and methods
+pub struct VirtualFs {
+  files : Map[String, String]
+}
+pub fn VirtualFs::exists(Self, String) -> Bool
+pub fn VirtualFs::new() -> Self
+pub fn VirtualFs::parse_key_values(Self, String) -> Map[String, String]
+pub fn VirtualFs::read(Self, String) -> String?
+pub fn VirtualFs::write(Self, String, String, append? : Bool) -> Unit
+
+pub struct WasiContext {
+  env : Map[String, String]
+  vfs : VirtualFs
+  workdir : String
+  stdout_buf : Array[String]
+  stderr_buf : Array[String]
+  exit_code : Int
+}
+pub fn WasiContext::collect_result(Self) -> WasiRunResult
+pub fn WasiContext::get_env_updates(Self) -> Map[String, String]
+pub fn WasiContext::get_outputs(Self) -> Map[String, String]
+pub fn WasiContext::get_stderr(Self) -> String
+pub fn WasiContext::get_stdout(Self) -> String
+pub fn WasiContext::new(env? : Map[String, String], inputs? : Map[String, String], workdir? : String) -> Self
+
+pub struct WasiRunResult {
+  status : String
+  exit_code : Int
+  stdout : String
+  stderr : String
+  outputs : Map[String, String]
+  env_updates : Map[String, String]
+}
+pub impl Show for WasiRunResult
+pub impl ToJson for WasiRunResult
+
+// Type aliases
+
+// Traits
+

@@ -1,0 +1,6 @@
+import {
+}
+
+options(
+  targets: { "wasi_host_js.mbt": [ "js" ] },
+)

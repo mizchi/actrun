@@ -1,5 +1,9 @@
 # WASM Container: Portable CI Foundation
 
+> Experimental / internal document.
+> This page describes legacy `wasm://...` and `ACTRUN_WASM_ACTION_ROOT` paths that are intentionally outside the release contract.
+> For the supported public surface, see [Public API](public-api.md).
+
 A minimal container image that enforces a strict contract: only WASM+WASI modules and shell scripts can execute. No Node.js, no Docker-in-Docker, no language-specific runtimes.
 
 ## Why
@@ -45,6 +49,8 @@ docker run --rm \
 
 ## Example Workflow
 
+The workflow below demonstrates the internal `wasm://...` path. It is not part of the stable public API.
+
 ```yaml
 name: wasm-ci
 on: push
@@ -72,6 +78,8 @@ jobs:
 ```
 
 ## Building WASM Actions
+
+The layout below is the internal module-root convention used by the legacy `wasm://...` execution path.
 
 Any language that compiles to WASI works:
 

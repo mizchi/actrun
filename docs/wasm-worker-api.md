@@ -214,6 +214,10 @@ Phase 3: Native worker deployment
   └── No filesystem dependency
 ```
 
+> Experimental / internal document.
+> The `wasm://...` references and `runs-on: wasi` examples in this page describe internal protocol experiments, not the stable release contract.
+> For the supported public surface, see [Public API](public-api.md).
+
 ## `run:` Steps in Worker Environment
 
 `run:` ステップ (shell scripts) は worker 環境では直接実行できない。選択肢:
@@ -225,7 +229,9 @@ Phase 3: Native worker deployment
 
 推奨は **Phase 2 では option 3** (既存 workflow 互換)、**Phase 3 では option 1** (完全 WASI) に移行。
 
-## Example: Full WASI Workflow (Phase 3)
+## Example: Full WASI Workflow (Phase 3, Experimental)
+
+The workflow below is an internal design sketch. It is not part of the supported public API.
 
 ```yaml
 name: portable-ci

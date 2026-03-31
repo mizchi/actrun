@@ -1,0 +1,235 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "mizchi/actrun/sh"
+
+// Values
+pub fn parse(String) -> Command raise ParseError
+
+pub fn parse_list(String) -> CommandList raise ParseError
+
+pub fn parse_word_parts(String) -> Word
+
+// Errors
+pub suberror LexError {
+  UnterminatedString(Int, Int)
+  UnexpectedChar(Char, Int, Int)
+  InvalidEscape(Char, Int, Int)
+}
+pub impl Show for LexError
+
+pub suberror ParseError {
+  LexError(String)
+  UnexpectedToken(String, String, Int, Int)
+  ExpectedWord(Int, Int)
+  UnexpectedEof
+}
+pub impl Show for ParseError
+
+// Types and methods
+pub struct CaseClause {
+  word : Word
+  items : Array[CaseItem]
+}
+pub fn CaseClause::new(Word, Array[CaseItem]) -> Self
+
+pub struct CaseItem {
+  patterns : Array[Word]
+  body : CommandList?
+}
+
+pub enum Command {
+  Simple(SimpleCommand)
+  Pipeline(Pipeline)
+  List(CommandList)
+  Subshell(CommandList)
+  BraceGroup(CommandList)
+  IfCmd(IfClause)
+  WhileCmd(WhileClause)
+  ForCmd(ForClause)
+  CaseCmd(CaseClause)
+  FuncDef(FunctionDef)
+}
+pub fn Command::simple(Array[Word]) -> Self
+pub fn Command::simple_str(Array[String]) -> Self
+
+pub struct CommandList {
+  first : Pipeline
+  rest : Array[(ListOp, Pipeline)]
+}
+pub fn CommandList::new(Pipeline, Array[(ListOp, Pipeline)]) -> Self
+pub fn CommandList::single(Pipeline) -> Self
+
+pub struct ForClause {
+  varname : String
+  words : Array[Word]?
+  body : CommandList
+}
+pub fn ForClause::new(String, Array[Word]?, CommandList) -> Self
+
+pub struct FunctionDef {
+  name : String
+  body : Command
+}
+pub fn FunctionDef::new(String, Command) -> Self
+
+pub struct IfClause {
+  condition : CommandList
+  then_body : CommandList
+  elif_parts : Array[(CommandList, CommandList)]
+  else_body : CommandList?
+}
+pub fn IfClause::new(CommandList, CommandList) -> Self
+
+pub struct Lexer {
+  input : String
+  chars : Array[Char]
+  mut pos : Int
+  mut line : Int
+  mut col : Int
+}
+pub fn Lexer::new(String) -> Self
+pub fn Lexer::next_token(Self) -> Token raise LexError
+pub fn Lexer::tokenize(Self) -> Array[Token] raise LexError
+
+pub enum ListOp {
+  Seq
+  And
+  Or
+  Background
+}
+
+pub struct Parser {
+  tokens : Array[Token]
+  mut pos : Int
+}
+pub fn Parser::new(Array[Token]) -> Self
+pub fn Parser::parse_command(Self) -> Command raise ParseError
+pub fn Parser::parse_command_list(Self) -> CommandList raise ParseError
+pub fn Parser::parse_pipeline(Self) -> Pipeline raise ParseError
+pub fn Parser::parse_simple_command(Self) -> Command raise ParseError
+pub fn Parser::parse_single_command(Self) -> Command raise ParseError
+
+pub struct Pipeline {
+  commands : Array[Command]
+  bang : Bool
+}
+pub fn Pipeline::new(Array[Command]) -> Self
+pub fn Pipeline::with_bang(Self) -> Self
+
+pub struct Redirect {
+  kind : RedirectKind
+  fd : Int?
+  target : Word
+}
+pub fn Redirect::append(Word) -> Self
+pub fn Redirect::input(Word) -> Self
+pub fn Redirect::output(Word) -> Self
+pub fn Redirect::with_fd(Self, Int) -> Self
+
+pub enum RedirectKind {
+  Input
+  Output
+  Append
+  HereDoc
+  HereString
+  InputDup
+  OutputDup
+  ReadWrite
+  Clobber
+}
+
+pub struct SimpleCommand {
+  assigns : Array[(String, Word)]
+  words : Array[Word]
+  redirects : Array[Redirect]
+}
+pub fn SimpleCommand::new(Array[Word]) -> Self
+pub fn SimpleCommand::with_assigns(Self, Array[(String, Word)]) -> Self
+pub fn SimpleCommand::with_redirects(Self, Array[Redirect]) -> Self
+
+pub struct Token {
+  kind : TokenKind
+  line : Int
+  col : Int
+}
+pub fn Token::eof(Int, Int) -> Self
+pub fn Token::get_word(Self) -> String?
+pub fn Token::is_redirect(Self) -> Bool
+pub fn Token::is_reserved(Self) -> Bool
+pub fn Token::is_separator(Self) -> Bool
+pub fn Token::is_word(Self) -> Bool
+pub fn Token::new(TokenKind, Int, Int) -> Self
+pub fn Token::word(String, Int, Int) -> Self
+
+pub enum TokenKind {
+  Word(String)
+  IoNumber(Int)
+  Pipe
+  PipeAnd
+  And
+  Or
+  Semi
+  Amp
+  Newline
+  Less
+  Great
+  DLess
+  DGreat
+  LessAnd
+  GreatAnd
+  LessGreat
+  Clobber
+  LParen
+  RParen
+  LBrace
+  RBrace
+  If
+  Then
+  Else
+  Elif
+  Fi
+  While
+  Until
+  For
+  Do
+  Done
+  Case
+  Esac
+  In
+  Function
+  Bang
+  Assignment(String, String)
+  Eof
+}
+pub impl Show for TokenKind
+
+pub struct WhileClause {
+  condition : CommandList
+  body : CommandList
+  is_until : Bool
+}
+pub fn WhileClause::until_(CommandList, CommandList) -> Self
+pub fn WhileClause::while_(CommandList, CommandList) -> Self
+
+pub struct Word {
+  parts : Array[WordPart]
+}
+pub fn Word::get_literal(Self) -> String?
+pub fn Word::is_simple(Self) -> Bool
+pub fn Word::literal(String) -> Self
+pub fn Word::new(Array[WordPart]) -> Self
+
+pub enum WordPart {
+  Literal(String)
+  SingleQuoted(String)
+  DoubleQuoted(Array[WordPart])
+  Variable(String)
+  SpecialVar(Char)
+  CommandSub(Command)
+  ArithSub(String)
+  Glob(String)
+}
+
+// Type aliases
+
+// Traits
+

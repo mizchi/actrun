@@ -42,9 +42,7 @@ jobs:
       - name: Checkout bit dependency
         run: git clone --depth 1 https://github.com/bit-vcs/bit.git ../../bit-vcs/bit
       - name: Install MoonBit CLI
-        run: |
-          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
-          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+        uses: ./.github/actions/setup-moonbit
       - name: Moon update
         run: moon update
       - name: Build CLI
@@ -105,9 +103,7 @@ jobs:
       - name: Checkout bit dependency
         run: git clone --depth 1 https://github.com/bit-vcs/bit.git ../../bit-vcs/bit
       - name: Install MoonBit CLI
-        run: |
-          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
-          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+        uses: ./.github/actions/setup-moonbit
       - name: Moon update
         run: moon update
       - name: Build CLI
@@ -134,9 +130,7 @@ jobs:
       - name: Install Nix
         uses: DeterminateSystems/nix-installer-action@d96bc962e61b3049ce8128d03d57a1144fa96539 # main
       - name: Install MoonBit CLI
-        run: |
-          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
-          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+        uses: ./.github/actions/setup-moonbit
       - name: Moon update
         run: moon update
       - name: Build CLI

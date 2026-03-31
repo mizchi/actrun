@@ -159,6 +159,45 @@ test "validate_workspace_path: accepts legitimate subpath" {
 }
 
 ///|
+test "configured_wasm_runner_kind: explicit runner overrides wasm bin inference" {
+  let kind = configured_wasm_runner_kind({
+    "ACTRUN_WASM_RUNNER": "deno",
+    "ACTRUN_WASM_BIN": "/tmp/tools/node",
+  })
+  inspect(kind, content="deno")
+}
+
+///|
+test "configured_wasm_runner_kind: infers v8 from node bin when unset" {
+  let kind = configured_wasm_runner_kind({
+    "ACTRUN_WASM_BIN": "/tmp/tools/node",
+  })
+  inspect(kind, content="v8")
+}
+
+///|
+test "configured_wasm_runner_kind_error: rejects unsupported explicit runner" {
+  inspect(
+    configured_wasm_runner_kind_error({ "ACTRUN_WASM_RUNNER": "custom" }).unwrap_or(
+      "",
+    ),
+    content="unsupported ACTRUN_WASM_RUNNER: custom (expected: wasmtime, deno, v8)",
+  )
+}
+
+///|
+test "configured_wasm_bin: v8 defaults to ACTRUN_NODE_BIN" {
+  let previous = @xsys.get_env_var("ACTRUN_NODE_BIN")
+  @xsys.set_env_var("ACTRUN_NODE_BIN", "/tmp/tools/node24")
+  let wasm_bin = configured_wasm_runner_bin({ "ACTRUN_WASM_RUNNER": "v8" })
+  inspect(wasm_bin, content="/tmp/tools/node24")
+  match previous {
+    Some(value) => @xsys.set_env_var("ACTRUN_NODE_BIN", value)
+    None => @xsys.unset_env_var("ACTRUN_NODE_BIN")
+  }
+}
+
+///|
 /// Helper: run a shell command and return (exit_code, stdout, stderr).
 async fn wbtest_run(
   cmd : String,

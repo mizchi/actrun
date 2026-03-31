@@ -18,9 +18,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - name: Install MoonBit CLI
-        run: |
-          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
-          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+        uses: ./.github/actions/setup-moonbit
       - run: moon update
       - name: Build CLI
         run: moon build src/cmd/actrun --target native

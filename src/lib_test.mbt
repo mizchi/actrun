@@ -460,6 +460,90 @@ test "parser: reject non-positive matrix max parallel" {
 }
 
 ///|
+test "wasi job: wasm-only steps are accepted" {
+  let src =
+    #|name: ci
+    #|on: push
+    #|jobs:
+    #|  build:
+    #|    runs-on: wasi
+    #|    steps:
+    #|      - uses: wasm://lint@v1
+    #|      - uses: wasm://test@v1
+  let parsed = parse_workflow_yaml(src)
+  let workflow = expect_workflow(parsed)
+  let lowered = lower_push_workflow(workflow)
+  inspect(lowered.errors, content="[]")
+}
+
+///|
+test "wasi job: run step is rejected" {
+  let src =
+    #|name: ci
+    #|on: push
+    #|jobs:
+    #|  build:
+    #|    runs-on: wasi
+    #|    steps:
+    #|      - uses: wasm://lint@v1
+    #|      - run: echo "not allowed"
+  let parsed = parse_workflow_yaml(src)
+  let workflow = expect_workflow(parsed)
+  let lowered = lower_push_workflow(workflow)
+  inspect(lowered.errors.length() > 0, content="true")
+  inspect(lowered.errors[0].contains("run:"), content="true")
+}
+
+///|
+test "wasi job: github action is rejected" {
+  let src =
+    #|name: ci
+    #|on: push
+    #|jobs:
+    #|  build:
+    #|    runs-on: wasi
+    #|    steps:
+    #|      - uses: actions/checkout@v4
+  let parsed = parse_workflow_yaml(src)
+  let workflow = expect_workflow(parsed)
+  let lowered = lower_push_workflow(workflow)
+  inspect(lowered.errors.length() > 0, content="true")
+  inspect(lowered.errors[0].contains("wasm://"), content="true")
+}
+
+///|
+test "wasi job: docker action is rejected" {
+  let src =
+    #|name: ci
+    #|on: push
+    #|jobs:
+    #|  build:
+    #|    runs-on: wasi
+    #|    steps:
+    #|      - uses: docker://alpine
+  let parsed = parse_workflow_yaml(src)
+  let workflow = expect_workflow(parsed)
+  let lowered = lower_push_workflow(workflow)
+  inspect(lowered.errors.length() > 0, content="true")
+}
+
+///|
+test "non-wasi job: run step is allowed" {
+  let src =
+    #|name: ci
+    #|on: push
+    #|jobs:
+    #|  build:
+    #|    runs-on: ubuntu-latest
+    #|    steps:
+    #|      - run: echo hello
+  let parsed = parse_workflow_yaml(src)
+  let workflow = expect_workflow(parsed)
+  let lowered = lower_push_workflow(workflow)
+  inspect(lowered.errors, content="[]")
+}
+
+///|
 test "push trigger: branch and path filters" {
   let trigger = new_push_trigger(branches=["main"], paths=["src/*", "README.md"])
   let matched = new_push_event("main", ["src/lib.mbt"])
@@ -1026,6 +1110,58 @@ test "lowering: local composite action nested builtin uses becomes action task" 
   inspect(checkout_plan.action.unwrap().uses, content="builtin://checkout")
   let show = flow_task_by_id(result.ir, "test/setup__show")
   inspect(show.needs, content="[\"test/setup__checkout\"]")
+}
+
+///|
+test "lowering: local composite action nested wasm uses receives input env" {
+  let workspace = prepare_local_action_workspace(
+    "lower-local-action-nested-wasm",
+  )
+  test_ensure_dir(workspace + "/.github")
+  test_ensure_dir(workspace + "/.github/actions")
+  test_ensure_dir(workspace + "/.github/actions/setup")
+  let action_src =
+    #|name: Setup
+    #|inputs:
+    #|  message:
+    #|    default: default-message
+    #|runs:
+    #|  using: composite
+    #|  steps:
+    #|    - id: build
+    #|      run: mkdir -p "$ACTRUN_WASM_ACTION_ROOT/std/generated/v1"
+    #|      shell: bash
+    #|    - id: module
+    #|      uses: wasm://std/generated@v1
+    #|      with:
+    #|        message: ${{ inputs.message }}
+    #|    - id: show
+    #|      run: printf '%s' ok
+  @xfs.write_string_to_file(
+    workspace + "/.github/actions/setup/action.yml",
+    action_src,
+  )
+
+  let workflow = new_workflow("ci", [
+    new_job("test", [
+      new_uses_step("setup", "./.github/actions/setup", with_values={
+        "message": "from-input",
+      }),
+    ]),
+  ])
+
+  let result = lower_push_workflow_in_workspace(workflow, workspace)
+
+  inspect(result.errors, content="[]")
+  let module_plan = expect_task_plan(result.plan, "test/setup__module")
+  inspect(module_plan.kind, content="action")
+  inspect(module_plan.action.unwrap().backend, content="wasm")
+  inspect(
+    module_plan.env.get("INPUT_MESSAGE").unwrap_or(""),
+    content="from-input",
+  )
+  let show = flow_task_by_id(result.ir, "test/setup__show")
+  inspect(show.needs, content="[\"test/setup__module\"]")
 }
 
 ///|

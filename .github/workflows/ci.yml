@@ -27,12 +27,12 @@ jobs:
         if: ${{ !env.ACTRUN_LOCAL }}
         run: git clone --depth 1 https://github.com/bit-vcs/bit.git ../../bit-vcs/bit
       - name: Setup just
-        uses: extractions/setup-just@f8a3cce218d9f83db3a2ecd90e41ac3de6cdfd9b # v3
+        uses: taiki-e/install-action@e9e8e031bcd90cdbe8ac6bb1d376f8596e587fbf # v2.70.2
+        with:
+          tool: just
       - name: Install MoonBit CLI
         if: ${{ !env.ACTRUN_LOCAL }}
-        run: |
-          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
-          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+        uses: ./.github/actions/setup-moonbit
       - name: Moon version
         run: moon version --all
       - name: Moon update
@@ -42,6 +42,80 @@ jobs:
         run: just fmt-check
       - name: Verify generated interfaces
         run: just info-check
+
+  compat-wasi-gha:
+    runs-on: ubuntu-latest
+    outputs:
+      result: ${{ steps.runtime.outputs.result }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+      - id: runtime
+        uses: ./.github/actions/wasi-node-sidecar
+        with:
+          message: compat-ok
+      - name: Verify GitHub-hosted result
+        shell: bash
+        run: |
+          test '${{ steps.runtime.outputs.result }}' = 'compat-ok'
+
+  compat-wasi-actrun:
+    runs-on: ubuntu-latest
+    needs: compat-wasi-gha
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+      - name: Checkout bit dependency
+        if: ${{ !env.ACTRUN_LOCAL }}
+        run: git clone --depth 1 https://github.com/bit-vcs/bit.git ../../bit-vcs/bit
+      - name: Setup just
+        uses: taiki-e/install-action@e9e8e031bcd90cdbe8ac6bb1d376f8596e587fbf # v2.70.2
+        with:
+          tool: just
+      - name: Install MoonBit CLI
+        if: ${{ !env.ACTRUN_LOCAL }}
+        uses: ./.github/actions/setup-moonbit
+      - name: Moon update
+        if: ${{ !env.ACTRUN_LOCAL }}
+        run: moon update
+      - name: Build CLI
+        run: moon build src/cmd/actrun --target native
+      - name: Prepare fake wasm runner
+        shell: bash
+        run: |
+          cat > "$RUNNER_TEMP/fake-wasm-runner.sh" <<'EOF'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          printf '%s\n' "$@" >> "$RUNNER_TEMP/actrun-wasm.log"
+          shift
+          module=""
+          while [ "$#" -gt 0 ]; do
+            case "$1" in
+              --env) export "$2"; shift 2 ;;
+              --dir) shift 2 ;;
+              *) module="$1"; shift ;;
+            esac
+          done
+          exec sh "$module"
+          EOF
+          chmod +x "$RUNNER_TEMP/fake-wasm-runner.sh"
+          : > "$RUNNER_TEMP/actrun-wasm.log"
+      - name: Run compat workflow with actrun
+        env:
+          ACTRUN_NIX: "false"
+          ACTRUN_WASM_BIN: ${{ runner.temp }}/fake-wasm-runner.sh
+          ACTRUN_WASM_SKIP_VALIDATE: "true"
+        run: |
+          ACTRUN=_build/native/debug/build/cmd/actrun/actrun.exe
+          "$ACTRUN" .github/workflows/compat-wasi-node-sidecar.yml --trigger push --local --trust
+      - name: Compare GitHub and actrun results
+        env:
+          EXPECTED_RESULT: ${{ needs.compat-wasi-gha.outputs.result }}
+        run: |
+          ACTUAL_RESULT=$(cat _build/compat/wasi-node-sidecar/result.txt)
+          test "$ACTUAL_RESULT" = "$EXPECTED_RESULT"
+          grep -F ".github/actions/wasi-node-sidecar/dist/index.wasm" "$RUNNER_TEMP/actrun-wasm.log"
 
   test:
     timeout-minutes: 20
@@ -61,12 +135,12 @@ jobs:
         if: ${{ !env.ACTRUN_LOCAL }}
         run: git clone --depth 1 https://github.com/bit-vcs/bit.git ../../bit-vcs/bit
       - name: Setup just
-        uses: extractions/setup-just@f8a3cce218d9f83db3a2ecd90e41ac3de6cdfd9b # v3
+        uses: taiki-e/install-action@e9e8e031bcd90cdbe8ac6bb1d376f8596e587fbf # v2.70.2
+        with:
+          tool: just
       - name: Install MoonBit CLI
         if: ${{ !env.ACTRUN_LOCAL }}
-        run: |
-          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
-          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+        uses: ./.github/actions/setup-moonbit
       - name: Moon version
         run: moon version --all
       - name: Moon update
@@ -99,12 +173,12 @@ jobs:
         if: ${{ !env.ACTRUN_LOCAL }}
         run: git clone --depth 1 https://github.com/bit-vcs/bit.git ../../bit-vcs/bit
       - name: Setup just
-        uses: extractions/setup-just@f8a3cce218d9f83db3a2ecd90e41ac3de6cdfd9b # v3
+        uses: taiki-e/install-action@e9e8e031bcd90cdbe8ac6bb1d376f8596e587fbf # v2.70.2
+        with:
+          tool: just
       - name: Install MoonBit CLI
         if: ${{ !env.ACTRUN_LOCAL }}
-        run: |
-          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
-          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+        uses: ./.github/actions/setup-moonbit
       - name: Moon update
         if: ${{ !env.ACTRUN_LOCAL }}
         run: moon update

@@ -3048,6 +3048,91 @@ async test "executor: local composite action supports nested uses" {
 
 ///|
 #cfg(target="native")
+async test "executor: local composite action can build and run nested wasm action" {
+  let workspace = prepare_workspace("executor-local-action-nested-wasm")
+  let tools_root = prepare_workspace("executor-local-action-nested-wasm-tools")
+  let wasm_log_path = tools_root + "/wasm.log"
+  let wasm_bin = test_support_prepare_fake_wasm_bin(tools_root, wasm_log_path)
+  let wasm_root = workspace + "/generated-wasm"
+  ensure_dir(workspace + "/.github")
+  ensure_dir(workspace + "/.github/actions")
+  ensure_dir(workspace + "/.github/actions/setup")
+  let action_src =
+    #|name: Setup
+    #|inputs:
+    #|  message:
+    #|    default: default-message
+    #|outputs:
+    #|  result:
+    #|    value: ${{ steps.module.outputs.result }}
+    #|runs:
+    #|  using: composite
+    #|  steps:
+    #|    - id: build
+    #|      run: |
+    #|        mkdir -p "$ACTRUN_WASM_ACTION_ROOT/std/generated/v1"
+    #|        cat > "$ACTRUN_WASM_ACTION_ROOT/std/generated/v1/main.wasm" <<'EOF'
+    #|        #!/bin/sh
+    #|        set -eu
+    #|        printf '%s|%s' "${INPUT_MESSAGE:-}" "$GITHUB_WORKSPACE"
+    #|        printf 'result=from-composite-wasm\n' > "$GITHUB_OUTPUT"
+    #|        EOF
+    #|      shell: bash
+    #|    - id: module
+    #|      uses: wasm://std/generated@v1
+    #|      with:
+    #|        message: ${{ inputs.message }}
+  @xfs.write_string_to_file(
+    workspace + "/.github/actions/setup/action.yml",
+    action_src,
+  )
+
+  let workflow = new_workflow("ci", [
+    new_job(
+      "build",
+      [
+        new_uses_step("setup", "./.github/actions/setup", with_values={
+          "message": "from-composite",
+        }),
+        new_run_step(
+          "verify",
+          "printf '%s' '${{ steps.setup.outputs.result }}'",
+          shell=Some("bash"),
+        ),
+      ],
+      env={
+        "ACTRUN_WASM_BIN": wasm_bin,
+        "ACTRUN_WASM_ACTION_ROOT": wasm_root,
+        "ACTRUN_WASM_SKIP_VALIDATE": "true",
+      },
+      defaults=new_run_defaults(shell=Some("bash")),
+    ),
+  ])
+
+  let lowered = lower_push_workflow_in_workspace(workflow, workspace)
+  inspect(lowered.errors, content="[]")
+
+  let report = execute_lowered_native(lowered, workspace_root=workspace)
+
+  inspect(report.ok, content="true")
+  inspect(report.state, content="completed")
+  let module_report = expect_task_report(report, "build/setup__module")
+  inspect(module_report.status, content="success")
+  inspect(
+    module_report.stdout.contains("from-composite|/tmp/actrun-wasm-"),
+    content="true",
+  )
+  let verify = expect_task_report(report, "build/verify")
+  inspect(
+    verify.stdout.trim(chars=" \n\r\t").to_string(),
+    content="from-composite-wasm",
+  )
+  let wasm_log = @xfs.read_file_to_string(wasm_log_path)
+  assert_eq(wasm_log.contains("generated/v1/main.wasm"), true)
+}
+
+///|
+#cfg(target="native")
 async test "executor: github action_path context is available in local composite action" {
   let workspace = prepare_workspace("executor-local-action-github-action-path")
   ensure_dir(workspace + "/.github")
@@ -3085,6 +3170,188 @@ async test "executor: github action_path context is available in local composite
   inspect(
     @xfs.read_file_to_string(workspace + "/action-path.txt"),
     content=workspace + "/.github/actions/setup",
+  )
+}
+
+///|
+#cfg(target="native")
+async test "executor: local node action prefers sibling wasm module" {
+  let workspace = prepare_workspace("executor-local-node-sidecar-wasm")
+  let tools_root = prepare_workspace("executor-local-node-sidecar-wasm-tools")
+  test_support_remove_tree(workspace)
+  test_support_remove_tree(tools_root)
+  ensure_dir(workspace)
+  ensure_dir(tools_root)
+  let node_log_path = tools_root + "/node.log"
+  let node_bin = test_support_prepare_fake_node_bin(tools_root, node_log_path)
+  let wasm_log_path = tools_root + "/wasm.log"
+  let wasm_bin = test_support_prepare_fake_wasm_bin(tools_root, wasm_log_path)
+  ensure_dir(workspace + "/.github")
+  ensure_dir(workspace + "/.github/actions")
+  ensure_dir(workspace + "/.github/actions/wasi")
+  ensure_dir(workspace + "/.github/actions/wasi/dist")
+  let action_src =
+    #|name: Wasi Sidecar
+    #|inputs:
+    #|  message:
+    #|    default: default-message
+    #|runs:
+    #|  using: node20
+    #|  main: dist/index.js
+  let node_src =
+    #|#!/bin/sh
+    #|set -eu
+    #|printf 'result=from-node\n' >> "$GITHUB_OUTPUT"
+    #|printf 'node:%s' "${INPUT_MESSAGE:-}"
+  let wasm_src =
+    #|#!/bin/sh
+    #|set -eu
+    #|printf 'result=from-wasm\n' >> "$GITHUB_OUTPUT"
+    #|printf 'wasm:%s' "${INPUT_MESSAGE:-}"
+  @xfs.write_string_to_file(
+    workspace + "/.github/actions/wasi/action.yml",
+    action_src,
+  )
+  @xfs.write_string_to_file(
+    workspace + "/.github/actions/wasi/dist/index.js",
+    node_src,
+  )
+  @xfs.write_string_to_file(
+    workspace + "/.github/actions/wasi/dist/index.wasm",
+    wasm_src,
+  )
+
+  let workflow = new_workflow("ci", [
+    new_job(
+      "build",
+      [
+        new_uses_step("runtime", "./.github/actions/wasi", with_values={
+          "message": "hello",
+        }),
+        new_run_step(
+          "verify",
+          "printf '%s' '${{ steps.runtime.outputs.result }}'",
+          shell=Some("bash"),
+        ),
+      ],
+      env={
+        "ACTRUN_NODE_BIN": node_bin,
+        "ACTRUN_WASM_BIN": wasm_bin,
+        "ACTRUN_WASM_SKIP_VALIDATE": "true",
+      },
+      defaults=new_run_defaults(shell=Some("bash")),
+    ),
+  ])
+
+  let lowered = lower_push_workflow_in_workspace(workflow, workspace)
+  inspect(lowered.errors, content="[]")
+
+  let report = execute_lowered_native(lowered, workspace_root=workspace)
+
+  inspect(report.ok, content="true")
+  let runtime = expect_task_report(report, "build/runtime")
+  inspect(
+    runtime.stdout.trim(chars=" \n\r\t").to_string(),
+    content="wasm:hello",
+  )
+  let verify = expect_task_report(report, "build/verify")
+  inspect(verify.stdout.trim(chars=" \n\r\t").to_string(), content="from-wasm")
+  let wasm_log = @xfs.read_file_to_string(wasm_log_path)
+  assert_eq(
+    wasm_log.contains(workspace + "/.github/actions/wasi/dist/index.wasm"),
+    true,
+  )
+  inspect(@xfs.read_file_to_string(node_log_path), content="")
+}
+
+///|
+#cfg(target="native")
+async test "executor: local node action falls back to node when wasm runner is unavailable" {
+  let workspace = prepare_workspace("executor-local-node-sidecar-fallback")
+  let tools_root = prepare_workspace(
+    "executor-local-node-sidecar-fallback-tools",
+  )
+  test_support_remove_tree(workspace)
+  test_support_remove_tree(tools_root)
+  ensure_dir(workspace)
+  ensure_dir(tools_root)
+  let node_log_path = tools_root + "/node.log"
+  let node_bin = test_support_prepare_fake_node_bin(tools_root, node_log_path)
+  let missing_wasm_bin = tools_root + "/missing-wasm-runner"
+  ensure_dir(workspace + "/.github")
+  ensure_dir(workspace + "/.github/actions")
+  ensure_dir(workspace + "/.github/actions/wasi")
+  ensure_dir(workspace + "/.github/actions/wasi/dist")
+  let action_src =
+    #|name: Wasi Sidecar
+    #|inputs:
+    #|  message:
+    #|    default: default-message
+    #|runs:
+    #|  using: node20
+    #|  main: dist/index.js
+  let node_src =
+    #|#!/bin/sh
+    #|set -eu
+    #|printf 'result=from-node\n' >> "$GITHUB_OUTPUT"
+    #|printf 'node:%s' "${INPUT_MESSAGE:-}"
+  let wasm_src =
+    #|#!/bin/sh
+    #|set -eu
+    #|printf 'result=from-wasm\n' >> "$GITHUB_OUTPUT"
+    #|printf 'wasm:%s' "${INPUT_MESSAGE:-}"
+  @xfs.write_string_to_file(
+    workspace + "/.github/actions/wasi/action.yml",
+    action_src,
+  )
+  @xfs.write_string_to_file(
+    workspace + "/.github/actions/wasi/dist/index.js",
+    node_src,
+  )
+  @xfs.write_string_to_file(
+    workspace + "/.github/actions/wasi/dist/index.wasm",
+    wasm_src,
+  )
+
+  let workflow = new_workflow("ci", [
+    new_job(
+      "build",
+      [
+        new_uses_step("runtime", "./.github/actions/wasi", with_values={
+          "message": "hello",
+        }),
+        new_run_step(
+          "verify",
+          "printf '%s' '${{ steps.runtime.outputs.result }}'",
+          shell=Some("bash"),
+        ),
+      ],
+      env={
+        "ACTRUN_NODE_BIN": node_bin,
+        "ACTRUN_WASM_BIN": missing_wasm_bin,
+        "ACTRUN_WASM_SKIP_VALIDATE": "true",
+      },
+      defaults=new_run_defaults(shell=Some("bash")),
+    ),
+  ])
+
+  let lowered = lower_push_workflow_in_workspace(workflow, workspace)
+  inspect(lowered.errors, content="[]")
+
+  let report = execute_lowered_native(lowered, workspace_root=workspace)
+
+  inspect(report.ok, content="true")
+  let runtime = expect_task_report(report, "build/runtime")
+  inspect(
+    runtime.stdout.trim(chars=" \n\r\t").to_string(),
+    content="node:hello",
+  )
+  let verify = expect_task_report(report, "build/verify")
+  inspect(verify.stdout.trim(chars=" \n\r\t").to_string(), content="from-node")
+  let node_log = @xfs.read_file_to_string(node_log_path)
+  assert_eq(
+    node_log.contains(workspace + "/.github/actions/wasi/dist/index.js"),
+    true,
   )
 }
 
@@ -3883,7 +4150,11 @@ async test "executor: wasm actions run via configured wasm runner" {
           shell=Some("bash"),
         ),
       ],
-      env={ "ACTRUN_WASM_BIN": wasm_bin, "ACTRUN_WASM_ACTION_ROOT": wasm_root },
+      env={
+        "ACTRUN_WASM_BIN": wasm_bin,
+        "ACTRUN_WASM_ACTION_ROOT": wasm_root,
+        "ACTRUN_WASM_SKIP_VALIDATE": "true",
+      },
       defaults=new_run_defaults(shell=Some("bash")),
     ),
   ])
@@ -3900,7 +4171,9 @@ async test "executor: wasm actions run via configured wasm runner" {
   inspect(module_report.status, content="success")
   inspect(
     module_report.stdout.trim(chars=" \n\r\t").to_string(),
-    content="hello|" + workspace,
+    content=(
+      #|hello|/tmp/actrun-wasm-0-build_module
+    ),
   )
   let verify = expect_task_report(report, "build/verify")
   inspect(verify.stdout.trim(chars=" \n\r\t").to_string(), content="from-wasm")

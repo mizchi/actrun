@@ -1,5 +1,9 @@
 # hello-wasm
 
+> Experimental / internal example.
+> This directory documents the legacy `wasm://...` module-root path and is not part of the public release contract.
+> For the supported public surface, see [../../../docs/public-api.md](../../../docs/public-api.md).
+
 A minimal WASI wasm action for actrun.
 
 ## How wasm actions work

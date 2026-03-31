@@ -1832,6 +1832,7 @@ fn append_run_task(
   if_condition : String,
   continue_on_error : String,
   env : Map[String, String],
+  with_values? : Map[String, String] = {},
   action_scope? : String? = None,
   timeout_minutes? : Int = 0,
 ) -> Unit {
@@ -1851,6 +1852,7 @@ fn append_run_task(
       if_condition,
       job.runs_on,
       env,
+      with_values~,
       continue_on_error~,
       action_scope~,
       timeout_minutes~,
@@ -1873,6 +1875,7 @@ fn append_action_task(
   continue_on_error : String,
   env : Map[String, String],
   action : ResolvedAction,
+  with_values? : Map[String, String] = {},
   action_scope? : String? = None,
   requires_action_started? : Bool = false,
   timeout_minutes? : Int = 0,
@@ -1893,6 +1896,7 @@ fn append_action_task(
       if_condition,
       job.runs_on,
       env,
+      with_values~,
       continue_on_error~,
       action=Some(action),
       action_scope~,
@@ -1912,6 +1916,7 @@ priv struct DeferredActionTask {
   if_condition : String
   continue_on_error : String
   env : Map[String, String]
+  with_values : Map[String, String]
   action : ResolvedAction
   action_scope : String?
   requires_action_started : Bool
@@ -1944,6 +1949,7 @@ fn append_deferred_action_tasks(
       deferred.continue_on_error,
       deferred.env,
       deferred.action,
+      with_values=deferred.with_values,
       action_scope=deferred.action_scope,
       requires_action_started=deferred.requires_action_started,
     )
@@ -2052,6 +2058,7 @@ fn lower_builtin_action(
       step.continue_on_error,
       env,
       action,
+      with_values=step.with_values,
       action_scope=Some(action_scope),
     )
     deferred_post_tasks.push({
@@ -2063,6 +2070,7 @@ fn lower_builtin_action(
       if_condition: "success()",
       continue_on_error: "false",
       env,
+      with_values: step.with_values,
       action: {
         uses: action.uses,
         action_ref,
@@ -2097,6 +2105,7 @@ fn lower_builtin_action(
     step.continue_on_error,
     env,
     action,
+    with_values=step.with_values,
   )
   task_id
 }
@@ -2212,6 +2221,7 @@ fn lower_manifest_backed_action(
             image: None,
             args: [],
           },
+          with_values=step.with_values,
           action_scope=Some(action_scope),
         )
         local_previous_task_id = pre_task_id
@@ -2242,6 +2252,7 @@ fn lower_manifest_backed_action(
         image: None,
         args: [],
       },
+      with_values=step.with_values,
       action_scope=Some(action_scope),
     )
     match action_manifest.post {
@@ -2258,6 +2269,7 @@ fn lower_manifest_backed_action(
           if_condition: action_manifest.post_if,
           continue_on_error: "false",
           env: node_env,
+          with_values: step.with_values,
           action: {
             uses: action_ref_text(action_ref),
             action_ref,
@@ -2349,6 +2361,7 @@ fn lower_manifest_backed_action(
             image: Some(image),
             args,
           },
+          with_values=step.with_values,
           action_scope=Some(action_scope),
         )
         local_previous_task_id = pre_task_id
@@ -2382,6 +2395,7 @@ fn lower_manifest_backed_action(
         image: Some(image),
         args,
       },
+      with_values=step.with_values,
       action_scope=Some(action_scope),
     )
     match
@@ -2402,6 +2416,7 @@ fn lower_manifest_backed_action(
           if_condition: action_manifest.post_if,
           continue_on_error: "false",
           env: docker_env,
+          with_values: step.with_values,
           action: {
             uses: action_ref_text(action_ref),
             action_ref,
@@ -2631,8 +2646,15 @@ fn lower_local_action(
           ),
           inner_step.if_condition,
           inner_step.continue_on_error,
-          merge_env(merge_env(outer_env, nested_env), action_context_env),
+          merge_env(
+            merge_env(
+              merge_env(outer_env, nested_env),
+              action_input_env({}, nested_with_values),
+            ),
+            action_context_env,
+          ),
           action,
+          with_values=nested_with_values,
         )
         local_previous_task_id = task_id
         inner_index += 1
@@ -2775,6 +2797,55 @@ fn resolve_composite_output_expression(
 }
 
 ///|
+fn is_wasi_job(job : JobSpec) -> Bool {
+  for runner in job.runs_on {
+    if runner == "wasi" {
+      return true
+    }
+  }
+  false
+}
+
+///|
+fn validate_wasi_job(job : JobSpec, errors : Array[String]) -> Unit {
+  if job.container is Some(_) {
+    errors.push(
+      "job '\{job.id}' uses runs-on: wasi but has container: which is not supported in wasi mode",
+    )
+  }
+  if job.services.length() > 0 {
+    errors.push(
+      "job '\{job.id}' uses runs-on: wasi but has services: which is not supported in wasi mode",
+    )
+  }
+  let mut step_index = 0
+  while step_index < job.steps.length() {
+    let step = job.steps[step_index]
+    let step_id = default_step_id(step, step_index)
+    match step.uses {
+      Some(uses) => {
+        let parsed = parse_action_ref(uses)
+        match parsed.action {
+          Some(Registry("wasm", _, _)) => () // wasm:// actions are allowed
+          Some(_) =>
+            errors.push(
+              "job '\{job.id}' step '\{step_id}' uses '\{uses}' which is not a wasm:// action; only wasm:// actions are allowed in wasi mode",
+            )
+          None => () // parse error handled elsewhere
+        }
+      }
+      None =>
+        if step.run is Some(_) {
+          errors.push(
+            "job '\{job.id}' step '\{step_id}' uses run: which is not supported in wasi mode; use a wasm:// action instead",
+          )
+        }
+    }
+    step_index += 1
+  }
+}
+
+///|
 pub fn lower_push_workflow_in_workspace(
   workflow : WorkflowSpec,
   workspace_root : String,
@@ -2877,6 +2948,9 @@ pub fn lower_push_workflow_in_workspace(
     }
     if job.steps.length() == 0 {
       errors.push("job '\{job.id}' must have at least one step")
+    }
+    if is_wasi_job(job) {
+      validate_wasi_job(job, errors)
     }
 
     let mut previous_task_id = ""
@@ -3025,6 +3099,7 @@ pub fn lower_push_workflow_in_workspace(
         step.if_condition,
         step.continue_on_error,
         step_env,
+        with_values=step.with_values,
         timeout_minutes=effective_timeout,
       )
       previous_task_id = task_id

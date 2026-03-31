@@ -27,9 +27,7 @@ jobs:
       - name: Checkout bit dependency
         run: git clone --depth 1 https://github.com/bit-vcs/bit.git ../../bit-vcs/bit
       - name: Install MoonBit CLI
-        run: |
-          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
-          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+        uses: ./.github/actions/setup-moonbit
       - name: Build
         run: |
           moon update

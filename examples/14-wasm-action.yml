@@ -1,3 +1,6 @@
+# Experimental / internal example.
+# This workflow uses the legacy `wasm://...` action path.
+# It is not part of the public release contract. See docs/public-api.md.
 name: wasm-action
 'on': push
 jobs:

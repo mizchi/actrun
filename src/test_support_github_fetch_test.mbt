@@ -205,14 +205,22 @@ async fn test_support_prepare_fake_wasm_bin(
   let wasm_path = bin_dir + "/wasm-runner"
   let absolute_log_path = test_support_absolute_path(log_path)
   @xfs.write_string_to_file(absolute_log_path, "")
+  // Fake wasmtime: parse `run --env K=V ... --dir D ... module.wasm`
   let script = "#!/bin/sh\n" +
     "set -eu\n" +
     "printf '%s\\n' \"$@\" >> '" +
     absolute_log_path +
     "'\n" +
-    "module=\"$1\"\n" +
-    "shift || true\n" +
-    "exec sh \"$module\" \"$@\"\n"
+    "shift\n" +
+    "MODULE=''\n" +
+    "while [ $# -gt 0 ]; do\n" +
+    "  case \"$1\" in\n" +
+    "    --env) export \"$2\"; shift 2;;\n" +
+    "    --dir) shift 2;;\n" +
+    "    *) MODULE=\"$1\"; shift;;\n" +
+    "  esac\n" +
+    "done\n" +
+    "exec sh \"$MODULE\"\n"
   @xfs.write_string_to_file(wasm_path, script)
   test_support_make_executable(wasm_path)
   test_support_absolute_path(wasm_path)
