@@ -1,0 +1,11 @@
+import {
+  "mizchi/actrun" @actrun,
+  "mizchi/actrun/wasi_runner" @wr,
+  "moonbitlang/core/json" @json,
+}
+
+warnings = "-0029"
+
+options(
+  targets: { "api_js.mbt": [ "js" ] },
+)

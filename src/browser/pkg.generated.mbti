@@ -1,0 +1,33 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "mizchi/actrun/browser"
+
+import {
+  "mizchi/actrun",
+  "mizchi/actrun/wasi_runner",
+}
+
+// Values
+pub fn execute_shell_step(String, env? : Map[String, String], vfs? : @wasi_runner.VirtualFs, workdir? : String) -> BrowserStepResult
+
+pub fn new_vfs_shell_env(@wasi_runner.VirtualFs, Map[String, String], cwd? : String) -> @actrun.ShellEnv
+
+pub fn step_result_to_json(BrowserStepResult) -> String
+
+// Errors
+
+// Types and methods
+pub struct BrowserStepResult {
+  status : String
+  exit_code : Int
+  stdout : String
+  stderr : String
+  outputs : Map[String, String]
+  env_updates : Map[String, String]
+}
+pub impl Show for BrowserStepResult
+pub impl ToJson for BrowserStepResult
+
+// Type aliases
+
+// Traits
+
