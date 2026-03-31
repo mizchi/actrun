@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.28.0
+
+### Features
+
+- Add GitHub-compatible WASM sidecar execution for `node*` actions on self-hosted runners
+- Add explicit WASM runtime selection with `--wasm-runner` / `ACTRUN_WASM_RUNNER` (`wasmtime`, `deno`, `v8`)
+- Add plan API, in-process shell execution, and MoonBit-generated WASI runner / worker paths
+- Add slim container image and compat CI coverage for GitHub-hosted JS fallback and self-hosted WASM execution
+
+### Security
+
+- Harden WASI sandbox path validation and cleanup to prevent traversal and leftover tempdir issues
+
+### CI / Tooling
+
+- Pin the MoonBit toolchain in workflows and replace deprecated setup actions to keep CI reproducible
+- Tighten the public API boundary docs and mark protocol extensions such as `wasm://...` and `runs-on: wasi` as internal / experimental
+
 ## 0.27.0
 
 ### Security
