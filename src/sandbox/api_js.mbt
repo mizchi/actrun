@@ -31,44 +31,38 @@ fn exec_shell_handler(config_json : String) -> String {
   let config : Json = @json.parse(config_json) catch {
     _ => return "{\"error\":\"invalid json\"}"
   }
-  let script = match config {
-    Object(m) =>
-      match m.get("script") {
-        Some(String(s)) => s
-        _ => return "{\"error\":\"script required\"}"
-      }
-    _ => return "{\"error\":\"invalid config\"}"
+  guard config is Object(m) else {
+    return "{\"error\":\"invalid config\"}"
+  }
+  let script = match m.get("script") {
+    Some(String(s)) => s
+    _ => return "{\"error\":\"script required\"}"
   }
   let env : Map[String, String] = {}
   let fs = MemFs::new()
   let mut workdir = "/workspace"
-  match config {
-    Object(m) => {
-      match m.get("env") {
-        Some(Object(e)) =>
-          for k, v in e {
-            match v {
-              String(s) => env[k] = s
-              _ => ()
-            }
-          }
-        _ => ()
+  match m.get("env") {
+    Some(Object(e)) =>
+      for k, v in e {
+        match v {
+          String(s) => env[k] = s
+          _ => ()
+        }
       }
-      match m.get("vfs") {
-        Some(Object(files)) =>
-          for path, content in files {
-            match content {
-              String(s) => fs.fs_write(path, s, false)
-              _ => ()
-            }
-          }
-        _ => ()
+    _ => ()
+  }
+  match m.get("vfs") {
+    Some(Object(files)) =>
+      for path, content in files {
+        match content {
+          String(s) => fs.write(path, s, false)
+          _ => ()
+        }
       }
-      match m.get("workdir") {
-        Some(String(s)) => workdir = s
-        _ => ()
-      }
-    }
+    _ => ()
+  }
+  match m.get("workdir") {
+    Some(String(s)) => workdir = s
     _ => ()
   }
   let result = execute_shell_step(script, fs, env~, workdir~)
@@ -274,43 +268,37 @@ fn exec_wasm_handler(config_json : String) -> String {
   let config : Json = @json.parse(config_json) catch {
     _ => return "{\"error\":\"invalid json\"}"
   }
-  let module_id = match config {
-    Object(m) =>
-      match m.get("module_id") {
-        Some(String(s)) => s
-        _ => return "{\"error\":\"module_id required\"}"
-      }
-    _ => return "{\"error\":\"invalid config\"}"
+  guard config is Object(m) else {
+    return "{\"error\":\"invalid config\"}"
+  }
+  let module_id = match m.get("module_id") {
+    Some(String(s)) => s
+    _ => return "{\"error\":\"module_id required\"}"
   }
   let env : Map[String, String] = {}
   let mut workdir = "/workspace"
-  match config {
-    Object(m) => {
-      match m.get("env") {
-        Some(Object(e)) =>
-          for k, v in e {
-            match v {
-              String(s) => env[k] = s
-              _ => ()
-            }
-          }
-        _ => ()
+  match m.get("env") {
+    Some(Object(e)) =>
+      for k, v in e {
+        match v {
+          String(s) => env[k] = s
+          _ => ()
+        }
       }
-      match m.get("inputs") {
-        Some(Object(e)) =>
-          for k, v in e {
-            match v {
-              String(s) => env["INPUT_" + to_upper(k)] = s
-              _ => ()
-            }
-          }
-        _ => ()
+    _ => ()
+  }
+  match m.get("inputs") {
+    Some(Object(e)) =>
+      for k, v in e {
+        match v {
+          String(s) => env["INPUT_" + k.to_upper()] = s
+          _ => ()
+        }
       }
-      match m.get("workdir") {
-        Some(String(s)) => workdir = s
-        _ => ()
-      }
-    }
+    _ => ()
+  }
+  match m.get("workdir") {
+    Some(String(s)) => workdir = s
     _ => ()
   }
   env["GITHUB_OUTPUT"] = workdir + "/github_output"
@@ -324,17 +312,4 @@ fn exec_wasm_handler(config_json : String) -> String {
 #cfg(target="js")
 pub fn register_api() -> Unit {
   js_register_api(plan_handler, exec_shell_handler, exec_wasm_handler)
-}
-
-///|
-fn to_upper(s : String) -> String {
-  let buf = StringBuilder::new()
-  for ch in s {
-    if ch >= 'a' && ch <= 'z' {
-      buf.write_char(Int::unsafe_to_char(ch.to_int() - 32))
-    } else {
-      buf.write_char(ch)
-    }
-  }
-  buf.to_string()
 }

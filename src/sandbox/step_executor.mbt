@@ -20,11 +20,11 @@ pub fn execute_shell_step(
 ) -> StepResult {
   let output_path = workdir + "/github_output"
   let env_path = workdir + "/github_env"
-  if not(fs.fs_exists(output_path)) {
-    fs.fs_write(output_path, "", false)
+  if not(fs.exists(output_path)) {
+    fs.write(output_path, "", false)
   }
-  if not(fs.fs_exists(env_path)) {
-    fs.fs_write(env_path, "", false)
+  if not(fs.exists(env_path)) {
+    fs.write(env_path, "", false)
   }
   let merged_env : Map[String, String] = {}
   for k, v in env {

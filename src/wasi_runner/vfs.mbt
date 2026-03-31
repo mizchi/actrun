@@ -99,12 +99,10 @@ pub fn VirtualFs::mkdir(self : VirtualFs, path : String) -> Bool {
 
 ///|
 pub fn VirtualFs::is_dir(self : VirtualFs, path : String) -> Bool {
-  let dir_key = if path.has_suffix("/") { path } else { path + "/" }
-  if self.files.get(dir_key) is Some(_) {
+  let prefix = if path.has_suffix("/") { path } else { path + "/" }
+  if self.files.get(prefix) is Some(_) {
     return true
   }
-  // Check if any file exists under this path prefix
-  let prefix = if path.has_suffix("/") { path } else { path + "/" }
   for key, _ in self.files {
     if key.has_prefix(prefix) {
       return true

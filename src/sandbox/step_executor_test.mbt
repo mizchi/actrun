@@ -52,7 +52,7 @@ test "execute_shell_step: custom env" {
 ///|
 test "execute_shell_step: pre-populated fs" {
   let fs = MemFs::new()
-  fs.fs_write("/workspace/input.txt", "data from outside", false)
+  fs.write("/workspace/input.txt", "data from outside", false)
   let result = execute_shell_step("cat /workspace/input.txt", fs)
   inspect(result.stdout, content="data from outside")
 }

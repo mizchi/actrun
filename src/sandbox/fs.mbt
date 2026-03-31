@@ -2,19 +2,19 @@
 /// Filesystem trait for sandboxed execution.
 /// Callers inject an implementation (in-memory, real FS, etc.).
 pub(open) trait Fs {
-  fs_write(Self, String, String, Bool) -> Unit // path, content, append
-  fs_read(Self, String) -> String?
-  fs_exists(Self, String) -> Bool
-  fs_is_dir(Self, String) -> Bool
-  fs_mkdir(Self, String) -> Bool
-  fs_remove(Self, String) -> Bool
+  write(Self, String, String, Bool) -> Unit // path, content, append
+  read(Self, String) -> String?
+  exists(Self, String) -> Bool
+  is_dir(Self, String) -> Bool
+  mkdir(Self, String) -> Bool
+  remove(Self, String) -> Bool
 }
 
 ///|
 /// Parse KEY=VALUE entries from a file (GITHUB_OUTPUT / GITHUB_ENV format).
 pub fn parse_key_values(fs : &Fs, path : String) -> Map[String, String] {
   let result : Map[String, String] = {}
-  let content = match fs.fs_read(path) {
+  let content = match fs.read(path) {
     Some(s) => s
     None => return result
   }
