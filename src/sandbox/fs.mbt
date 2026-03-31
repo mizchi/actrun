@@ -1,6 +1,4 @@
 ///|
-/// Filesystem trait for sandboxed execution.
-/// Callers inject an implementation (in-memory, real FS, etc.).
 pub(open) trait Fs {
   write(Self, String, String, Bool) -> Unit // path, content, append
   read(Self, String) -> String?

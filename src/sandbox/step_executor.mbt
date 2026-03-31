@@ -1,7 +1,4 @@
 ///|
-/// Sandboxed step executor — runs workflow steps entirely in-memory via Fs trait.
-
-///|
 pub struct StepResult {
   status : String // "success" | "failed" | "skipped"
   exit_code : Int
@@ -20,12 +17,9 @@ pub fn execute_shell_step(
 ) -> StepResult {
   let output_path = workdir + "/github_output"
   let env_path = workdir + "/github_env"
-  if not(fs.exists(output_path)) {
-    fs.write(output_path, "", false)
-  }
-  if not(fs.exists(env_path)) {
-    fs.write(env_path, "", false)
-  }
+  // Unconditionally initialize — idempotent for empty files
+  fs.write(output_path, "", false)
+  fs.write(env_path, "", false)
   let merged_env : Map[String, String] = {}
   for k, v in env {
     merged_env[k] = v

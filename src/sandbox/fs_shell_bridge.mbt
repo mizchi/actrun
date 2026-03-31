@@ -1,8 +1,4 @@
 ///|
-/// Bridge Fs trait to ShellEnv DI callbacks.
-/// All filesystem operations route through the injected Fs implementation.
-
-///|
 pub fn new_fs_shell_env(
   fs : &Fs,
   vars : Map[String, String],

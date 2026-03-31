@@ -1,5 +1,4 @@
 ///|
-/// In-memory filesystem backed by a flat Map.
 pub struct MemFs {
   files : Map[String, String]
 }
@@ -51,10 +50,7 @@ pub impl Fs for MemFs with mkdir(self, path) {
 
 ///|
 pub impl Fs for MemFs with remove(self, path) {
-  if self.files.get(path) is Some(_) {
-    self.files.remove(path)
-    true
-  } else {
-    false
-  }
+  let had = self.files.get(path) is Some(_)
+  self.files.remove(path)
+  had
 }

@@ -1,9 +1,4 @@
 ///|
-/// JS binding for the sandbox executor.
-/// Registers plan / executeShellStep / executeWasmStep on globalThis._actrun_sandbox.
-/// This is an example of how to expose the target-agnostic sandbox layer to JS.
-
-///|
 #cfg(target="js")
 extern "js" fn js_register_api(
   plan_fn : (String) -> String,
@@ -26,6 +21,33 @@ fn plan_handler(yaml_text : String) -> String {
 }
 
 ///|
+/// Extract string-valued entries from a JSON object into a Map.
+#cfg(target="js")
+fn extract_string_map(m : Map[String, Json], key : String) -> Map[String, String] {
+  let result : Map[String, String] = {}
+  match m.get(key) {
+    Some(Object(e)) =>
+      for k, v in e {
+        match v {
+          String(s) => result[k] = s
+          _ => ()
+        }
+      }
+    _ => ()
+  }
+  result
+}
+
+///|
+#cfg(target="js")
+fn extract_workdir(m : Map[String, Json]) -> String {
+  match m.get("workdir") {
+    Some(String(s)) => s
+    _ => "/workspace"
+  }
+}
+
+///|
 #cfg(target="js")
 fn exec_shell_handler(config_json : String) -> String {
   let config : Json = @json.parse(config_json) catch {
@@ -38,19 +60,9 @@ fn exec_shell_handler(config_json : String) -> String {
     Some(String(s)) => s
     _ => return "{\"error\":\"script required\"}"
   }
-  let env : Map[String, String] = {}
+  let env = extract_string_map(m, "env")
+  let workdir = extract_workdir(m)
   let fs = MemFs::new()
-  let mut workdir = "/workspace"
-  match m.get("env") {
-    Some(Object(e)) =>
-      for k, v in e {
-        match v {
-          String(s) => env[k] = s
-          _ => ()
-        }
-      }
-    _ => ()
-  }
   match m.get("vfs") {
     Some(Object(files)) =>
       for path, content in files {
@@ -59,10 +71,6 @@ fn exec_shell_handler(config_json : String) -> String {
           _ => ()
         }
       }
-    _ => ()
-  }
-  match m.get("workdir") {
-    Some(String(s)) => workdir = s
     _ => ()
   }
   let result = execute_shell_step(script, fs, env~, workdir~)
@@ -275,31 +283,11 @@ fn exec_wasm_handler(config_json : String) -> String {
     Some(String(s)) => s
     _ => return "{\"error\":\"module_id required\"}"
   }
-  let env : Map[String, String] = {}
-  let mut workdir = "/workspace"
-  match m.get("env") {
-    Some(Object(e)) =>
-      for k, v in e {
-        match v {
-          String(s) => env[k] = s
-          _ => ()
-        }
-      }
-    _ => ()
-  }
-  match m.get("inputs") {
-    Some(Object(e)) =>
-      for k, v in e {
-        match v {
-          String(s) => env["INPUT_" + k.to_upper()] = s
-          _ => ()
-        }
-      }
-    _ => ()
-  }
-  match m.get("workdir") {
-    Some(String(s)) => workdir = s
-    _ => ()
+  let env = extract_string_map(m, "env")
+  let workdir = extract_workdir(m)
+  let inputs = extract_string_map(m, "inputs")
+  for k, v in inputs {
+    env["INPUT_" + k.to_upper()] = v
   }
   env["GITHUB_OUTPUT"] = workdir + "/github_output"
   env["GITHUB_ENV"] = workdir + "/github_env"
