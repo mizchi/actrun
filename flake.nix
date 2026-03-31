@@ -3,9 +3,7 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
-    # TODO: switch back to "github:moonbit-community/moonbit-overlay" once
-    # https://github.com/moonbit-community/moonbit-overlay/pull/39 is merged
-    moonbit-overlay.url = "github:ryoppippi/moonbit-overlay/fix/moonplatform-bugs";
+    moonbit-overlay.url = "github:moonbit-community/moonbit-overlay";
     moon-registry = {
       url = "git+https://mooncakes.io/git/index";
       flake = false;

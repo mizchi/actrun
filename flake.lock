@@ -22,16 +22,15 @@
         "treefmt-nix": "treefmt-nix"
       },
       "locked": {
-        "lastModified": 1774725309,
-        "narHash": "sha256-6A+KPyYuubWS2CW8+0LN1/IMREZR1JA4CKIiwBze1ss=",
-        "owner": "ryoppippi",
+        "lastModified": 1774948263,
+        "narHash": "sha256-5g6Fl5+39UlOjTa+dm9mOTtklHmAr+ai0G9fmq/L+kg=",
+        "owner": "moonbit-community",
         "repo": "moonbit-overlay",
-        "rev": "4ffc0aab45588a519342178cca9231be94c9bab0",
+        "rev": "50118f5c3c0298b5cb17cc6f1c346165801014c8",
         "type": "github"
       },
       "original": {
-        "owner": "ryoppippi",
-        "ref": "fix/moonplatform-bugs",
+        "owner": "moonbit-community",
         "repo": "moonbit-overlay",
         "type": "github"
       }
