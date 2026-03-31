@@ -40,7 +40,7 @@ fn exec_shell_handler(config_json : String) -> String {
     _ => return "{\"error\":\"invalid config\"}"
   }
   let env : Map[String, String] = {}
-  let vfs = @wr.VirtualFs::new()
+  let fs = MemFs::new()
   let mut workdir = "/workspace"
   match config {
     Object(m) => {
@@ -58,7 +58,7 @@ fn exec_shell_handler(config_json : String) -> String {
         Some(Object(files)) =>
           for path, content in files {
             match content {
-              String(s) => vfs.write(path, s)
+              String(s) => fs.fs_write(path, s, false)
               _ => ()
             }
           }
@@ -71,7 +71,7 @@ fn exec_shell_handler(config_json : String) -> String {
     }
     _ => ()
   }
-  let result = execute_shell_step(script, env~, vfs~, workdir~)
+  let result = execute_shell_step(script, fs, env~, workdir~)
   step_result_to_json(result)
 }
 

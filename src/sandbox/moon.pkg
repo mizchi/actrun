@@ -1,6 +1,5 @@
 import {
   "mizchi/actrun" @actrun,
-  "mizchi/actrun/wasi_runner" @wr,
   "moonbitlang/core/json" @json,
 }
 

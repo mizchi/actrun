@@ -3,19 +3,26 @@ package "mizchi/actrun/sandbox"
 
 import {
   "mizchi/actrun",
-  "mizchi/actrun/wasi_runner",
 }
 
 // Values
-pub fn execute_shell_step(String, env? : Map[String, String], vfs? : @wasi_runner.VirtualFs, workdir? : String) -> StepResult
+pub fn execute_shell_step(String, &Fs, env? : Map[String, String], workdir? : String) -> StepResult
 
-pub fn new_vfs_shell_env(@wasi_runner.VirtualFs, Map[String, String], cwd? : String) -> @actrun.ShellEnv
+pub fn new_fs_shell_env(&Fs, Map[String, String], cwd? : String) -> @actrun.ShellEnv
+
+pub fn parse_key_values(&Fs, String) -> Map[String, String]
 
 pub fn step_result_to_json(StepResult) -> String
 
 // Errors
 
 // Types and methods
+pub struct MemFs {
+  files : Map[String, String]
+}
+pub fn MemFs::new() -> Self
+pub impl Fs for MemFs
+
 pub struct StepResult {
   status : String
   exit_code : Int
@@ -30,4 +37,12 @@ pub impl ToJson for StepResult
 // Type aliases
 
 // Traits
+pub(open) trait Fs {
+  fs_write(Self, String, String, Bool) -> Unit
+  fs_read(Self, String) -> String?
+  fs_exists(Self, String) -> Bool
+  fs_is_dir(Self, String) -> Bool
+  fs_mkdir(Self, String) -> Bool
+  fs_remove(Self, String) -> Bool
+}
 
