@@ -3,6 +3,7 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+    flake-parts.url = "github:hercules-ci/flake-parts";
     moonbit-overlay.url = "github:moonbit-community/moonbit-overlay";
     moon-registry = {
       url = "git+https://mooncakes.io/git/index";
@@ -11,103 +12,87 @@
   };
 
   outputs =
-    {
-      self,
-      nixpkgs,
-      moonbit-overlay,
-      moon-registry,
-    }:
-    let
-      supportedSystems = [
+    inputs:
+    inputs.flake-parts.lib.mkFlake { inherit inputs; } {
+      systems = [
         "x86_64-linux"
         "aarch64-linux"
         "x86_64-darwin"
         "aarch64-darwin"
       ];
 
-      forAllSystems = f: nixpkgs.lib.genAttrs supportedSystems (system: f system);
+      flake = {
+        overlays.default = _final: prev: {
+          actrun = prev.callPackage (
+            { moonPlatform, ... }:
+            moonPlatform.buildMoonPackage {
+              src = ./.;
+              moonModJson = ./moon.mod.json;
+              moonRegistryIndex = inputs.moon-registry;
 
-      pkgsFor =
-        system:
-        import nixpkgs {
-          inherit system;
-          overlays = [ moonbit-overlay.overlays.default ];
-          config.allowBroken = true;
+              doCheck = false;
+              propagatedBuildInputs = [ prev.git ];
+              nativeBuildInputs = prev.lib.optionals prev.stdenv.isLinux [ prev.autoPatchelfHook ];
+            }
+          ) { };
         };
-
-      mkActrun =
-        system:
-        let
-          pkgs = pkgsFor system;
-        in
-        pkgs.moonPlatform.buildMoonPackage {
-          src = ./.;
-          moonModJson = ./moon.mod.json;
-          moonRegistryIndex = moon-registry;
-
-          doCheck = false;
-          propagatedBuildInputs = [ pkgs.git ];
-          nativeBuildInputs = pkgs.lib.optionals pkgs.stdenv.isLinux [ pkgs.autoPatchelfHook ];
-
-          meta.platforms = supportedSystems;
-        };
-    in
-    {
-      overlays.default = _final: prev: {
-        actrun = mkActrun prev.stdenv.hostPlatform.system;
       };
 
-      packages = forAllSystems (
-        system:
+      perSystem =
+        { pkgs, system, ... }:
         let
-          pkg = mkActrun system;
-        in
-        {
-          default = pkg;
-          actrun = pkg;
-        }
-      );
+          moonPkgs = import inputs.nixpkgs {
+            inherit system;
+            overlays = [ inputs.moonbit-overlay.overlays.default ];
+            config.allowBroken = true;
+          };
 
-      devShells = forAllSystems (
-        system:
-        let
-          pkgs = pkgsFor system;
-          moonHome = pkgs.moonPlatform.bundleWithRegistry {
-            cachedRegistry = pkgs.moonPlatform.buildCachedRegistry {
+          actrun = moonPkgs.moonPlatform.buildMoonPackage {
+            src = ./.;
+            moonModJson = ./moon.mod.json;
+            moonRegistryIndex = inputs.moon-registry;
+
+            doCheck = false;
+            propagatedBuildInputs = [ moonPkgs.git ];
+            nativeBuildInputs = moonPkgs.lib.optionals moonPkgs.stdenv.isLinux [
+              moonPkgs.autoPatchelfHook
+            ];
+          };
+
+          moonHome = moonPkgs.moonPlatform.bundleWithRegistry {
+            cachedRegistry = moonPkgs.moonPlatform.buildCachedRegistry {
               moonModJson = ./moon.mod.json;
-              registryIndexSrc = moon-registry;
+              registryIndexSrc = inputs.moon-registry;
             };
           };
         in
         {
-          default = pkgs.mkShellNoCC {
+          packages = {
+            default = actrun;
+            inherit actrun;
+          };
+
+          apps = {
+            default = {
+              type = "app";
+              program = "${actrun}/bin/actrun";
+            };
+            actrun = {
+              type = "app";
+              program = "${actrun}/bin/actrun";
+            };
+          };
+
+          devShells.default = moonPkgs.mkShellNoCC {
             packages = [
               moonHome
-              pkgs.git
-              pkgs.just
-              pkgs.pnpm
-              pkgs.nodejs
+              moonPkgs.git
+              moonPkgs.just
+              moonPkgs.pnpm
+              moonPkgs.nodejs
             ];
             env.MOON_HOME = "${moonHome}";
           };
-        }
-      );
-
-      apps = forAllSystems (
-        system:
-        let
-          pkg = mkActrun system;
-        in
-        {
-          default = {
-            type = "app";
-            program = "${pkg}/bin/actrun";
-          };
-          actrun = {
-            type = "app";
-            program = "${pkg}/bin/actrun";
-          };
-        }
-      );
+        };
     };
 }
