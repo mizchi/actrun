@@ -53,6 +53,31 @@ test "VirtualFs: parse_key_values empty" {
 }
 
 ///|
+test "VirtualFs: remove" {
+  let vfs = VirtualFs::new()
+  vfs.write("/test.txt", "x")
+  inspect(vfs.remove("/test.txt"), content="true")
+  inspect(vfs.exists("/test.txt"), content="false")
+  inspect(vfs.remove("/missing.txt"), content="false")
+}
+
+///|
+test "VirtualFs: mkdir and is_dir" {
+  let vfs = VirtualFs::new()
+  ignore(vfs.mkdir("/workspace"))
+  inspect(vfs.is_dir("/workspace"), content="true")
+  inspect(vfs.is_dir("/missing"), content="false")
+}
+
+///|
+test "VirtualFs: is_dir with child files" {
+  let vfs = VirtualFs::new()
+  vfs.write("/workspace/file.txt", "content")
+  inspect(vfs.is_dir("/workspace"), content="true")
+  inspect(vfs.is_dir("/work"), content="false")
+}
+
+///|
 test "WasiContext: new with inputs" {
   let ctx = WasiContext::new(inputs={ "message": "hello" })
   inspect(ctx.env.get("INPUT_MESSAGE"), content="Some(\"hello\")")

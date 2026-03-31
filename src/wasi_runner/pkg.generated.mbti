@@ -10,9 +10,12 @@ pub struct VirtualFs {
   files : Map[String, String]
 }
 pub fn VirtualFs::exists(Self, String) -> Bool
+pub fn VirtualFs::is_dir(Self, String) -> Bool
+pub fn VirtualFs::mkdir(Self, String) -> Bool
 pub fn VirtualFs::new() -> Self
 pub fn VirtualFs::parse_key_values(Self, String) -> Map[String, String]
 pub fn VirtualFs::read(Self, String) -> String?
+pub fn VirtualFs::remove(Self, String) -> Bool
 pub fn VirtualFs::write(Self, String, String, append? : Bool) -> Unit
 
 pub struct WasiContext {
