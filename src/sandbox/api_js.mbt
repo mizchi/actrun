@@ -1,16 +1,17 @@
 ///|
-/// Browser API — registers functions on globalThis._actrun_browser.
-/// Compiled to JS via `moon build src/browser --target js`.
+/// JS binding for the sandbox executor.
+/// Registers plan / executeShellStep / executeWasmStep on globalThis._actrun_sandbox.
+/// This is an example of how to expose the target-agnostic sandbox layer to JS.
 
 ///|
 #cfg(target="js")
-extern "js" fn js_register_browser_api(
+extern "js" fn js_register_api(
   plan_fn : (String) -> String,
   exec_shell_fn : (String) -> String,
   exec_wasm_fn : (String) -> String,
 ) -> Unit =
   #| function(planFn, execShellFn, execWasmFn) {
-  #|   globalThis._actrun_browser = {
+  #|   globalThis._actrun_sandbox = {
   #|     plan: planFn,
   #|     executeShellStep: execShellFn,
   #|     executeWasmStep: execWasmFn,
@@ -76,7 +77,7 @@ fn exec_shell_handler(config_json : String) -> String {
 
 ///|
 /// Run a WASM module with WASI P1 using a pre-compiled WebAssembly.Module.
-/// The module is stored in globalThis._actrun_wasm_modules by the JS wrapper.
+/// The module is stored in globalThis._actrun_wasm_modules by the JS caller.
 #cfg(target="js")
 extern "js" fn js_run_wasi_from_module(
   module_id : String,
@@ -321,8 +322,8 @@ fn exec_wasm_handler(config_json : String) -> String {
 
 ///|
 #cfg(target="js")
-pub fn register_browser_api() -> Unit {
-  js_register_browser_api(plan_handler, exec_shell_handler, exec_wasm_handler)
+pub fn register_api() -> Unit {
+  js_register_api(plan_handler, exec_shell_handler, exec_wasm_handler)
 }
 
 ///|

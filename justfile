@@ -90,13 +90,13 @@ gha-compat-compare workflow downloaded_dir:
 gha-compat-live workflow repo="mizchi/action_runner" ref="main":
     bash scripts/gha_compat_live.sh {{workflow}} {{repo}} {{ref}}
 
-# Build browser library (JS target)
-build-browser:
-    moon build src/browser --target js
+# Build sandbox library (JS target)
+build-sandbox:
+    moon build src/sandbox --target js
 
-# Test browser library
-test-browser:
-    moon test src/browser
+# Test sandbox library
+test-sandbox:
+    moon test src/sandbox
 
 # Generate type definition files
 info:
