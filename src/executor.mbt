@@ -2807,6 +2807,72 @@ fn configured_exec_bin(
 }
 
 ///|
+fn configured_wasm_runner_kind_env_value(
+  resolved_plan_env : Map[String, String],
+) -> String {
+  resolved_plan_env
+  .get("ACTRUN_WASM_RUNNER")
+  .unwrap_or(@xsys.get_env_var("ACTRUN_WASM_RUNNER").unwrap_or(""))
+}
+
+///|
+fn configured_wasm_runner_kind_error(
+  resolved_plan_env : Map[String, String],
+) -> String? {
+  let configured = configured_wasm_runner_kind_env_value(resolved_plan_env)
+  if configured.length() == 0 {
+    None
+  } else {
+    match normalize_wasm_runner_kind(configured) {
+      Some(_) => None
+      None =>
+        Some(
+          "unsupported ACTRUN_WASM_RUNNER: " +
+          configured +
+          " (expected: wasmtime, deno, v8)",
+        )
+    }
+  }
+}
+
+///|
+fn configured_wasm_runner_kind(
+  resolved_plan_env : Map[String, String],
+) -> String {
+  let configured = configured_wasm_runner_kind_env_value(resolved_plan_env)
+  if configured.length() > 0 {
+    normalize_wasm_runner_kind(configured).unwrap_or("")
+  } else {
+    let wasm_bin = configured_exec_bin(
+      "ACTRUN_WASM_BIN", resolved_plan_env, "wasmtime",
+    )
+    infer_wasm_runner_kind(wasm_bin)
+  }
+}
+
+///|
+fn configured_wasm_runner_bin(
+  resolved_plan_env : Map[String, String],
+) -> String {
+  let fallback = match configured_wasm_runner_kind(resolved_plan_env) {
+    "deno" => "deno"
+    "v8" => configured_exec_bin("ACTRUN_NODE_BIN", resolved_plan_env, "node")
+    _ => "wasmtime"
+  }
+  configured_exec_bin("ACTRUN_WASM_BIN", resolved_plan_env, fallback)
+}
+
+///|
+async fn exec_bin_exists(bin : String) -> Bool {
+  if bin.contains("/") {
+    @xfs.path_exists(bin)
+  } else {
+    let (code, _, _) = run_command("which", [bin], cwd=".")
+    code == 0
+  }
+}
+
+///|
 fn resolve_exec_bin_for_workspace(
   configured : String,
   workspace_root : String,
@@ -2871,11 +2937,59 @@ fn wasm_module_candidate_paths(
 }
 
 ///|
+fn node_action_sidecar_wasm_path(entrypoint : String) -> String {
+  let mut last_slash = -1
+  let mut idx = 0
+  while idx < entrypoint.length() {
+    if entrypoint.unsafe_get(idx) == '/' {
+      last_slash = idx
+    }
+    idx += 1
+  }
+  let mut last_dot = -1
+  idx = last_slash + 1
+  while idx < entrypoint.length() {
+    if entrypoint.unsafe_get(idx) == '.' {
+      last_dot = idx
+    }
+    idx += 1
+  }
+  if last_dot >= 0 {
+    exec_text_slice(entrypoint, 0, last_dot) + ".wasm"
+  } else {
+    entrypoint + ".wasm"
+  }
+}
+
+///|
+async fn resolve_node_action_sidecar_wasm_path(
+  action : ResolvedAction,
+  resolved_plan_env : Map[String, String],
+) -> String? {
+  guard action.entrypoint is Some(entrypoint) else { return None }
+  let candidate = node_action_sidecar_wasm_path(entrypoint)
+  guard @xfs.path_exists(candidate) else { return None }
+  guard configured_wasm_runner_kind_error(resolved_plan_env) is None else {
+    return None
+  }
+  let wasm_bin = configured_wasm_runner_bin(resolved_plan_env)
+  guard exec_bin_exists(wasm_bin) else { return None }
+  Some(candidate)
+}
+
+///|
 fn resolve_wasm_module_path(
   resolved_plan_env : Map[String, String],
   workspace_root : String,
   entrypoint : String,
 ) -> String? {
+  if entrypoint.has_prefix("/") {
+    if @xfs.path_exists(entrypoint) {
+      return Some(entrypoint)
+    } else {
+      return None
+    }
+  }
   let root = configured_path_root(
     "ACTRUN_WASM_ACTION_ROOT", resolved_plan_env, "_build/actrun/wasm_actions", workspace_root,
   )
@@ -2949,12 +3063,20 @@ async fn execute_wasm_action_native(
     workflow_name, plan, workspace_root, github_ctx, resolved_plan_env, file_commands,
     runner_ctx,
   )
-  let wasm_bin = configured_exec_bin(
-    "ACTRUN_WASM_BIN", resolved_plan_env, "wasmtime",
-  )
+  guard configured_wasm_runner_kind_error(resolved_plan_env) is None else {
+    return failure_execution_result(
+      plan,
+      workspace_root,
+      configured_wasm_runner_kind_error(resolved_plan_env).unwrap_or(
+        "invalid wasm runner",
+      ),
+    )
+  }
+  let wasm_runner_kind = configured_wasm_runner_kind(resolved_plan_env)
+  let wasm_bin = configured_wasm_runner_bin(resolved_plan_env)
   let wasm_args = build_sandboxed_wasmtime_args(sandbox, env, abs_module_path)
-  let (cmd, args) = resolve_wasm_runner_command(
-    wasm_bin, wasm_args, workspace_root,
+  let (cmd, args) = resolve_wasm_runner_command_with_kind(
+    wasm_runner_kind, wasm_bin, wasm_args, workspace_root,
   )
   let cwd = sandbox.tempdir
   let (code, stdout, stderr) = run_command(cmd, args, cwd~)
@@ -2994,6 +3116,29 @@ async fn execute_node_action_native(
   github_ctx : Map[String, String],
   runner_ctx : Map[String, String],
 ) -> TaskExecutionResult {
+  match resolve_node_action_sidecar_wasm_path(action, resolved_plan_env) {
+    Some(sidecar_wasm) =>
+      return execute_wasm_action_native(
+        workflow_name,
+        plan,
+        {
+          uses: action.uses,
+          action_ref: action.action_ref,
+          kind: "wasm-module",
+          backend: "wasm",
+          capabilities: backend_capabilities_for("wasm"),
+          action_path: action.action_path,
+          entrypoint: Some(sidecar_wasm),
+          image: None,
+          args: [],
+        },
+        workspace_root,
+        resolved_plan_env,
+        github_ctx,
+        runner_ctx,
+      )
+    None => ()
+  }
   guard action.entrypoint is Some(entrypoint) else {
     return failure_execution_result(
       plan, workspace_root, "node action is missing an entrypoint",

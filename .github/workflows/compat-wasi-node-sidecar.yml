@@ -1,0 +1,34 @@
+name: Compat WASI Node Sidecar
+
+on:
+  push:
+    tags-ignore:
+      - "**"
+    paths:
+      - .github/workflows/compat-wasi-node-sidecar.yml
+      - .github/actions/wasi-node-sidecar/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+      - id: runtime
+        uses: ./.github/actions/wasi-node-sidecar
+        with:
+          message: compat-ok
+      - name: Capture result
+        shell: bash
+        run: |
+          mkdir -p _build/compat/wasi-node-sidecar
+          printf '%s' '${{ steps.runtime.outputs.result }}' > _build/compat/wasi-node-sidecar/result.txt
+      - name: Upload result
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: compat-wasi-node-sidecar-report
+          path: _build/compat/wasi-node-sidecar/result.txt

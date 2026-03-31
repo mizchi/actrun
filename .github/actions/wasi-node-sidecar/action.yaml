@@ -1,0 +1,13 @@
+name: WASI Node Sidecar
+description: Standard node action with a sidecar wasm module for actrun
+inputs:
+  message:
+    description: Message to echo back through the action output
+    required: false
+    default: default-message
+outputs:
+  result:
+    description: Echoed action result
+runs:
+  using: node24
+  main: dist/index.js

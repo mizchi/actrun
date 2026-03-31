@@ -3175,6 +3175,188 @@ async test "executor: github action_path context is available in local composite
 
 ///|
 #cfg(target="native")
+async test "executor: local node action prefers sibling wasm module" {
+  let workspace = prepare_workspace("executor-local-node-sidecar-wasm")
+  let tools_root = prepare_workspace("executor-local-node-sidecar-wasm-tools")
+  test_support_remove_tree(workspace)
+  test_support_remove_tree(tools_root)
+  ensure_dir(workspace)
+  ensure_dir(tools_root)
+  let node_log_path = tools_root + "/node.log"
+  let node_bin = test_support_prepare_fake_node_bin(tools_root, node_log_path)
+  let wasm_log_path = tools_root + "/wasm.log"
+  let wasm_bin = test_support_prepare_fake_wasm_bin(tools_root, wasm_log_path)
+  ensure_dir(workspace + "/.github")
+  ensure_dir(workspace + "/.github/actions")
+  ensure_dir(workspace + "/.github/actions/wasi")
+  ensure_dir(workspace + "/.github/actions/wasi/dist")
+  let action_src =
+    #|name: Wasi Sidecar
+    #|inputs:
+    #|  message:
+    #|    default: default-message
+    #|runs:
+    #|  using: node20
+    #|  main: dist/index.js
+  let node_src =
+    #|#!/bin/sh
+    #|set -eu
+    #|printf 'result=from-node\n' >> "$GITHUB_OUTPUT"
+    #|printf 'node:%s' "${INPUT_MESSAGE:-}"
+  let wasm_src =
+    #|#!/bin/sh
+    #|set -eu
+    #|printf 'result=from-wasm\n' >> "$GITHUB_OUTPUT"
+    #|printf 'wasm:%s' "${INPUT_MESSAGE:-}"
+  @xfs.write_string_to_file(
+    workspace + "/.github/actions/wasi/action.yml",
+    action_src,
+  )
+  @xfs.write_string_to_file(
+    workspace + "/.github/actions/wasi/dist/index.js",
+    node_src,
+  )
+  @xfs.write_string_to_file(
+    workspace + "/.github/actions/wasi/dist/index.wasm",
+    wasm_src,
+  )
+
+  let workflow = new_workflow("ci", [
+    new_job(
+      "build",
+      [
+        new_uses_step("runtime", "./.github/actions/wasi", with_values={
+          "message": "hello",
+        }),
+        new_run_step(
+          "verify",
+          "printf '%s' '${{ steps.runtime.outputs.result }}'",
+          shell=Some("bash"),
+        ),
+      ],
+      env={
+        "ACTRUN_NODE_BIN": node_bin,
+        "ACTRUN_WASM_BIN": wasm_bin,
+        "ACTRUN_WASM_SKIP_VALIDATE": "true",
+      },
+      defaults=new_run_defaults(shell=Some("bash")),
+    ),
+  ])
+
+  let lowered = lower_push_workflow_in_workspace(workflow, workspace)
+  inspect(lowered.errors, content="[]")
+
+  let report = execute_lowered_native(lowered, workspace_root=workspace)
+
+  inspect(report.ok, content="true")
+  let runtime = expect_task_report(report, "build/runtime")
+  inspect(
+    runtime.stdout.trim(chars=" \n\r\t").to_string(),
+    content="wasm:hello",
+  )
+  let verify = expect_task_report(report, "build/verify")
+  inspect(verify.stdout.trim(chars=" \n\r\t").to_string(), content="from-wasm")
+  let wasm_log = @xfs.read_file_to_string(wasm_log_path)
+  assert_eq(
+    wasm_log.contains(workspace + "/.github/actions/wasi/dist/index.wasm"),
+    true,
+  )
+  inspect(@xfs.read_file_to_string(node_log_path), content="")
+}
+
+///|
+#cfg(target="native")
+async test "executor: local node action falls back to node when wasm runner is unavailable" {
+  let workspace = prepare_workspace("executor-local-node-sidecar-fallback")
+  let tools_root = prepare_workspace(
+    "executor-local-node-sidecar-fallback-tools",
+  )
+  test_support_remove_tree(workspace)
+  test_support_remove_tree(tools_root)
+  ensure_dir(workspace)
+  ensure_dir(tools_root)
+  let node_log_path = tools_root + "/node.log"
+  let node_bin = test_support_prepare_fake_node_bin(tools_root, node_log_path)
+  let missing_wasm_bin = tools_root + "/missing-wasm-runner"
+  ensure_dir(workspace + "/.github")
+  ensure_dir(workspace + "/.github/actions")
+  ensure_dir(workspace + "/.github/actions/wasi")
+  ensure_dir(workspace + "/.github/actions/wasi/dist")
+  let action_src =
+    #|name: Wasi Sidecar
+    #|inputs:
+    #|  message:
+    #|    default: default-message
+    #|runs:
+    #|  using: node20
+    #|  main: dist/index.js
+  let node_src =
+    #|#!/bin/sh
+    #|set -eu
+    #|printf 'result=from-node\n' >> "$GITHUB_OUTPUT"
+    #|printf 'node:%s' "${INPUT_MESSAGE:-}"
+  let wasm_src =
+    #|#!/bin/sh
+    #|set -eu
+    #|printf 'result=from-wasm\n' >> "$GITHUB_OUTPUT"
+    #|printf 'wasm:%s' "${INPUT_MESSAGE:-}"
+  @xfs.write_string_to_file(
+    workspace + "/.github/actions/wasi/action.yml",
+    action_src,
+  )
+  @xfs.write_string_to_file(
+    workspace + "/.github/actions/wasi/dist/index.js",
+    node_src,
+  )
+  @xfs.write_string_to_file(
+    workspace + "/.github/actions/wasi/dist/index.wasm",
+    wasm_src,
+  )
+
+  let workflow = new_workflow("ci", [
+    new_job(
+      "build",
+      [
+        new_uses_step("runtime", "./.github/actions/wasi", with_values={
+          "message": "hello",
+        }),
+        new_run_step(
+          "verify",
+          "printf '%s' '${{ steps.runtime.outputs.result }}'",
+          shell=Some("bash"),
+        ),
+      ],
+      env={
+        "ACTRUN_NODE_BIN": node_bin,
+        "ACTRUN_WASM_BIN": missing_wasm_bin,
+        "ACTRUN_WASM_SKIP_VALIDATE": "true",
+      },
+      defaults=new_run_defaults(shell=Some("bash")),
+    ),
+  ])
+
+  let lowered = lower_push_workflow_in_workspace(workflow, workspace)
+  inspect(lowered.errors, content="[]")
+
+  let report = execute_lowered_native(lowered, workspace_root=workspace)
+
+  inspect(report.ok, content="true")
+  let runtime = expect_task_report(report, "build/runtime")
+  inspect(
+    runtime.stdout.trim(chars=" \n\r\t").to_string(),
+    content="node:hello",
+  )
+  let verify = expect_task_report(report, "build/verify")
+  inspect(verify.stdout.trim(chars=" \n\r\t").to_string(), content="from-node")
+  let node_log = @xfs.read_file_to_string(node_log_path)
+  assert_eq(
+    node_log.contains(workspace + "/.github/actions/wasi/dist/index.js"),
+    true,
+  )
+}
+
+///|
+#cfg(target="native")
 async test "executor: GITHUB_STATE is scoped to local composite action inner steps" {
   let workspace = prepare_workspace("executor-local-action-state")
   ensure_dir(workspace + "/.github")

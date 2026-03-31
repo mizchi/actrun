@@ -290,6 +290,7 @@ actrun cache prune --key <key>                         # Delete cache entry
 | `--no-nix` | Disable nix wrapping even if flake.nix/shell.nix exists |
 | `--nix-packages <pkgs>` | Ad-hoc nix packages (space-separated) |
 | `--container-runtime <name>` | Container runtime: `docker`, `podman`, `container`, `lima`, `nerdctl` |
+| `--wasm-runner <kind>` | Wasm runner kind: `wasmtime`, `deno`, `v8` |
 | `--affected [base]` | Only run if files matching patterns changed (see below) |
 | `--retry` | Re-run only failed jobs from the latest run |
 | `--include-dirty` | Include uncommitted changes in worktree/tmp workspace |
@@ -446,6 +447,7 @@ Secrets are automatically masked in stdout, stderr, logs, and run store. The `::
 | `ACTRUN_VAR_<NAME>` | `${{ vars.<name> }}` |
 | `ACTRUN_NODE_BIN` | Node.js binary path |
 | `ACTRUN_DOCKER_BIN` | Docker binary path |
+| `ACTRUN_WASM_RUNNER` | Wasm runner kind: `wasmtime`, `deno`, `v8` |
 | `ACTRUN_WASM_BIN` | Wasm runtime binary (default: `wasmtime`) |
 | `ACTRUN_GIT_BIN` | Git binary path |
 | `ACTRUN_GITHUB_BASE_URL` | GitHub API base URL |
@@ -455,6 +457,8 @@ Secrets are automatically masked in stdout, stderr, logs, and run store. The `::
 | `ACTRUN_ACTION_REGISTRY_ROOT` | Custom registry root |
 | `ACTRUN_WASM_ACTION_ROOT` | Wasm action module root |
 | `ACTRUN_NIX` | Set to `false` to disable nix wrapping |
+
+`ACTRUN_WASM_RUNNER` を指定した場合、default bin は `wasmtime` / `deno` / `ACTRUN_NODE_BIN` (`v8`) に切り替わります。`ACTRUN_WASM_BIN` を併用すると、runner kind は固定したまま実行 binary だけ上書きできます。
 
 ## Nix Integration
 

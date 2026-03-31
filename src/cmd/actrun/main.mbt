@@ -9,6 +9,7 @@ struct CliOptions {
   github_action_cache_root : String?
   registry_root : String?
   wasm_action_root : String?
+  wasm_runner : String
   workspace_mode : String
   event_path : String?
   repository : String
@@ -269,6 +270,7 @@ fn usage_text() -> String {
   "  --no-nix                     Disable nix wrapping even if flake.nix/shell.nix exists\n" +
   "  --nix-packages <pkgs>        Additional nix packages (space-separated)\n" +
   "  --container-runtime <name>   Container runtime: docker, podman, container, lima, nerdctl\n" +
+  "  --wasm-runner <kind>         Wasm runner kind: wasmtime, deno, v8\n" +
   "  --watch                      Watch for file changes and re-run automatically\n" +
   "  --affected [base]             Only run if files changed since base (default: last success; accepts rev like HEAD~3)\n" +
   "  --include-dirty               Include uncommitted changes in worktree/tmp workspace\n" +
@@ -409,6 +411,19 @@ fn apply_cli_root_overrides(options : CliOptions) -> Unit {
   match options.wasm_action_root {
     Some(path) => @xsys.set_env_var("ACTRUN_WASM_ACTION_ROOT", path)
     None => ()
+  }
+  if options.wasm_runner.length() > 0 {
+    @xsys.set_env_var("ACTRUN_WASM_RUNNER", options.wasm_runner)
+  }
+}
+
+///|
+fn normalize_cli_wasm_runner_kind(kind : String) -> String? {
+  match kind {
+    "wasmtime" => Some("wasmtime")
+    "deno" => Some("deno")
+    "v8" => Some("v8")
+    _ => None
   }
 }
 
@@ -2225,6 +2240,7 @@ fn merge_config_into_options(
     github_action_cache_root: options.github_action_cache_root,
     registry_root: options.registry_root,
     wasm_action_root: options.wasm_action_root,
+    wasm_runner: options.wasm_runner,
     workspace_mode: if options.workspace_mode.length() > 0 {
       options.workspace_mode
     } else {
@@ -3463,6 +3479,7 @@ fn parse_cli_args(args : Array[String]) -> CliParseResult {
   let mut github_action_cache_root : String? = None
   let mut registry_root : String? = None
   let mut wasm_action_root : String? = None
+  let mut wasm_runner = ""
   let mut workspace_mode = ""
   let mut event_path : String? = None
   let mut repository = ""
@@ -3587,6 +3604,7 @@ fn parse_cli_args(args : Array[String]) -> CliParseResult {
       arg == "--github-action-cache-root" ||
       arg == "--registry-root" ||
       arg == "--wasm-action-root" ||
+      arg == "--wasm-runner" ||
       arg == "--workspace-mode" ||
       arg == "--event" ||
       arg == "--repository" ||
@@ -3624,6 +3642,16 @@ fn parse_cli_args(args : Array[String]) -> CliParseResult {
         registry_root = Some(value)
       } else if arg == "--wasm-action-root" {
         wasm_action_root = Some(value)
+      } else if arg == "--wasm-runner" {
+        match normalize_cli_wasm_runner_kind(value) {
+          Some(normalized) => wasm_runner = normalized
+          None =>
+            errors.push(
+              "unsupported wasm runner: " +
+              value +
+              " (expected: wasmtime, deno, v8)",
+            )
+        }
       } else if arg == "--workspace-mode" {
         workspace_mode = value
       } else if arg == "--event" {
@@ -3723,6 +3751,7 @@ fn parse_cli_args(args : Array[String]) -> CliParseResult {
       github_action_cache_root,
       registry_root,
       wasm_action_root,
+      wasm_runner,
       workspace_mode,
       event_path,
       repository,
@@ -4763,6 +4792,22 @@ struct DoctorCheck {
 }
 
 ///|
+fn doctor_wasm_runner_bin() -> String {
+  match @xsys.get_env_var("ACTRUN_WASM_BIN") {
+    Some(bin) => bin
+    None =>
+      match
+        normalize_cli_wasm_runner_kind(
+          @xsys.get_env_var("ACTRUN_WASM_RUNNER").unwrap_or(""),
+        ) {
+        Some("deno") => "deno"
+        Some("v8") => @xsys.get_env_var("ACTRUN_NODE_BIN").unwrap_or("node")
+        _ => "wasmtime"
+      }
+  }
+}
+
+///|
 async fn handle_doctor_command() -> Int {
   let checks : Array[DoctorCheck] = [
     { name: "git", bin: "git", env_override: "ACTRUN_GIT_BIN", required: true },
@@ -4781,9 +4826,9 @@ async fn handle_doctor_command() -> Int {
     { name: "bash", bin: "bash", env_override: "", required: true },
     { name: "sh", bin: "sh", env_override: "", required: true },
     {
-      name: "wasmtime",
-      bin: "wasmtime",
-      env_override: "ACTRUN_WASM_BIN",
+      name: "wasm runner",
+      bin: doctor_wasm_runner_bin(),
+      env_override: "",
       required: false,
     },
     {

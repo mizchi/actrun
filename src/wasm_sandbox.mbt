@@ -118,22 +118,53 @@ pub fn build_sandboxed_wasmtime_args(
 }
 
 ///|
+fn normalize_wasm_runner_kind(kind : String) -> String? {
+  match kind {
+    "wasmtime" => Some("wasmtime")
+    "deno" => Some("deno")
+    "v8" => Some("v8")
+    "node" => Some("v8")
+    "nodejs" => Some("v8")
+    "bun" => Some("v8")
+    "js" => Some("v8")
+    "javascript" => Some("v8")
+    _ => None
+  }
+}
+
+///|
+fn infer_wasm_runner_kind(wasm_bin : String) -> String {
+  let bin_name = normalized_exec_name(wasm_bin)
+  if bin_name == "deno" {
+    "deno"
+  } else if is_js_wasi_runtime(bin_name) {
+    "v8"
+  } else {
+    "wasmtime"
+  }
+}
+
+///|
 /// Resolve the WASM runner command.
-/// - "wasmtime" (default): use wasmtime directly with CLI args
+/// - "wasmtime" (default): use wasmtime-compatible CLI directly
 /// - "deno": use deno with wasi-runner.mjs shim
-/// - "node"/"nodejs"/"bun" (including `.exe` variants): use JS runtime with wasi-runner.mjs shim
-/// - anything else: use as-is (custom runner with wasmtime-compatible CLI)
+/// - "v8": use node-compatible JS runtime with wasi-runner.mjs shim
+/// If runner_kind is empty, infer from the configured binary for backward compatibility.
 #cfg(target="native")
-pub fn resolve_wasm_runner_command(
+fn resolve_wasm_runner_command_with_kind(
+  runner_kind : String,
   wasm_bin : String,
   wasm_args : Array[String],
   workspace_root : String,
 ) -> (String, Array[String]) {
-  let bin_name = normalized_exec_name(wasm_bin)
-  if is_js_wasi_runtime(bin_name) {
+  let effective_kind = match normalize_wasm_runner_kind(runner_kind) {
+    Some(kind) => kind
+    None => infer_wasm_runner_kind(wasm_bin)
+  }
+  if effective_kind == "deno" || effective_kind == "v8" {
     let shim_path = find_wasi_runner_shim(workspace_root)
     let args : Array[String] = []
-    if bin_name == "deno" {
+    if effective_kind == "deno" {
       args.push("run")
       args.push("--allow-all")
     }
@@ -145,6 +176,17 @@ pub fn resolve_wasm_runner_command(
   } else {
     (wasm_bin, wasm_args)
   }
+}
+
+///|
+/// Backward-compatible wrapper that infers runner kind from the configured binary.
+#cfg(target="native")
+pub fn resolve_wasm_runner_command(
+  wasm_bin : String,
+  wasm_args : Array[String],
+  workspace_root : String,
+) -> (String, Array[String]) {
+  resolve_wasm_runner_command_with_kind("", wasm_bin, wasm_args, workspace_root)
 }
 
 ///|
