@@ -41,7 +41,7 @@ jobs:
           chmod +x dist/actrun
           tar -C dist -czf "$OUT" actrun
       - name: Upload artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
         with:
           name: actrun-${{ matrix.target }}
           path: "*.tar.gz"
@@ -52,7 +52,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Download artifacts
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with:
           merge-multiple: true
       - name: Create release
