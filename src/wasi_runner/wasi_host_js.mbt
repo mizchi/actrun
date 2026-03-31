@@ -13,6 +13,42 @@ extern "js" fn js_run_wasi_module(
   #|   const env = JSON.parse(envJson);
   #|   const bytesArr = JSON.parse(moduleBytesJson);
   #|   const bytes = new Uint8Array(bytesArr);
+  #|   const normalizePath = (path) => {
+  #|     const raw = String(path || '').replaceAll('\\\\', '/');
+  #|     const driveMatch = raw.match(/^[A-Za-z]:/);
+  #|     const drive = driveMatch ? driveMatch[0] : '';
+  #|     const rest = drive ? raw.slice(drive.length) : raw;
+  #|     const isAbs = rest.startsWith('/');
+  #|     const parts = [];
+  #|     for (const part of rest.split('/')) {
+  #|       if (!part || part === '.') continue;
+  #|       if (part === '..') {
+  #|         if (parts.length > 0 && parts[parts.length - 1] !== '..') {
+  #|           parts.pop();
+  #|         } else if (!isAbs) {
+  #|           parts.push('..');
+  #|         }
+  #|         continue;
+  #|       }
+  #|       parts.push(part);
+  #|     }
+  #|     const prefix = drive ? `${drive}${isAbs ? '/' : ''}` : (isAbs ? '/' : '');
+  #|     if (prefix.length > 0 || parts.length > 0) return prefix + parts.join('/');
+  #|     return '.';
+  #|   };
+  #|   const pathWithinPreopen = (basePath, candidatePath) => {
+  #|     const base = normalizePath(basePath);
+  #|     const candidate = normalizePath(candidatePath);
+  #|     return candidate === base || candidate.startsWith(base + '/');
+  #|   };
+  #|   const resolvePreopenPath = (basePath, relativePath) => {
+  #|     const base = normalizePath(basePath);
+  #|     const candidate = /^[A-Za-z]:[\\\\/]/.test(relativePath) || relativePath.startsWith('/')
+  #|       ? normalizePath(relativePath)
+  #|       : normalizePath(base + '/' + relativePath);
+  #|     if (!pathWithinPreopen(base, candidate)) return null;
+  #|     return candidate;
+  #|   };
   #|
   #|   // In-memory VFS
   #|   const vfs = new Map();
@@ -104,7 +140,8 @@ extern "js" fn js_run_wasi_module(
   #|       const dir = fds.get(dirfd);
   #|       if (!dir || !dir.path) return 8;
   #|       const rel = dec.decode(u8().subarray(pp, pp + pl));
-  #|       const full = dir.path + '/' + rel;
+  #|       const full = resolvePreopenPath(dir.path, rel);
+  #|       if (full === null) return 76;
   #|       const nfd = nextFd++;
   #|       fds.set(nfd, { path: full, isDir: false });
   #|       if (!vfs.has(full)) vfs.set(full, '');

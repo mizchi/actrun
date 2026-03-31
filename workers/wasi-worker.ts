@@ -155,7 +155,8 @@ class WasiP1Runner {
           const dir = self.fds.get(dirfd);
           if (!dir?.path) return 8;
           const rel = decode(self.u8().subarray(pp, pp + pl));
-          const full = dir.path + "/" + rel;
+          const full = resolvePreopenPath(dir.path, rel);
+          if (full === null) return 76;
           const nfd = self.nextFd++;
           self.fds.set(nfd, { path: full, isDir: false, writeBuf: [] });
           // Initialize empty file in vfs
@@ -194,6 +195,45 @@ class WasiExit extends Error {
 }
 
 const sharedDecoder = new TextDecoder();
+
+function normalizePath(path: string): string {
+  const raw = String(path || "").replaceAll("\\", "/");
+  const driveMatch = raw.match(/^[A-Za-z]:/);
+  const drive = driveMatch ? driveMatch[0] : "";
+  const rest = drive ? raw.slice(drive.length) : raw;
+  const isAbs = rest.startsWith("/");
+  const parts: string[] = [];
+  for (const part of rest.split("/")) {
+    if (!part || part === ".") continue;
+    if (part === "..") {
+      if (parts.length > 0 && parts[parts.length - 1] !== "..") {
+        parts.pop();
+      } else if (!isAbs) {
+        parts.push("..");
+      }
+      continue;
+    }
+    parts.push(part);
+  }
+  const prefix = drive ? `${drive}${isAbs ? "/" : ""}` : (isAbs ? "/" : "");
+  if (prefix.length > 0 || parts.length > 0) return prefix + parts.join("/");
+  return ".";
+}
+
+function pathWithinPreopen(basePath: string, candidatePath: string): boolean {
+  const base = normalizePath(basePath);
+  const candidate = normalizePath(candidatePath);
+  return candidate === base || candidate.startsWith(base + "/");
+}
+
+function resolvePreopenPath(basePath: string, relativePath: string): string | null {
+  const base = normalizePath(basePath);
+  const candidate = /^[A-Za-z]:[\\/]/.test(relativePath) || relativePath.startsWith("/")
+    ? normalizePath(relativePath)
+    : normalizePath(base + "/" + relativePath);
+  if (!pathWithinPreopen(base, candidate)) return null;
+  return candidate;
+}
 
 function concat(bufs: Uint8Array[]): Uint8Array {
   const total = bufs.reduce((s, b) => s + b.length, 0);

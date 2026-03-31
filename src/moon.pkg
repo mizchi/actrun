@@ -45,6 +45,7 @@ options(
     "runner_context_test.mbt": [ "native" ],
     "runtime_test.mbt": [ "native" ],
     "test_support_github_fetch_test.mbt": [ "native" ],
+    "wasi_runner_script_test.mbt": [ "native" ],
     "wasm_module_test.mbt": [ "native" ],
     "wasm_sandbox_wbtest.mbt": [ "native" ],
   },

@@ -566,6 +566,7 @@ pub struct TaskPlan {
   if_condition : String
   runs_on : Array[String]
   env : Map[String, String]
+  with_values : Map[String, String]
   action : ResolvedAction?
   action_scope : String?
   requires_action_started : Bool
@@ -588,6 +589,7 @@ pub fn new_task_plan(
   if_condition : String,
   runs_on : Array[String],
   env : Map[String, String],
+  with_values? : Map[String, String] = {},
   action? : ResolvedAction? = None,
   action_scope? : String? = None,
   requires_action_started? : Bool = false,
@@ -606,6 +608,7 @@ pub fn new_task_plan(
     if_condition,
     runs_on,
     env,
+    with_values,
     action,
     action_scope,
     requires_action_started,

@@ -67,7 +67,7 @@ pub fn plan_workflow(
       },
       if_condition: task.if_condition,
       env: task.env,
-      with_values: {},
+      with_values: task.with_values,
     }
     job_steps.get(task.job_id).unwrap().push(step)
   }
@@ -139,8 +139,17 @@ pub fn plan_result_to_json(result : PlanResult) -> String {
       if step.shell.length() > 0 {
         sparts.push("\"shell\": " + json_escape_string(step.shell))
       }
+      if step.script.length() > 0 {
+        sparts.push("\"script\": " + json_escape_string(step.script))
+      }
       if step.if_condition.length() > 0 && step.if_condition != "success()" {
         sparts.push("\"if\": " + json_escape_string(step.if_condition))
+      }
+      if step.env.length() > 0 {
+        sparts.push("\"env\": " + plan_json_string_map(step.env))
+      }
+      if step.with_values.length() > 0 {
+        sparts.push("\"with\": " + plan_json_string_map(step.with_values))
       }
       step_items.push("{ " + sparts.join(", ") + " }")
     }
@@ -172,4 +181,13 @@ fn json_escape_string(s : String) -> String {
   }
   buf.write_char('"')
   buf.to_string()
+}
+
+///|
+fn plan_json_string_map(values : Map[String, String]) -> String {
+  let items : Array[String] = []
+  for key, value in values {
+    items.push(json_escape_string(key) + ": " + json_escape_string(value))
+  }
+  "{ " + items.join(", ") + " }"
 }

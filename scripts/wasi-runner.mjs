@@ -8,89 +8,154 @@
 
 const isNode = typeof process !== "undefined" && process.versions?.node;
 const isDeno = typeof Deno !== "undefined";
+const nodeFs = isNode ? await import("node:fs") : null;
+const nodeUrl = isNode ? await import("node:url") : null;
 
-// --- Argument parsing (wasmtime-compatible) ---
-const argv = isDeno ? Deno.args : process.argv.slice(2);
-const envMap = {};
-const preopens = [];
-let modulePath = "";
-
-let i = 0;
-while (i < argv.length) {
-  if (argv[i] === "run") { i++; continue; }
-  if (argv[i] === "--env" && i + 1 < argv.length) {
-    const eq = argv[i + 1].indexOf("=");
-    if (eq > 0) {
-      envMap[argv[i + 1].substring(0, eq)] = argv[i + 1].substring(eq + 1);
+export function parseWasmtimeCli(argv) {
+  const envMap = {};
+  const preopens = [];
+  let modulePath = "";
+  let i = 0;
+  while (i < argv.length) {
+    if (argv[i] === "run") {
+      i++;
+      continue;
     }
-    i += 2; continue;
+    if (argv[i] === "--env" && i + 1 < argv.length) {
+      const eq = argv[i + 1].indexOf("=");
+      if (eq > 0) {
+        envMap[argv[i + 1].substring(0, eq)] = argv[i + 1].substring(eq + 1);
+      }
+      i += 2;
+      continue;
+    }
+    if (argv[i] === "--dir" && i + 1 < argv.length) {
+      preopens.push(argv[i + 1]);
+      i += 2;
+      continue;
+    }
+    modulePath = argv[i];
+    i++;
   }
-  if (argv[i] === "--dir" && i + 1 < argv.length) {
-    preopens.push(argv[i + 1]);
-    i += 2; continue;
-  }
-  modulePath = argv[i];
-  i++;
+  return { envMap, preopens, modulePath };
 }
 
-if (!modulePath) {
+export function normalizeFsPath(path) {
+  const raw = String(path || "").replaceAll("\\", "/");
+  const driveMatch = raw.match(/^[A-Za-z]:/);
+  const drive = driveMatch ? driveMatch[0] : "";
+  const rest = drive ? raw.slice(drive.length) : raw;
+  const isAbs = rest.startsWith("/");
+  const parts = [];
+  for (const part of rest.split("/")) {
+    if (!part || part === ".") {
+      continue;
+    }
+    if (part === "..") {
+      if (parts.length > 0 && parts[parts.length - 1] !== "..") {
+        parts.pop();
+      } else if (!isAbs) {
+        parts.push("..");
+      }
+      continue;
+    }
+    parts.push(part);
+  }
+  const prefix = drive ? `${drive}${isAbs ? "/" : ""}` : (isAbs ? "/" : "");
+  if (prefix.length > 0 || parts.length > 0) {
+    return prefix + parts.join("/");
+  }
+  return ".";
+}
+
+export function pathWithinPreopen(basePath, candidatePath) {
+  const base = normalizeFsPath(basePath);
+  const candidate = normalizeFsPath(candidatePath);
+  return candidate === base || candidate.startsWith(base + "/");
+}
+
+export function resolvePreopenPath(basePath, relativePath) {
+  const base = normalizeFsPath(basePath);
+  const candidate = /^[A-Za-z]:[\\/]/.test(relativePath) || relativePath.startsWith("/")
+    ? normalizeFsPath(relativePath)
+    : normalizeFsPath(base + "/" + relativePath);
+  if (!pathWithinPreopen(base, candidate)) {
+    return null;
+  }
+  return candidate;
+}
+
+export function writeFileAppend(path, data) {
+  if (isDeno) {
+    Deno.writeFileSync(path, data, { append: true });
+    return;
+  }
+  nodeFs.appendFileSync(path, data);
+}
+
+export function writeFileCreate(path) {
+  if (isDeno) {
+    Deno.writeFileSync(path, new Uint8Array());
+    return;
+  }
+  nodeFs.writeFileSync(path, "");
+}
+
+function writeUsageAndExit() {
   const cmd = isNode ? "node" : "deno run --allow-all";
-  process.stderr?.write?.(`Usage: ${cmd} wasi-runner.mjs run [--env K=V]... [--dir D]... <module.wasm>\n`)
-    ?? Deno?.stderr?.writeSync?.(new TextEncoder().encode(`Usage: ${cmd} wasi-runner.mjs run [--env K=V]... [--dir D]... <module.wasm>\n`));
-  (isDeno ? Deno.exit(1) : process.exit(1));
-}
-
-// --- Read module binary ---
-let binary;
-if (isDeno) {
-  binary = await Deno.readFile(modulePath);
-} else {
-  const fs = await import("node:fs/promises");
-  binary = await fs.readFile(modulePath);
-}
-
-// --- Try node:wasi first (Node.js >= 20) ---
-let started = false;
-if (isNode) {
-  try {
-    const { WASI } = await import("node:wasi");
-    const wasi = new WASI({
-      version: "preview1",
-      args: [modulePath],
-      env: envMap,
-      preopens: Object.fromEntries(preopens.map(d => [d, d])),
-    });
-    const mod = await WebAssembly.compile(binary);
-    const instance = await WebAssembly.instantiate(mod, wasi.getImportObject());
-    wasi.start(instance);
-    started = true;
-  } catch {
-    // node:wasi not available or failed, fall through to pure JS shim
+  const message = `Usage: ${cmd} wasi-runner.mjs run [--env K=V]... [--dir D]... <module.wasm>\n`;
+  if (isDeno) {
+    Deno.stderr.writeSync(new TextEncoder().encode(message));
+    Deno.exit(1);
   }
+  process.stderr.write(message);
+  process.exit(1);
 }
 
-// --- Pure JS WASI P1 shim (Deno, Bun, or Node.js fallback) ---
-if (!started) {
+export async function runWasiModule(modulePath, envMap, preopens) {
+  let binary;
+  if (isDeno) {
+    binary = await Deno.readFile(modulePath);
+  } else {
+    const fsPromises = await import("node:fs/promises");
+    binary = await fsPromises.readFile(modulePath);
+  }
+
+  let started = false;
+  if (isNode) {
+    try {
+      const { WASI } = await import("node:wasi");
+      const wasi = new WASI({
+        version: "preview1",
+        args: [modulePath],
+        env: envMap,
+        preopens: Object.fromEntries(preopens.map((dir) => [dir, dir])),
+      });
+      const mod = await WebAssembly.compile(binary);
+      const instance = await WebAssembly.instantiate(mod, wasi.getImportObject());
+      wasi.start(instance);
+      started = true;
+    } catch {
+      // node:wasi not available or failed, fall through to pure JS shim
+    }
+  }
+
+  if (started) {
+    return;
+  }
+
   const encoder = new TextEncoder();
   const decoder = new TextDecoder();
-
   const writeStdout = isDeno
-    ? (d) => Deno.stdout.writeSync(d)
-    : (d) => process.stdout.write(d);
+    ? (data) => Deno.stdout.writeSync(data)
+    : (data) => process.stdout.write(data);
   const writeStderr = isDeno
-    ? (d) => Deno.stderr.writeSync(d)
-    : (d) => process.stderr.write(d);
-  const writeFileSync = isDeno
-    ? (p, d) => Deno.writeFileSync(p, d, { append: true })
-    : (p, d) => { const fs = require("node:fs"); fs.appendFileSync(p, d); };
-  const writeFileCreate = isDeno
-    ? (p) => Deno.writeFileSync(p, new Uint8Array())
-    : (p) => { const fs = require("node:fs"); fs.writeFileSync(p, ""); };
+    ? (data) => Deno.stderr.writeSync(data)
+    : (data) => process.stderr.write(data);
   const exitFn = isDeno ? Deno.exit : process.exit;
 
   const fds = new Map();
   let nextFd = 3;
-  // stdin=0, stdout=1, stderr=2
   fds.set(0, { isDir: false });
   fds.set(1, { isDir: false });
   fds.set(2, { isDir: false });
@@ -105,45 +170,51 @@ if (!started) {
   const imports = {
     wasi_snapshot_preview1: {
       args_get: () => 0,
-      args_sizes_get: (argc_ptr, argv_buf_size_ptr) => {
-        view().setUint32(argc_ptr, 0, true);
-        view().setUint32(argv_buf_size_ptr, 0, true);
+      args_sizes_get: (argcPtr, argvBufSizePtr) => {
+        view().setUint32(argcPtr, 0, true);
+        view().setUint32(argvBufSizePtr, 0, true);
         return 0;
       },
-      environ_get: (environ_ptr, environ_buf_ptr) => {
+      environ_get: (environPtr, environBufPtr) => {
         const entries = Object.entries(envMap);
-        let bufOffset = environ_buf_ptr;
+        let bufOffset = environBufPtr;
         for (let j = 0; j < entries.length; j++) {
-          view().setUint32(environ_ptr + j * 4, bufOffset, true);
-          const s = encoder.encode(entries[j][0] + "=" + entries[j][1] + "\0");
-          u8().set(s, bufOffset);
-          bufOffset += s.length;
+          view().setUint32(environPtr + j * 4, bufOffset, true);
+          const text = encoder.encode(entries[j][0] + "=" + entries[j][1] + "\0");
+          u8().set(text, bufOffset);
+          bufOffset += text.length;
         }
         return 0;
       },
-      environ_sizes_get: (count_ptr, buf_size_ptr) => {
+      environ_sizes_get: (countPtr, bufSizePtr) => {
         const entries = Object.entries(envMap);
         let size = 0;
-        for (const [k, v] of entries) size += k.length + 1 + v.length + 1;
-        view().setUint32(count_ptr, entries.length, true);
-        view().setUint32(buf_size_ptr, size, true);
+        for (const [key, value] of entries) {
+          size += key.length + 1 + value.length + 1;
+        }
+        view().setUint32(countPtr, entries.length, true);
+        view().setUint32(bufSizePtr, size, true);
         return 0;
       },
-      fd_write: (fd, iovs_ptr, iovs_len, nwritten_ptr) => {
+      fd_write: (fd, iovsPtr, iovsLen, nwrittenPtr) => {
         let written = 0;
-        for (let j = 0; j < iovs_len; j++) {
-          const ptr = view().getUint32(iovs_ptr + j * 8, true);
-          const len = view().getUint32(iovs_ptr + j * 8 + 4, true);
+        for (let j = 0; j < iovsLen; j++) {
+          const ptr = view().getUint32(iovsPtr + j * 8, true);
+          const len = view().getUint32(iovsPtr + j * 8 + 4, true);
           const data = u8().subarray(ptr, ptr + len);
-          if (fd === 1) writeStdout(data);
-          else if (fd === 2) writeStderr(data);
-          else {
+          if (fd === 1) {
+            writeStdout(data);
+          } else if (fd === 2) {
+            writeStderr(data);
+          } else {
             const entry = fds.get(fd);
-            if (entry?.path) writeFileSync(entry.path, data);
+            if (entry?.path) {
+              writeFileAppend(entry.path, data);
+            }
           }
           written += len;
         }
-        view().setUint32(nwritten_ptr, written, true);
+        view().setUint32(nwrittenPtr, written, true);
         return 0;
       },
       fd_read: () => 0,
@@ -160,39 +231,62 @@ if (!started) {
       },
       fd_prestat_get: (fd, buf) => {
         const entry = fds.get(fd);
-        if (!entry?.isDir || !entry.path) return 8;
+        if (!entry?.isDir || !entry.path) {
+          return 8;
+        }
         view().setUint8(buf, 0);
         view().setUint32(buf + 4, encoder.encode(entry.path).length, true);
         return 0;
       },
-      fd_prestat_dir_name: (fd, path_ptr, path_len) => {
+      fd_prestat_dir_name: (fd, pathPtr, pathLen) => {
         const entry = fds.get(fd);
-        if (!entry?.path) return 8;
-        u8().set(encoder.encode(entry.path).slice(0, path_len), path_ptr);
+        if (!entry?.path) {
+          return 8;
+        }
+        u8().set(encoder.encode(entry.path).slice(0, pathLen), pathPtr);
         return 0;
       },
-      path_open: (dirfd, _dirflags, path_ptr, path_len, _oflags,
-                   _rights_base, _rights_inheriting, _fdflags, fd_ptr) => {
+      path_open: (
+        dirfd,
+        _dirflags,
+        pathPtr,
+        pathLen,
+        _oflags,
+        _rightsBase,
+        _rightsInheriting,
+        _fdflags,
+        fdPtr,
+      ) => {
         const dirEntry = fds.get(dirfd);
-        if (!dirEntry?.path) return 8;
-        const relPath = decoder.decode(u8().subarray(path_ptr, path_ptr + path_len));
-        const fullPath = dirEntry.path + "/" + relPath;
-        if (!preopens.some(d => fullPath.startsWith(d))) return 76;
+        if (!dirEntry?.path) {
+          return 8;
+        }
+        const relPath = decoder.decode(u8().subarray(pathPtr, pathPtr + pathLen));
+        const fullPath = resolvePreopenPath(dirEntry.path, relPath);
+        if (fullPath === null) {
+          return 76;
+        }
         const newFd = nextFd++;
         fds.set(newFd, { path: fullPath, isDir: false });
-        try { writeFileCreate(fullPath); } catch { /* may exist */ }
-        view().setUint32(fd_ptr, newFd, true);
+        try {
+          writeFileCreate(fullPath);
+        } catch {
+          // Existing files are fine.
+        }
+        view().setUint32(fdPtr, newFd, true);
         return 0;
       },
-      clock_time_get: (_id, _precision, time_ptr) => {
-        view().setBigUint64(time_ptr, BigInt(Date.now()) * 1000000n, true);
+      clock_time_get: (_id, _precision, timePtr) => {
+        view().setBigUint64(timePtr, BigInt(Date.now()) * 1000000n, true);
         return 0;
       },
       proc_exit: (code) => exitFn(code),
       sched_yield: () => 0,
       random_get: (buf, len) => {
         const arr = u8().subarray(buf, buf + len);
-        if (typeof crypto !== "undefined") crypto.getRandomValues(arr);
+        if (typeof crypto !== "undefined") {
+          crypto.getRandomValues(arr);
+        }
         return 0;
       },
       poll_oneoff: () => 0,
@@ -210,4 +304,22 @@ if (!started) {
   const instance = await WebAssembly.instantiate(mod, imports);
   memory = instance.exports.memory;
   instance.exports._start();
+}
+
+export async function main(argv = isDeno ? Deno.args : process.argv.slice(2)) {
+  const { envMap, preopens, modulePath } = parseWasmtimeCli(argv);
+  if (!modulePath) {
+    writeUsageAndExit();
+    return;
+  }
+  await runWasiModule(modulePath, envMap, preopens);
+}
+
+const isMain = (typeof import.meta.main === "boolean" && import.meta.main) ||
+  (isNode &&
+    process.argv[1] &&
+    import.meta.url === nodeUrl.pathToFileURL(process.argv[1]).href);
+
+if (isMain) {
+  await main();
 }

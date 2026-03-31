@@ -86,7 +86,7 @@ pub fn new_run_step(String, String, name? : String, shell? : String?, working_di
 
 pub fn new_shell_env(Map[String, String], cwd? : String, write_file? : (String, String, Bool) -> Bool, read_file? : (String) -> String?, file_exists? : (String) -> Bool, is_dir? : (String) -> Bool, mkdir? : (String) -> Bool, remove? : (String) -> Bool) -> ShellEnv
 
-pub fn new_task_plan(String, String, String, String, String, String, String, String, String, Array[String], Map[String, String], action? : ResolvedAction?, action_scope? : String?, requires_action_started? : Bool, continue_on_error? : String, timeout_minutes? : Int) -> TaskPlan
+pub fn new_task_plan(String, String, String, String, String, String, String, String, String, Array[String], Map[String, String], with_values? : Map[String, String], action? : ResolvedAction?, action_scope? : String?, requires_action_started? : Bool, continue_on_error? : String, timeout_minutes? : Int) -> TaskPlan
 
 pub fn new_uses_step(String, String, name? : String, env? : Map[String, String], if_condition? : String, with_values? : Map[String, String], continue_on_error? : String, timeout_minutes? : Int) -> StepSpec
 
@@ -444,6 +444,7 @@ pub struct TaskPlan {
   if_condition : String
   runs_on : Array[String]
   env : Map[String, String]
+  with_values : Map[String, String]
   action : ResolvedAction?
   action_scope : String?
   requires_action_started : Bool
