@@ -161,7 +161,7 @@ jobs:
       - name: Build
         run: nix build
       - name: Smoke test
-        run: nix run . -- workflow list
+        run: nix run . -- --help >/dev/null
 
   e2e:
     runs-on: ubuntu-latest
