@@ -39,7 +39,7 @@ fn clear_workspace_root(
     fs.remove_file(path)
     return
   }
-  if not(rfs.is_dir(path)) {
+  if !rfs.is_dir(path) {
     return
   }
   for entry in rfs.readdir(path) {
@@ -124,7 +124,7 @@ fn resolve_push_base_commit_id(
   event : PushEvent,
   head_commit_id : @bit.ObjectId,
 ) -> @bit.ObjectId? raise @bit.GitError {
-  if event.before_sha.length() > 0 && not(is_zero_sha(event.before_sha)) {
+  if event.before_sha.length() > 0 && !is_zero_sha(event.before_sha) {
     return Some(@bit.ObjectId::from_hex(event.before_sha))
   }
   let commit_obj = store.get(head_commit_id)

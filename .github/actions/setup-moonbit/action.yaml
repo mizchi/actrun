@@ -1,15 +1,19 @@
 name: Setup MoonBit
-description: Install a pinned MoonBit toolchain for CI stability
+description: Install a MoonBit toolchain for CI
 inputs:
   version:
     description: MoonBit release version to install
     required: false
-    default: 0.8.3+cd28f524e
+    default: ""
 runs:
   using: composite
   steps:
     - name: Install MoonBit CLI
       shell: bash
       run: |
-        curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash -s -- "${{ inputs.version }}"
+        if [ -n "${{ inputs.version }}" ]; then
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash -s -- "${{ inputs.version }}"
+        else
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+        fi
         echo "$HOME/.moon/bin" >> "$GITHUB_PATH"

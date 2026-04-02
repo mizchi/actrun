@@ -366,7 +366,7 @@ async test "compat docs: job container fixture executes run step via docker adap
     env=workflow_env,
     defaults=workflow.defaults,
   )
-  if not(@xfs.path_exists(workspace + "/nested")) {
+  if !@xfs.path_exists(workspace + "/nested") {
     @xfs.create_dir(workspace + "/nested")
   }
   let lowered = lower_push_workflow_in_workspace(runtime_workflow, workspace)

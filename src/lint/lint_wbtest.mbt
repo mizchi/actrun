@@ -102,5 +102,5 @@ test "has_errors returns false for warnings only" {
       field: "if",
     },
   ]
-  assert_true(not(has_errors(diags)))
+  assert_true(!has_errors(diags))
 }

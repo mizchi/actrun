@@ -142,7 +142,7 @@ fn Tokenizer::read_number(self : Tokenizer) -> Unit {
     let c = self.ch()
     if is_digit(c) {
       self.advance()
-    } else if c == '.' && not(has_dot) {
+    } else if c == '.' && !has_dot {
       if self.pos + 1 < self.source.length() &&
         is_digit(self.ch_at(self.pos + 1)) {
         has_dot = true

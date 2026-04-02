@@ -8,14 +8,14 @@ fn expect_cli_options(result : CliParseResult) -> CliOptions {
 
 ///|
 fn ensure_main_test_dir(path : String) -> Unit raise {
-  if not(@xfs.path_exists(path)) {
+  if !@xfs.path_exists(path) {
     @xfs.create_dir(path)
   }
 }
 
 ///|
 fn remove_main_test_tree(path : String) -> Unit raise {
-  if not(@xfs.path_exists(path)) {
+  if !@xfs.path_exists(path) {
     return
   }
   if @xfs.is_dir(path) {
@@ -93,6 +93,16 @@ fn test_json_array_field(obj : Json, key : String) -> Array[Json] {
 }
 
 ///|
+fn expect_flow_task(ir : @wf.FlowIr, id : String) -> @wf.FlowTask {
+  for task in ir.tasks {
+    if task.id == id {
+      return task
+    }
+  }
+  abort("missing flow task: " + id)
+}
+
+///|
 test "cli: parse local workflow path" {
   let result = parse_cli_args(["actrun", ".github/workflows/ci.yml"])
   inspect(result.errors, content="[]")
@@ -138,6 +148,48 @@ test "cli: parse repo mode flags" {
   inspect(options.after_sha, content="abc123")
   inspect(options.repository, content="mizchi/actrun")
   inspect(options.changed_paths, content="[\"src/lib.mbt\", \"README.md\"]")
+}
+
+///|
+test "cli: parse flow cache flags" {
+  let result = parse_cli_args([
+    "actrun", ".github/workflows/ci.yml", "--flow-cache-store", "/tmp/flow-cache.json",
+    "--flow-signature", "build=sig-build", "--flow-signature", "test=sig-test",
+  ])
+  inspect(result.errors, content="[]")
+
+  let options = expect_cli_options(result)
+  inspect(
+    options.flow_cache_store.unwrap_or(""),
+    content="/tmp/flow-cache.json",
+  )
+  inspect(
+    options.flow_signatures.get("build").unwrap_or(""),
+    content="sig-build",
+  )
+  inspect(options.flow_signatures.get("test").unwrap_or(""), content="sig-test")
+}
+
+///|
+test "cli: flow cache flags validate signatures" {
+  let result = parse_cli_args([
+    "actrun", ".github/workflows/ci.yml", "--flow-cache-store", "/tmp/flow-cache.json",
+  ])
+  inspect(result.errors.length() > 0, content="true")
+  inspect(
+    result.errors.join("\n").contains("--flow-cache-store requires"),
+    content="true",
+  )
+
+  let invalid = parse_cli_args([
+    "actrun", ".github/workflows/ci.yml", "--flow-cache-store", "/tmp/flow-cache.json",
+    "--flow-signature", "broken",
+  ])
+  inspect(invalid.errors.length() > 0, content="true")
+  inspect(
+    invalid.errors.join("\n").contains("--flow-signature expects key=value"),
+    content="true",
+  )
 }
 
 ///|
@@ -665,6 +717,7 @@ async test "cli: persist run record stores task logs and summaries" {
   inspect(run_json.contains("\"steps\": [{"), content="true")
   inspect(run_json.contains("\"started_at_ms\": 1000"), content="true")
   inspect(run_json.contains("\"finished_at_ms\": 2000"), content="true")
+  inspect(run_json.contains("\"duration_ms\": "), content="true")
   inspect(
     run_json.contains("\"stdout_path\": \"tasks/build__record.stdout.log\""),
     content="true",
@@ -688,6 +741,7 @@ async test "cli: persist run record stores task logs and summaries" {
   let jobs_json = @xfs.read_file_to_string(run_root + "/run-1/jobs.json")
   inspect(jobs_json.contains("\"id\": \"build\""), content="true")
   inspect(jobs_json.contains("\"conclusion\": \"success\""), content="true")
+  inspect(jobs_json.contains("\"duration_ms\": "), content="true")
   let artifacts_json = @xfs.read_file_to_string(
     run_root + "/run-1/artifacts.json",
   )
@@ -853,6 +907,127 @@ async test "cli: persist run record stores task logs and summaries" {
   )
   inspect(pruned_list_text, content="")
   main_test_restore_env_var("ACTRUN_CACHE_ROOT", previous_cache_root)
+}
+
+///|
+#cfg(target="native")
+async test "cli: persist run record stores embedded test reports as artifacts" {
+  ensure_main_test_dir("_build")
+  ensure_main_test_dir("_build/test-main")
+  let workspace_rel = "_build/test-main/run-store-embedded-report-workspace"
+  let workspace = main_test_absolute_path(workspace_rel)
+  let run_root = "_build/test-main/run-store-embedded-report"
+  let artifact_root = "_build/actrun/artifacts"
+  remove_main_test_tree(workspace_rel)
+  remove_main_test_tree(run_root)
+  ensure_main_test_dir(workspace_rel)
+  remove_main_test_tree(
+    artifact_root + "/\{run_store_workspace_key(workspace)}",
+  )
+  let workflow_src =
+    #|name: ci
+    #|'on':
+    #|  push:
+    #|jobs:
+    #|  test:
+    #|    runs-on: ubuntu-latest
+    #|    steps:
+    #|      - id: playwright
+    #|        run: |
+    #|          cat <<'EOF'
+    #|          {"config":{"projects":[{"name":"chromium"}]},"suites":[{"title":"auth.spec.ts","file":"tests/auth.spec.ts","specs":[{"title":"logs in","tests":[{"projectName":"chromium","status":"expected","results":[{"status":"passed","duration":100,"retry":0}]}]}]}]}
+    #|          EOF
+    #|      - id: vitest
+    #|        run: |
+    #|          cat <<'EOF'
+    #|          {"testResults":[{"name":"tests/math.test.ts","assertionResults":[{"fullName":"math > adds numbers","status":"passed","duration":5,"failureMessages":[]}]}]}
+    #|          EOF
+  let parsed = @ar.parse_workflow_yaml(workflow_src)
+  let workflow = match parsed.workflow {
+    Some(spec) => spec
+    None => abort(parsed.errors.join("\n"))
+  }
+  let lowered = @ar.lower_push_workflow_in_workspace(workflow, workspace)
+  if lowered.errors.length() > 0 {
+    abort(lowered.errors.join("\n"))
+  }
+  let report = @ar.execute_lowered_native(
+    lowered,
+    workspace_root=workspace,
+    push_event=Some(
+      @ar.new_push_event("main", ["README.md"], repository="mizchi/actrun"),
+    ),
+  )
+  let run_id = persist_run_record(
+    run_root,
+    {
+      run_id: "",
+      workflow_name: "ci",
+      workflow_path: ".github/workflows/ci.yml",
+      workspace_root: workspace,
+      workspace_mode: "worktree",
+      started_at_ms: 1000UL,
+      finished_at_ms: 2000UL,
+      event: "push",
+      state: report.state,
+      ok: report.ok,
+      exit_code: 0,
+      repository: "mizchi/actrun",
+      ref_name: "main",
+      before_sha: "",
+      after_sha: "",
+      changed_paths: ["README.md"],
+    },
+    report=Some(report),
+    plan=Some(lowered.plan),
+  ).unwrap_or("")
+
+  inspect(run_id, content="run-1")
+  let artifacts_json = @xfs.read_file_to_string(
+    run_root + "/run-1/artifacts.json",
+  )
+  inspect(
+    artifacts_json.contains("\"name\": \"playwright-report\""),
+    content="true",
+  )
+  inspect(
+    artifacts_json.contains("\"name\": \"vitest-report\""),
+    content="true",
+  )
+  inspect(
+    artifacts_json.contains("\"files\": [\"test__playwright.json\"]"),
+    content="true",
+  )
+  inspect(
+    artifacts_json.contains("\"files\": [\"test__vitest.json\"]"),
+    content="true",
+  )
+  inspect(
+    @xfs.read_file_to_string(
+      artifact_root +
+      "/\{run_store_workspace_key(workspace)}/playwright-report/test__playwright.json",
+    ).contains("\"suites\":"),
+    content="true",
+  )
+  inspect(
+    @xfs.read_file_to_string(
+      artifact_root +
+      "/\{run_store_workspace_key(workspace)}/vitest-report/test__vitest.json",
+    ).contains("\"testResults\":"),
+    content="true",
+  )
+  inspect(
+    @xfs.read_file_to_string(
+      run_root + "/run-1/artifacts/playwright-report/test__playwright.json",
+    ).contains("\"logs in\""),
+    content="true",
+  )
+  inspect(
+    @xfs.read_file_to_string(
+      run_root + "/run-1/artifacts/vitest-report/test__vitest.json",
+    ).contains("\"math > adds numbers\""),
+    content="true",
+  )
 }
 
 ///|
@@ -1110,7 +1285,13 @@ test "cli: job JSON schema has required fields" {
     needs: ["setup"],
     task_ids: ["build/test"],
     steps: [
-      { name: "test", number: 1, status: "completed", conclusion: "success" },
+      {
+        name: "test",
+        number: 1,
+        status: "completed",
+        conclusion: "success",
+        duration_ms: 12UL,
+      },
     ],
   })
   for
@@ -1119,6 +1300,7 @@ test "cli: job JSON schema has required fields" {
       Array[String]) {
     assert_true(json_has_field(job_json, field))
   }
+  assert_true(job_json.contains("\"duration_ms\": 12"))
 }
 
 ///|
@@ -1428,6 +1610,147 @@ test "cli: run_record_json includes gh alias fields" {
 }
 
 ///|
+test "cli: lowered_flow_cache_ir strips barriers and rewrites dependencies" {
+  let workflow = @ar.new_workflow("ci", [
+    @ar.new_job("build", [
+      @ar.new_run_step("install", "pnpm install"),
+      @ar.new_run_step("test", "pnpm test"),
+    ]),
+    @ar.new_job("lint", [@ar.new_run_step("lint", "pnpm lint")], needs=["build"]),
+  ])
+  let lowered = @ar.lower_push_workflow(workflow)
+  let cache_ir = lowered_flow_cache_ir(lowered)
+  inspect(cache_ir.tasks.length(), content="3")
+  inspect(cache_ir.entry_targets, content="[\"build/test\", \"lint/lint\"]")
+  let lint_task = expect_flow_task(cache_ir, "lint/lint")
+  inspect(lint_task.needs, content="[\"build/test\"]")
+}
+
+///|
+test "cli: resolve_flow_cache_signatures expands matrix group keys" {
+  let workflow = @ar.new_workflow("ci", [
+    @ar.new_job(
+      "build",
+      [@ar.new_run_step("test", "pnpm test")],
+      matrix=Some(
+        @ar.new_job_matrix([{ "os": "ubuntu-latest" }, { "os": "macos-latest" }]),
+      ),
+    ),
+  ])
+  let lowered = @ar.lower_push_workflow(workflow)
+  let resolved = resolve_flow_cache_signatures(lowered, { "build": "sig-build" })
+  inspect(resolved.get("build__matrix_1").unwrap_or(""), content="sig-build")
+  inspect(resolved.get("build__matrix_2").unwrap_or(""), content="sig-build")
+}
+
+///|
+test "cli: render_dry_run_plan_json includes flow cache payload" {
+  let workflow = @ar.new_workflow("ci", [
+    @ar.new_job("build", [@ar.new_run_step("test", "pnpm test")]),
+  ])
+  let lowered = @ar.lower_push_workflow(workflow)
+  let cache_ir = lowered_flow_cache_ir(lowered)
+  let plan = @wf.plan_task_cache(cache_ir, { "build": "sig-build" }, {})
+  let json_text = render_dry_run_plan_json(
+    workflow,
+    lowered,
+    flow_cache=Some({
+      store_path: "/tmp/flow-cache.json",
+      plan_json: Some(@wf.render_task_cache_plan_json(plan)),
+      writeback_json: None,
+    }),
+  )
+  inspect(json_text.contains("\"flow_cache\""), content="true")
+  inspect(
+    json_text.contains("\"store\": \"/tmp/flow-cache.json\""),
+    content="true",
+  )
+  inspect(json_text.contains("\"misses\": 1"), content="true")
+  inspect(json_text.contains("\"build/test\""), content="true")
+}
+
+///|
+test "cli: run_record_json includes flow cache payload" {
+  let record : RunRecord = {
+    run_id: "run-9",
+    workflow_name: "ci",
+    workflow_path: ".github/workflows/ci.yml",
+    workspace_root: "/tmp",
+    workspace_mode: "local",
+    started_at_ms: 1000UL,
+    finished_at_ms: 2000UL,
+    event: "push",
+    state: "completed",
+    ok: true,
+    exit_code: 0,
+    repository: "owner/repo",
+    ref_name: "main",
+    before_sha: "aaa",
+    after_sha: "bbb",
+    changed_paths: [],
+  }
+  let json_text = run_record_json(
+    record,
+    flow_cache=Some({
+      store_path: "/tmp/flow-cache.json",
+      plan_json: Some(
+        "{\"ok\":true,\"summary\":{\"tasks\":1,\"hits\":0,\"misses\":1}}",
+      ),
+      writeback_json: Some(
+        "{\"ok\":true,\"summary\":{\"updated\":1,\"entries\":1},\"updated_task_ids\":[\"build/test\"],\"issues\":[]}",
+      ),
+    }),
+  )
+  inspect(json_text.contains("\"flow_cache\""), content="true")
+  inspect(
+    json_text.contains("\"updated_task_ids\":[\"build/test\"]"),
+    content="true",
+  )
+}
+
+///|
+#cfg(target="native")
+async test "cli: flow_cache_record_after_run writes cache store" {
+  ensure_main_test_dir("_build")
+  ensure_main_test_dir("_build/test-main")
+  let cache_store_rel = "_build/test-main/flow-cache-store.json"
+  let workspace_rel = "_build/test-main/flow-cache-store-workspace"
+  remove_main_test_tree(cache_store_rel)
+  remove_main_test_tree(workspace_rel)
+  ensure_main_test_dir(workspace_rel)
+  let workspace = main_test_absolute_path(workspace_rel)
+  let workflow = @ar.new_workflow("ci", [
+    @ar.new_job("build", [@ar.new_run_step("test", "echo cache-ok")]),
+  ])
+  let lowered = @ar.lower_push_workflow_in_workspace(workflow, workspace)
+  let options = expect_cli_options(
+    parse_cli_args([
+      "actrun",
+      ".github/workflows/ci.yml",
+      "--flow-cache-store",
+      main_test_absolute_path(cache_store_rel),
+      "--flow-signature",
+      "build=sig-build",
+    ]),
+  )
+  let context = match prepare_flow_cache_plan(lowered, options) {
+    Some(value) => value
+    None => abort("missing flow cache context")
+  }
+  let report = @ar.execute_lowered_native(
+    lowered,
+    workspace_root=workspace,
+    push_event=Some(@ar.new_push_event("main", ["README.md"])),
+  )
+  let record = flow_cache_record_after_run(context, report)
+  inspect(record.writeback_json is Some(_), content="true")
+  inspect(
+    @xfs.read_file_to_string(cache_store_rel).contains("build/test::build"),
+    content="true",
+  )
+}
+
+///|
 test "cli: run_json_matches_filters workflow filter" {
   let json = "{\"workflow_name\": \"ci\", \"status\": \"completed\", \"conclusion\": \"success\", \"state\": \"completed\", \"ref_name\": \"main\", \"event\": \"push\"}"
   inspect(run_json_matches_filters(json, "", "ci", "", ""), content="true")
@@ -1511,8 +1834,15 @@ test "gh-compat: job record includes name, conclusion, and steps" {
         number: 1,
         status: "completed",
         conclusion: "success",
+        duration_ms: 15UL,
       },
-      { name: "Test", number: 2, status: "completed", conclusion: "failure" },
+      {
+        name: "Test",
+        number: 2,
+        status: "completed",
+        conclusion: "failure",
+        duration_ms: 27UL,
+      },
     ],
   }
   let json_text = run_job_json(job)
@@ -1521,8 +1851,10 @@ test "gh-compat: job record includes name, conclusion, and steps" {
   inspect(json_text.contains("\"steps\": ["), content="true")
   inspect(json_text.contains("\"name\": \"Checkout\""), content="true")
   inspect(json_text.contains("\"number\": 1"), content="true")
+  inspect(json_text.contains("\"duration_ms\": 15"), content="true")
   inspect(json_text.contains("\"name\": \"Test\""), content="true")
   inspect(json_text.contains("\"number\": 2"), content="true")
+  inspect(json_text.contains("\"duration_ms\": 27"), content="true")
 }
 
 ///|

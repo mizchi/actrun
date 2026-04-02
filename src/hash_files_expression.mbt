@@ -22,7 +22,7 @@ fn if_hash_files_function_supported(text : String) -> Bool {
   match if_function_arguments_at_least(text, "hashFiles", 1) {
     Some(args) => {
       for arg in args {
-        if not(if_condition_supported(arg)) {
+        if !if_condition_supported(arg) {
           return false
         }
       }
@@ -121,7 +121,7 @@ fn if_hash_files_selected_paths(
   workspace_root : String,
   patterns : Array[String],
 ) -> Array[String] {
-  if workspace_root.length() == 0 || not(@xfs.path_exists(workspace_root)) {
+  if workspace_root.length() == 0 || !@xfs.path_exists(workspace_root) {
     return []
   }
   let workspace_abs = absolute_exec_path(workspace_root)

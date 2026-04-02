@@ -303,7 +303,7 @@ fn compat_expect_push_event_fixture(fixture : CompatFixture) -> PushEvent {
 
 ///|
 fn compat_remove_tree(path : String) -> Unit raise {
-  if not(@xfs.path_exists(path)) {
+  if !@xfs.path_exists(path) {
     return
   }
   if @xfs.is_dir(path) {
@@ -319,7 +319,7 @@ fn compat_remove_tree(path : String) -> Unit raise {
 ///|
 fn compat_copy_tree(src : String, dst : String) -> Unit raise {
   if @xfs.is_dir(src) {
-    if not(@xfs.path_exists(dst)) {
+    if !@xfs.path_exists(dst) {
       @xfs.create_dir(dst)
     }
     for entry in @xfs.read_dir(src) {
@@ -330,7 +330,7 @@ fn compat_copy_tree(src : String, dst : String) -> Unit raise {
     }
     let github_dir = compat_join_path(src, ".github")
     if @xfs.path_exists(github_dir) &&
-      not(@xfs.path_exists(compat_join_path(dst, ".github"))) {
+      !@xfs.path_exists(compat_join_path(dst, ".github")) {
       compat_copy_tree(github_dir, compat_join_path(dst, ".github"))
     }
   } else {
@@ -340,7 +340,7 @@ fn compat_copy_tree(src : String, dst : String) -> Unit raise {
 
 ///|
 fn compat_ensure_dir(path : String) -> Unit raise {
-  if not(@xfs.path_exists(path)) {
+  if !@xfs.path_exists(path) {
     @xfs.create_dir(path)
   }
 }
@@ -445,7 +445,7 @@ fn compat_prepare_workspace(name : String) -> String raise {
 ///|
 fn compat_fixture_dirs(root : String) -> Array[String] raise {
   let dirs : Array[String] = []
-  if not(@xfs.path_exists(root)) || not(@xfs.is_dir(root)) {
+  if !@xfs.path_exists(root) || !@xfs.is_dir(root) {
     return dirs
   }
   if @xfs.path_exists(compat_join_path(root, "fixture.txt")) &&

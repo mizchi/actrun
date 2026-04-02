@@ -69,6 +69,12 @@ pub fn shell_stderr(env : ShellEnv) -> String {
 }
 
 ///|
+#warnings("-deprecated")
+fn shell_parse_int(value : StringView) -> Int raise {
+  @strconv.parse_int(value)
+}
+
+///|
 fn exec_command_list(env : ShellEnv, list : @sh.CommandList) -> Int {
   let mut code = exec_pipeline(env, list.first)
   env.exit_code = code
@@ -225,11 +231,11 @@ fn exec_if(env : ShellEnv, clause : @sh.IfClause) -> Int {
 fn exec_while(env : ShellEnv, clause : @sh.WhileClause) -> Int {
   let mut code = 0
   if clause.is_until {
-    while exec_command_list(env, clause.condition) != 0 && not(env.exit_called) {
+    while exec_command_list(env, clause.condition) != 0 && !env.exit_called {
       code = exec_command_list(env, clause.body)
     }
   } else {
-    while exec_command_list(env, clause.condition) == 0 && not(env.exit_called) {
+    while exec_command_list(env, clause.condition) == 0 && !env.exit_called {
       code = exec_command_list(env, clause.body)
     }
   }
@@ -274,7 +280,7 @@ fn exec_builtin(env : ShellEnv, name : String, args : Array[String]) -> Int {
     "exit" => {
       env.exit_called = true
       env.exit_code = if args.length() > 0 {
-        @strconv.parse_int(args[0]) catch {
+        shell_parse_int(args[0]) catch {
           _ => 1
         }
       } else {
@@ -473,7 +479,7 @@ fn builtin_rm(env : ShellEnv, args : Array[String]) -> Int {
 fn builtin_cp(env : ShellEnv, args : Array[String]) -> Int {
   let files : Array[String] = []
   for arg in args {
-    if not(arg.has_prefix("-")) {
+    if !arg.has_prefix("-") {
       files.push(arg)
     }
   }

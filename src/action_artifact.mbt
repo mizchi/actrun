@@ -230,7 +230,7 @@ fn artifact_collect_relative_files(
   }
   entries.sort_by(String::lexical_compare)
   for entry in entries {
-    if not(include_hidden) && entry.has_prefix(".") {
+    if !include_hidden && entry.has_prefix(".") {
       continue
     }
     let next_abs = artifact_path_join(current_abs, entry)
@@ -280,7 +280,7 @@ fn artifact_workspace_relative_files(
 ) -> Array[String] {
   let workspace_abs = absolute_exec_path(resolve_task_cwd(workspace_root, ""))
   let files : Array[String] = []
-  if not(@xfs.path_exists(workspace_abs)) {
+  if !@xfs.path_exists(workspace_abs) {
     return files
   }
   artifact_collect_relative_files(workspace_abs, "", files, include_hidden~)
@@ -317,10 +317,10 @@ fn artifact_common_ancestor(paths : Array[String]) -> String {
   }
   let mut current = artifact_canonical_path(paths[0])
   let mut found = false
-  while not(found) {
+  while !found {
     let mut all_contained = true
     for path in paths {
-      if not(artifact_is_prefix_dir(artifact_canonical_path(path), current)) {
+      if !artifact_is_prefix_dir(artifact_canonical_path(path), current) {
         all_contained = false
         break
       }
@@ -380,7 +380,7 @@ fn artifact_select_upload_files(
       continue
     }
     let resolved_path = resolve_task_cwd(workspace_root, path)
-    if not(@xfs.path_exists(resolved_path)) {
+    if !@xfs.path_exists(resolved_path) {
       continue
     }
     let absolute_path = artifact_canonical_path(resolved_path)
@@ -410,7 +410,7 @@ fn artifact_select_upload_files(
         break
       }
     }
-    if not(excluded) {
+    if !excluded {
       selected_files.push(absolute_path)
     }
   }
@@ -473,14 +473,14 @@ fn execute_upload_artifact_native(
     }
   }
   if @xfs.path_exists(artifact_root) {
-    if not(overwrite) {
+    if !overwrite {
       return task_report_failure(
         plan,
         workspace_root,
         "upload-artifact artifact '\{name}' already exists and overwrite is false",
       )
     }
-    if not(exec_remove_tree(artifact_root)) {
+    if !exec_remove_tree(artifact_root) {
       return task_report_failure(
         plan,
         workspace_root,
@@ -488,7 +488,7 @@ fn execute_upload_artifact_native(
       )
     }
   }
-  if not(ensure_exec_dir_recursive(artifact_root)) {
+  if !ensure_exec_dir_recursive(artifact_root) {
     return task_report_failure(
       plan,
       workspace_root,
@@ -503,7 +503,7 @@ fn execute_upload_artifact_native(
     } else {
       artifact_root + "/" + exec_leaf_name(absolute_path)
     }
-    if not(exec_copy_tree(absolute_path, target)) {
+    if !exec_copy_tree(absolute_path, target) {
       return task_report_failure(
         plan,
         workspace_root,
@@ -531,7 +531,7 @@ fn execute_download_artifact_native(
   } else {
     resolve_task_cwd(workspace_root, "")
   }
-  if not(ensure_exec_dir_recursive(destination)) {
+  if !ensure_exec_dir_recursive(destination) {
     return task_report_failure(
       plan,
       workspace_root,
@@ -549,10 +549,10 @@ fn execute_download_artifact_native(
     let mut copied_any = false
     for entry in artifact_entries {
       let artifact_root = store_root + "/" + entry
-      if not(exec_is_dir(artifact_root)) {
+      if !exec_is_dir(artifact_root) {
         continue
       }
-      if pattern.length() > 0 && not(artifact_path_matches(pattern, entry)) {
+      if pattern.length() > 0 && !artifact_path_matches(pattern, entry) {
         continue
       }
       let target = if merge_multiple {
@@ -560,7 +560,7 @@ fn execute_download_artifact_native(
       } else {
         destination + "/" + entry
       }
-      if not(exec_copy_tree(artifact_root, target)) {
+      if !exec_copy_tree(artifact_root, target) {
         return task_report_failure(
           plan,
           workspace_root,
@@ -569,7 +569,7 @@ fn execute_download_artifact_native(
       }
       copied_any = true
     }
-    if not(copied_any) {
+    if !copied_any {
       return task_report_failure(
         plan, workspace_root, "download-artifact could not find any artifacts",
       )
@@ -579,7 +579,7 @@ fn execute_download_artifact_native(
   let artifact_root = artifact_store_root(workspace_root) +
     "/" +
     sanitize_task_id(name)
-  if not(@xfs.path_exists(artifact_root)) {
+  if !@xfs.path_exists(artifact_root) {
     return task_report_failure(
       plan,
       workspace_root,
@@ -593,9 +593,7 @@ fn execute_download_artifact_native(
   }
   entries.sort_by(String::lexical_compare)
   for entry in entries {
-    if not(
-        exec_copy_tree(artifact_root + "/" + entry, destination + "/" + entry),
-      ) {
+    if !exec_copy_tree(artifact_root + "/" + entry, destination + "/" + entry) {
       return task_report_failure(
         plan,
         workspace_root,

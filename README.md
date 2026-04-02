@@ -103,6 +103,13 @@ actrun workflow run .github/workflows/ci.yml
 # Show execution plan without running
 actrun workflow run .github/workflows/ci.yml --dry-run
 
+# Emit flow cache plan JSON for an external orchestrator
+actrun workflow run .github/workflows/ci.yml \
+  --dry-run \
+  --json \
+  --flow-cache-store /tmp/flow-cache.json \
+  --flow-signature build=sig-build
+
 # Skip actions not needed locally (e.g. setup tools already installed)
 actrun workflow run .github/workflows/ci.yml \
   --skip-action actions/checkout \
@@ -166,6 +173,12 @@ container_runtime = "docker"
 When `--event` is omitted, actrun auto-detects `github.repository`, `github.ref_name`, `github.sha`, and `github.actor` from the local git repository when possible. Use `[local_context]` only when you need to pin or override those values. See [Local GitHub Context](docs/local-context.md) for precedence and examples.
 
 CLI flags always override `actrun.toml` settings. See [Cheatsheet](docs/cheatsheet.md) for quick reference and [Advanced Workflow](docs/advanced-workflow.md) for details.
+
+## Flow Cache
+
+Use `--flow-cache-store <path>` together with one or more `--flow-signature <job-or-task>=<fingerprint>` flags to exchange task cache state with the embedded `bitflow` planner.
+
+`--dry-run --json` includes a `flow_cache.plan` payload with per-task hit/miss information. A normal run writes successful task fingerprints back to the same store and persists both the plan and writeback result under `run.json` as `flow_cache.plan` and `flow_cache.writeback`.
 
 ## CLI Reference
 

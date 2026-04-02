@@ -74,7 +74,7 @@ fn Lexer::skip_comment(self : Lexer) -> Unit {
 ///|
 /// Check if character is a word character
 fn is_word_char(c : Char) -> Bool {
-  not(is_meta_char(c)) && c != '\'' && c != '"' && c != '`'
+  !is_meta_char(c) && c != '\'' && c != '"' && c != '`'
 }
 
 ///|
@@ -454,13 +454,13 @@ fn is_valid_name(s : String) -> Bool {
   }
   // First char must be letter or underscore
   let first = chars[0]
-  if not(is_alpha(first)) && first != '_' {
+  if !is_alpha(first) && first != '_' {
     return false
   }
   // Rest must be alphanumeric or underscore
   for i in 1..<chars.length() {
     let c = chars[i]
-    if not(is_alnum(c)) && c != '_' {
+    if !is_alnum(c) && c != '_' {
       return false
     }
   }

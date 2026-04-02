@@ -1,5 +1,6 @@
 import {
   "mizchi/actrun" @ar,
+  "mizchi/bitflow/workflow" @wf,
   "mizchi/actrun/lint" @lint,
   "mizchi/jq" @jq,
   "bobzhang/toml" @toml,

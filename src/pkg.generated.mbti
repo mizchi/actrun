@@ -390,10 +390,7 @@ pub struct StepSpec {
 pub struct StoreEnvEntry {
   key : String
   value : String
-}
-pub impl Show for StoreEnvEntry
-pub impl ToJson for StoreEnvEntry
-pub impl @json.FromJson for StoreEnvEntry
+} derive(Show, ToJson, @json.FromJson)
 
 pub enum StoreMode {
   FileStore
@@ -403,34 +400,22 @@ pub enum StoreMode {
 pub struct StoreOutputEntry {
   key : String
   value : String
-}
-pub impl Show for StoreOutputEntry
-pub impl ToJson for StoreOutputEntry
-pub impl @json.FromJson for StoreOutputEntry
+} derive(Show, ToJson, @json.FromJson)
 
 pub struct StorePathEntry {
   path : String
-}
-pub impl Show for StorePathEntry
-pub impl ToJson for StorePathEntry
-pub impl @json.FromJson for StorePathEntry
+} derive(Show, ToJson, @json.FromJson)
 
 pub struct StoreStepResult {
   outputs : Map[String, String]
   env_updates : Map[String, String]
   path_entries : Array[String]
   summary : String
-}
-pub impl Show for StoreStepResult
-pub impl ToJson for StoreStepResult
-pub impl @json.FromJson for StoreStepResult
+} derive(Show, ToJson, @json.FromJson)
 
 pub struct StoreSummaryEntry {
   content : String
-}
-pub impl Show for StoreSummaryEntry
-pub impl ToJson for StoreSummaryEntry
-pub impl @json.FromJson for StoreSummaryEntry
+} derive(Show, ToJson, @json.FromJson)
 
 pub struct TaskPlan {
   id : String
@@ -457,6 +442,7 @@ pub struct TaskRunReport {
   kind : String
   status : String
   code : Int
+  duration_ms : UInt64
   shell : String
   script : String
   cwd : String
@@ -560,6 +546,7 @@ pub struct WorkflowStepReport {
   id : String
   status : String
   required : Bool
+  duration_ms : UInt64
   message : String
 }
 

@@ -40,9 +40,7 @@ pub struct WasiRunResult {
   stderr : String
   outputs : Map[String, String]
   env_updates : Map[String, String]
-}
-pub impl Show for WasiRunResult
-pub impl ToJson for WasiRunResult
+} derive(Show, ToJson)
 
 // Type aliases
 

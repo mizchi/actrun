@@ -162,7 +162,7 @@ pub fn filter_diagnostics(
         break
       }
     }
-    if not(ignored) {
+    if !ignored {
       result.push(d)
     }
   }

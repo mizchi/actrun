@@ -221,7 +221,7 @@ fn check_undefined_needs(
         break
       }
     }
-    if not(found) {
+    if !found {
       diagnostics.push({
         severity: Error,
         code: "undefined-needs",
@@ -365,7 +365,7 @@ fn check_unused_job_outputs(
         break
       }
     }
-    if not(any_referenced) {
+    if !any_referenced {
       // Check if any job depends on this job at all
       let mut has_downstream = false
       for other_job in workflow.jobs {

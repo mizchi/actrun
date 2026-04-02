@@ -114,11 +114,9 @@ fn is_sha_ref(ref_str : String) -> Bool {
     return false
   }
   for ch in ref_str {
-    if not(
-        (ch >= '0' && ch <= '9') ||
-        (ch >= 'a' && ch <= 'f') ||
-        (ch >= 'A' && ch <= 'F'),
-      ) {
+    if !((ch >= '0' && ch <= '9') ||
+      (ch >= 'a' && ch <= 'f') ||
+      (ch >= 'A' && ch <= 'F')) {
       return false
     }
   }
@@ -198,7 +196,7 @@ pub fn diagnostics_from_resolutions(
       break
     }
     let resolution = resolutions[i]
-    if not(resolution.exists) {
+    if !resolution.exists {
       diagnostics.push({
         severity: Error,
         code: "action-not-found",
@@ -209,7 +207,7 @@ pub fn diagnostics_from_resolutions(
       })
       continue
     }
-    if not(action_ref.is_sha_pinned) && resolution.sha.length() > 0 {
+    if !action_ref.is_sha_pinned && resolution.sha.length() > 0 {
       let suggested = action_ref.owner +
         "/" +
         action_ref.repo +

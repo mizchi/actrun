@@ -50,17 +50,17 @@ fn strip_yaml_comment(text : String) -> String {
   let mut idx = 0
   while idx < text.length() {
     let ch = text.unsafe_get(idx)
-    if ch == '\'' && not(in_double) {
-      in_single = not(in_single)
+    if ch == '\'' && !in_double {
+      in_single = !in_single
       idx += 1
       continue
     }
-    if ch == '"' && not(in_single) {
-      in_double = not(in_double)
+    if ch == '"' && !in_single {
+      in_double = !in_double
       idx += 1
       continue
     }
-    if ch == '#' && not(in_single) && not(in_double) {
+    if ch == '#' && !in_single && !in_double {
       return String::unsafe_substring(text, start=0, end=idx)
         .trim_end(chars=" \t")
         .to_string()
@@ -131,17 +131,17 @@ fn split_key_value(text : String) -> (String, String?)? {
   let mut idx = 0
   while idx < text.length() {
     let ch = text.unsafe_get(idx)
-    if ch == '\'' && not(in_double) {
-      in_single = not(in_single)
+    if ch == '\'' && !in_double {
+      in_single = !in_single
       idx += 1
       continue
     }
-    if ch == '"' && not(in_single) {
-      in_double = not(in_double)
+    if ch == '"' && !in_single {
+      in_double = !in_double
       idx += 1
       continue
     }
-    if not(in_single) && not(in_double) {
+    if !in_single && !in_double {
       if ch == '[' {
         bracket_depth += 1
       } else if ch == ']' && bracket_depth > 0 {
@@ -183,17 +183,17 @@ fn split_inline_items(text : String) -> Array[String] {
   let mut idx = 0
   while idx < text.length() {
     let ch = text.unsafe_get(idx)
-    if ch == '\'' && not(in_double) {
-      in_single = not(in_single)
+    if ch == '\'' && !in_double {
+      in_single = !in_single
       idx += 1
       continue
     }
-    if ch == '"' && not(in_single) {
-      in_double = not(in_double)
+    if ch == '"' && !in_single {
+      in_double = !in_double
       idx += 1
       continue
     }
-    if not(in_single) && not(in_double) {
+    if !in_single && !in_double {
       if ch == '[' {
         bracket_depth += 1
       } else if ch == ']' && bracket_depth > 0 {
@@ -395,7 +395,7 @@ fn WorkflowYamlParser::parse_sequence(
     self.skip_ignorable()
     guard self.idx < self.lines.length() else { break }
     let line = self.lines[self.idx]
-    if line.indent != indent || not(is_sequence_item(line.text)) {
+    if line.indent != indent || !is_sequence_item(line.text) {
       break
     }
     let item_text = after_sequence_dash(line.text)
@@ -585,6 +585,12 @@ fn yaml_as_optional_bool(
 }
 
 ///|
+#warnings("-deprecated")
+fn parser_parse_int64(value : StringView) -> Int64 raise {
+  @strconv.parse_int64(value)
+}
+
+///|
 fn yaml_as_optional_int(
   value : YamlValue?,
   errors : Array[String],
@@ -596,7 +602,7 @@ fn yaml_as_optional_int(
       if trimmed.length() == 0 {
         return None
       }
-      let parsed = @strconv.parse_int64(trimmed) catch {
+      let parsed = parser_parse_int64(trimmed) catch {
         _ => {
           errors.push(ctx + " must be an integer")
           return None
@@ -730,7 +736,7 @@ fn expand_matrix_includes(
       }
       row_index += 1
     }
-    if not(matched) {
+    if !matched {
       expanded.push(matrix_row_merge({}, include_row))
     }
   }
@@ -754,7 +760,7 @@ fn filter_matrix_excludes(
         break
       }
     }
-    if not(excluded) {
+    if !excluded {
       filtered.push(row)
     }
   }
@@ -1244,7 +1250,7 @@ fn parse_trigger(value : YamlValue?, errors : Array[String]) -> ParsedTriggers {
       let has_push_like = yaml_obj_get(fields, "push") is Some(_) ||
         yaml_obj_get(fields, "pull_request") is Some(_) ||
         yaml_obj_get(fields, "pull_request_target") is Some(_)
-      if not(has_push_like) && workflow_call is None {
+      if !has_push_like && workflow_call is None {
         errors.push("only push and workflow_call triggers are supported in MVP")
       }
       {

@@ -63,7 +63,7 @@ fn push_event_append_unique(
     if path.length() == 0 {
       continue
     }
-    if not(paths.contains(path)) {
+    if !paths.contains(path) {
       paths.push(path)
     }
   }

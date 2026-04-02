@@ -63,7 +63,7 @@ fn has_non_ignored_path(
   changed_paths : Array[String],
 ) -> Bool {
   for path in changed_paths {
-    if not(matches_any_pattern(ignored_patterns, path)) {
+    if !matches_any_pattern(ignored_patterns, path) {
       return true
     }
   }
@@ -73,7 +73,7 @@ fn has_non_ignored_path(
 ///|
 pub fn matches_push_trigger(trigger : PushTrigger, event : PushEvent) -> Bool {
   if trigger.tags.length() > 0 &&
-    not(matches_any_pattern(trigger.tags, event.ref_name)) {
+    !matches_any_pattern(trigger.tags, event.ref_name) {
     return false
   }
   if trigger.tags_ignore.length() > 0 &&
@@ -81,7 +81,7 @@ pub fn matches_push_trigger(trigger : PushTrigger, event : PushEvent) -> Bool {
     return false
   }
   if trigger.branches.length() > 0 &&
-    not(matches_any_pattern(trigger.branches, event.ref_name)) {
+    !matches_any_pattern(trigger.branches, event.ref_name) {
     return false
   }
   if trigger.branches_ignore.length() > 0 &&
@@ -89,12 +89,12 @@ pub fn matches_push_trigger(trigger : PushTrigger, event : PushEvent) -> Bool {
     return false
   }
   if trigger.paths.length() > 0 &&
-    not(has_matching_changed_path(trigger.paths, event.changed_paths)) {
+    !has_matching_changed_path(trigger.paths, event.changed_paths) {
     return false
   }
   if trigger.paths_ignore.length() > 0 &&
     event.changed_paths.length() > 0 &&
-    not(has_non_ignored_path(trigger.paths_ignore, event.changed_paths)) {
+    !has_non_ignored_path(trigger.paths_ignore, event.changed_paths) {
     return false
   }
   true

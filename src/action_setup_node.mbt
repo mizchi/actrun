@@ -94,7 +94,7 @@ fn read_node_version_from_file(file_path : String) -> String {
     // First non-empty line
     for line_view in trimmed.split("\n") {
       let line = line_view.trim(chars=" \t\r").to_string()
-      if line.length() > 0 && not(line.has_prefix("#")) {
+      if line.length() > 0 && !line.has_prefix("#") {
         return line
       }
     }
@@ -152,7 +152,7 @@ async fn write_setup_node_shim(
     "/" +
     sanitize_task_id(task_id)
   let shim_dir = shim_root + "/bin"
-  if not(ensure_exec_dir_recursive(shim_dir)) {
+  if !ensure_exec_dir_recursive(shim_dir) {
     return None
   }
   let shim_path = shim_dir + "/node"
@@ -174,10 +174,10 @@ async fn write_setup_node_shim(
     "' \"" +
     d +
     "@\"\n"
-  if not(write_exec_text(shim_path, script)) {
+  if !write_exec_text(shim_path, script) {
     return None
   }
-  if not(exec_make_executable(shim_path)) {
+  if !exec_make_executable(shim_path) {
     return None
   }
   Some(shim_dir)
@@ -253,12 +253,12 @@ fn resolve_setup_node_dependency_paths(
   let explicit = dependency_input.trim(chars=" \t\r\n").length() > 0
   for candidate in candidates {
     let resolved_path = resolve_task_cwd(workspace_root, candidate)
-    if explicit && not(@xfs.path_exists(resolved_path)) {
+    if explicit && !@xfs.path_exists(resolved_path) {
       return Err(
         "setup-node cache dependency path '\{candidate}' does not exist",
       )
     }
-    if not(@xfs.path_exists(resolved_path)) {
+    if !@xfs.path_exists(resolved_path) {
       continue
     }
     guard workspace_relative_store_path(workspace_root, resolved_path)
@@ -431,7 +431,7 @@ async fn execute_setup_node_native(
       normalized_cache_input,
     )
     let cache_abs_path = resolve_task_cwd(workspace_root, cache_relative_path)
-    if not(ensure_exec_dir_recursive(cache_abs_path)) {
+    if !ensure_exec_dir_recursive(cache_abs_path) {
       return failure_execution_result(
         plan, workspace_root, "failed to prepare setup-node cache directory",
       )
@@ -468,9 +468,7 @@ async fn execute_setup_node_native(
       .to_string()
     let npmrc_path = prepare_runner_temp_dir(plan.job_id, workspace_root) +
       "/.npmrc"
-    if not(
-        write_setup_node_npmrc(npmrc_path, registry_url, always_auth~, scope~),
-      ) {
+    if !write_setup_node_npmrc(npmrc_path, registry_url, always_auth~, scope~) {
       return failure_execution_result(
         plan, workspace_root, "failed to write setup-node npm auth config",
       )
@@ -523,7 +521,7 @@ fn execute_setup_node_cache_post_native(
     return task_report_success(plan, workspace_root)
   }
   let resolved_path = resolve_task_cwd(workspace_root, path_input)
-  if not(@xfs.path_exists(resolved_path)) {
+  if !@xfs.path_exists(resolved_path) {
     return task_report_success(plan, workspace_root)
   }
   return execute_save_cache_native(

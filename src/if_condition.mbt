@@ -115,17 +115,17 @@ fn if_expression_has_outer_parens(text : String) -> Bool {
   let mut idx = 0
   while idx < text.length() {
     let ch = text.unsafe_get(idx)
-    if ch == '\'' && not(in_double) {
-      in_single = not(in_single)
+    if ch == '\'' && !in_double {
+      in_single = !in_single
       idx += 1
       continue
     }
-    if ch == '"' && not(in_single) {
-      in_double = not(in_double)
+    if ch == '"' && !in_single {
+      in_double = !in_double
       idx += 1
       continue
     }
-    if not(in_single) && not(in_double) {
+    if !in_single && !in_double {
       if ch == '(' {
         depth += 1
       } else if ch == ')' {
@@ -160,17 +160,17 @@ fn find_top_level_if_operator(text : String, op : String) -> Int? {
   let mut idx = 0
   while idx + op.length() <= text.length() {
     let ch = text.unsafe_get(idx)
-    if ch == '\'' && not(in_double) {
-      in_single = not(in_single)
+    if ch == '\'' && !in_double {
+      in_single = !in_single
       idx += 1
       continue
     }
-    if ch == '"' && not(in_single) {
-      in_double = not(in_double)
+    if ch == '"' && !in_single {
+      in_double = !in_double
       idx += 1
       continue
     }
-    if not(in_single) && not(in_double) {
+    if !in_single && !in_double {
       if ch == '(' {
         depth += 1
         idx += 1
@@ -367,17 +367,17 @@ fn split_top_level_if_arguments(text : String) -> Array[String]? {
   let mut idx = 0
   while idx < text.length() {
     let ch = text.unsafe_get(idx)
-    if ch == '\'' && not(in_double) {
-      in_single = not(in_single)
+    if ch == '\'' && !in_double {
+      in_single = !in_single
       idx += 1
       continue
     }
-    if ch == '"' && not(in_single) {
-      in_double = not(in_double)
+    if ch == '"' && !in_single {
+      in_double = !in_double
       idx += 1
       continue
     }
-    if not(in_single) && not(in_double) {
+    if !in_single && !in_double {
       if ch == '(' {
         depth += 1
       } else if ch == ')' {
@@ -520,7 +520,7 @@ fn if_expression_function_supported(text : String) -> Bool {
   match if_function_arguments_at_least(text, "format", 1) {
     Some(args) => {
       for arg in args {
-        if not(if_condition_supported(arg)) {
+        if !if_condition_supported(arg) {
           return false
         }
       }
@@ -531,7 +531,7 @@ fn if_expression_function_supported(text : String) -> Bool {
   match if_function_arguments_at_least(text, "join", 1) {
     Some(args) => {
       for arg in args {
-        if not(if_condition_supported(arg)) {
+        if !if_condition_supported(arg) {
           return false
         }
       }
@@ -542,7 +542,7 @@ fn if_expression_function_supported(text : String) -> Bool {
   match if_function_arguments_at_least(text, "case", 1) {
     Some(args) => {
       for arg in args {
-        if not(if_condition_supported(arg)) {
+        if !if_condition_supported(arg) {
           return false
         }
       }
@@ -573,7 +573,7 @@ fn if_number_literal(text : String) -> Bool {
     let ch = trimmed.unsafe_get(i).to_int()
     if ch >= '0'.to_int() && ch <= '9'.to_int() {
       has_digit = true
-    } else if ch == '.'.to_int() && not(has_dot) {
+    } else if ch == '.'.to_int() && !has_dot {
       has_dot = true
     } else {
       return false
@@ -1099,12 +1099,14 @@ fn evaluate_string_function_expression(
 }
 
 ///|
+#warnings("-deprecated")
 fn try_parse_int64(s : String) -> Int64? {
   let v = @strconv.parse_int64(s) catch { _ => return None }
   Some(v)
 }
 
 ///|
+#warnings("-deprecated")
 fn try_parse_double(s : String) -> Double? {
   let v = @strconv.parse_double(s) catch { _ => return None }
   Some(v)
@@ -1160,13 +1162,11 @@ fn eval_if_condition_bool(text : String, ctx : IfConditionContext) -> Bool {
   }
   match find_top_level_if_operator(trimmed, "!=") {
     Some(idx) =>
-      return not(
-        if_condition_value_eq(
-          if_condition_atom_value(if_text_slice(trimmed, 0, idx), ctx),
-          if_condition_atom_value(
-            if_text_slice(trimmed, idx + 2, trimmed.length()),
-            ctx,
-          ),
+      return !if_condition_value_eq(
+        if_condition_atom_value(if_text_slice(trimmed, 0, idx), ctx),
+        if_condition_atom_value(
+          if_text_slice(trimmed, idx + 2, trimmed.length()),
+          ctx,
         ),
       )
     None => ()
@@ -1227,8 +1227,9 @@ fn eval_if_condition_bool(text : String, ctx : IfConditionContext) -> Bool {
     None => ()
   }
   if trimmed.has_prefix("!") {
-    return not(
-      eval_if_condition_bool(if_text_slice(trimmed, 1, trimmed.length()), ctx),
+    return !eval_if_condition_bool(
+      if_text_slice(trimmed, 1, trimmed.length()),
+      ctx,
     )
   }
   if_condition_value_truthy(if_condition_atom_value(trimmed, ctx))

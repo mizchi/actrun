@@ -70,16 +70,14 @@ pub struct ActionRefToResolve {
   job_id : String
   step_index : Int
   is_sha_pinned : Bool
-}
-pub impl Show for ActionRefToResolve
+} derive(Show)
 
 pub struct ActionResolution {
   uses : String
   sha : String
   exists : Bool
   error : String
-}
-pub impl Show for ActionResolution
+} derive(Show)
 
 pub enum BinaryOp {
   OpAnd
@@ -90,9 +88,7 @@ pub enum BinaryOp {
   OpLe
   OpGt
   OpGe
-}
-pub impl Eq for BinaryOp
-pub impl Show for BinaryOp
+} derive(Eq, Show)
 
 pub enum Expr {
   Literal(ExprLiteral)
@@ -102,18 +98,14 @@ pub enum Expr {
   UnaryOp(UnaryOp, Expr)
   BinaryOp(BinaryOp, Expr, Expr)
   FunctionCall(String, Array[Expr])
-}
-pub impl Eq for Expr
-pub impl Show for Expr
+} derive(Eq, Show)
 
 pub enum ExprLiteral {
   LitString(String)
   LitNumber(String)
   LitBool(Bool)
   LitNull
-}
-pub impl Eq for ExprLiteral
-pub impl Show for ExprLiteral
+} derive(Eq, Show)
 
 pub enum ExprType {
   TyAny
@@ -123,9 +115,7 @@ pub enum ExprType {
   TyString
   TyArray(ExprType)
   TyObject(ObjectKind)
-}
-pub impl Eq for ExprType
-pub impl Show for ExprType
+} derive(Eq, Show)
 
 pub struct LintContext {
   contexts : Map[String, ExprType]
@@ -138,38 +128,29 @@ pub struct LintDiagnostic {
   job_id : String
   step_index : Int
   field : String
-}
+} derive(Eq, Show)
 pub fn LintDiagnostic::format(Self) -> String
-pub impl Eq for LintDiagnostic
-pub impl Show for LintDiagnostic
 
 pub struct LintOptions {
   strict : Bool
   online : Bool
   yaml_text : String
-}
-pub impl Show for LintOptions
+} derive(Show)
 
 pub enum ObjectKind {
   Strict(Map[String, ExprType])
   Loose(Map[String, ExprType], ExprType)
   MapObj(ExprType)
-}
-pub impl Eq for ObjectKind
-pub impl Show for ObjectKind
+} derive(Eq, Show)
 
 pub enum Severity {
   Error
   Warning
-}
-pub impl Eq for Severity
-pub impl Show for Severity
+} derive(Eq, Show)
 
 pub enum UnaryOp {
   OpNot
-}
-pub impl Eq for UnaryOp
-pub impl Show for UnaryOp
+} derive(Eq, Show)
 
 // Type aliases
 

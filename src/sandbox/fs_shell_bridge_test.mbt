@@ -56,7 +56,9 @@ test "fs_shell_env: mkdir and cd" {
 test "fs_shell_env: GITHUB_OUTPUT pattern" {
   let fs = MemFs::new()
   fs.write("/workspace/github_output", "", false)
-  let vars : Map[String, String] = { "GITHUB_OUTPUT": "/workspace/github_output" }
+  let vars : Map[String, String] = {
+    "GITHUB_OUTPUT": "/workspace/github_output",
+  }
   let env = new_fs_shell_env(fs, vars)
   ignore(@actrun.shell_exec(env, "echo \"key=value\" >> $GITHUB_OUTPUT"))
   let content = fs.read("/workspace/github_output").unwrap()

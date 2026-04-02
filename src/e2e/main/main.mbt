@@ -103,16 +103,16 @@ fn e2e_ensure_dir(path : String) -> Unit {
     return
   }
   let parent = e2e_parent_dir(path)
-  if parent != path && parent != "." && not(@xfs.path_exists(parent)) {
+  if parent != path && parent != "." && !@xfs.path_exists(parent) {
     e2e_ensure_dir(parent)
   }
-  if not(@xfs.path_exists(path)) {
+  if !@xfs.path_exists(path) {
     let ok = try @xfs.create_dir(path) catch {
       _ => false
     } noraise {
       _ => true
     }
-    if not(ok) {
+    if !ok {
       abort("failed to create dir: " + path)
     }
   }
@@ -120,7 +120,7 @@ fn e2e_ensure_dir(path : String) -> Unit {
 
 ///|
 fn e2e_remove_tree(path : String) -> Unit {
-  if not(@xfs.path_exists(path)) {
+  if !@xfs.path_exists(path) {
     return
   }
   if e2e_is_dir(path) {
@@ -132,7 +132,7 @@ fn e2e_remove_tree(path : String) -> Unit {
     } noraise {
       _ => true
     }
-    if not(ok) {
+    if !ok {
       abort("failed to remove dir: " + path)
     }
   } else {
@@ -141,7 +141,7 @@ fn e2e_remove_tree(path : String) -> Unit {
     } noraise {
       _ => true
     }
-    if not(ok) {
+    if !ok {
       abort("failed to remove file: " + path)
     }
   }
@@ -150,7 +150,7 @@ fn e2e_remove_tree(path : String) -> Unit {
 ///|
 fn e2e_copy_tree(src : String, dst : String) -> Unit {
   if e2e_is_dir(src) {
-    if not(@xfs.path_exists(dst)) {
+    if !@xfs.path_exists(dst) {
       e2e_ensure_dir(dst)
     }
     for entry in e2e_read_dir(src) {
@@ -158,7 +158,7 @@ fn e2e_copy_tree(src : String, dst : String) -> Unit {
     }
     let github_dir = e2e_join_path(src, ".github")
     let dst_github_dir = e2e_join_path(dst, ".github")
-    if @xfs.path_exists(github_dir) && not(@xfs.path_exists(dst_github_dir)) {
+    if @xfs.path_exists(github_dir) && !@xfs.path_exists(dst_github_dir) {
       e2e_copy_tree(github_dir, dst_github_dir)
     }
   } else {
@@ -170,7 +170,7 @@ fn e2e_copy_tree(src : String, dst : String) -> Unit {
     } noraise {
       _ => true
     }
-    if not(ok) {
+    if !ok {
       abort("failed to copy file to: " + dst)
     }
   }
@@ -213,7 +213,7 @@ fn e2e_expect_contains(
   needle : String,
   context : String,
 ) -> Unit {
-  if not(text.contains(needle)) {
+  if !text.contains(needle) {
     abort(context + ": missing <" + needle + "> in\n" + text)
   }
 }
@@ -845,7 +845,7 @@ fn e2e_write_repo_file(repo_root : String, file : E2eRepoFile) -> Unit {
   } noraise {
     _ => true
   }
-  if not(ok) {
+  if !ok {
     abort("failed to write repo file: " + path)
   }
 }
@@ -873,7 +873,7 @@ fn e2e_commit_repo_files(
   } noraise {
     _ => true
   }
-  if not(add_ok) {
+  if !add_ok {
     abort("bit add failed for repo: " + repo_root)
   }
   let commit_id = @bitlib.commit(

@@ -1116,7 +1116,7 @@ fn convert_github_output(
   step_id : String,
   _job_id : String,
 ) -> String {
-  if not(script.contains("GITHUB_OUTPUT")) && not(script.contains("GITHUB_ENV")) {
+  if !script.contains("GITHUB_OUTPUT") && !script.contains("GITHUB_ENV") {
     return script
   }
   let lines : Array[String] = []
@@ -1312,7 +1312,7 @@ fn shell_quote(s : String) -> String {
       break
     }
   }
-  if not(needs_quote) {
+  if !needs_quote {
     return s
   }
   "\"" + s + "\""

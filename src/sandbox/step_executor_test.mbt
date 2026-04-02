@@ -41,11 +41,9 @@ test "execute_shell_step: GITHUB_ENV parsing" {
 ///|
 test "execute_shell_step: custom env" {
   let fs = MemFs::new()
-  let result = execute_shell_step(
-    "echo \"hello $NAME\"",
-    fs,
-    env={ "NAME": "world" },
-  )
+  let result = execute_shell_step("echo \"hello $NAME\"", fs, env={
+    "NAME": "world",
+  })
   inspect(result.stdout, content="hello world\n")
 }
 

@@ -7,7 +7,7 @@ pub fn check_semantics(workflow : @ar.WorkflowSpec) -> Array[LintDiagnostic] {
     for i, step in job.steps {
       match step.uses {
         Option::Some(uses_str) =>
-          if not(is_valid_uses(uses_str)) {
+          if !is_valid_uses(uses_str) {
             diagnostics.push({
               severity: Error,
               code: "invalid-uses",

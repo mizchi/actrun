@@ -30,9 +30,7 @@ pub struct StepResult {
   stderr : String
   outputs : Map[String, String]
   env_updates : Map[String, String]
-}
-pub impl Show for StepResult
-pub impl ToJson for StepResult
+} derive(Show, ToJson)
 
 // Type aliases
 

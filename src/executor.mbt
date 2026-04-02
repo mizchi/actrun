@@ -468,7 +468,7 @@ fn apply_job_runtime_updates(
 
 ///|
 fn ensure_exec_dir_impl(path : String) -> Unit raise {
-  if not(@xfs.path_exists(path)) {
+  if !@xfs.path_exists(path) {
     @xfs.create_dir(path)
   }
 }
@@ -2334,7 +2334,7 @@ fn evaluate_virtual_job_outputs(
     while idx > 0 {
       idx -= 1
       let job_id = completed_job_order[idx]
-      if not(array_contains_string(targets, job_id)) {
+      if !array_contains_string(targets, job_id) {
         continue
       }
       if completed_job_results.get(job_id).unwrap_or("") != "success" {
@@ -2374,7 +2374,7 @@ fn materialize_virtual_jobs(
       let needs_results = job_needs_results(plan, job_id, completed_job_results)
       let ready = needs_results.length() ==
         plan.job_virtual_targets.get(job_id).unwrap_or([]).length()
-      if not(ready) {
+      if !ready {
         continue
       }
       let needs_outputs = job_needs_outputs(plan, job_id, completed_job_outputs)
@@ -2430,6 +2430,7 @@ fn task_report_success(
     kind: plan.kind,
     status: "success",
     code: 0,
+    duration_ms: 0UL,
     shell: plan.shell,
     script: plan.script,
     cwd: resolve_task_cwd(workspace_root, plan.working_directory),
@@ -2450,6 +2451,7 @@ fn task_report_failure(
     kind: plan.kind,
     status: "failed",
     code: 1,
+    duration_ms: 0UL,
     shell: plan.shell,
     script: plan.script,
     cwd: resolve_task_cwd(workspace_root, plan.working_directory),
@@ -2485,6 +2487,7 @@ fn task_report_skipped(
     kind: plan.kind,
     status: "skipped",
     code: 0,
+    duration_ms: 0UL,
     shell: plan.shell,
     script: plan.script,
     cwd: resolve_task_cwd(workspace_root, plan.working_directory),
@@ -2505,6 +2508,7 @@ fn task_report_cancelled(
     kind: plan.kind,
     status: "cancelled",
     code: 1,
+    duration_ms: 0UL,
     shell: plan.shell,
     script: plan.script,
     cwd: resolve_task_cwd(workspace_root, plan.working_directory),
@@ -2520,7 +2524,7 @@ fn ensure_exec_dir_recursive(path : String) -> Bool {
     return true
   }
   let parent = artifact_parent_dir(path)
-  if parent != path && not(ensure_exec_dir_recursive(parent)) {
+  if parent != path && !ensure_exec_dir_recursive(parent) {
     return false
   }
   ensure_exec_dir(path)
@@ -2537,7 +2541,7 @@ fn exec_is_dir(path : String) -> Bool {
 
 ///|
 fn exec_remove_tree(path : String) -> Bool {
-  if not(@xfs.path_exists(path)) {
+  if !@xfs.path_exists(path) {
     return true
   }
   // Try remove_file first — this handles regular files AND symlinks.
@@ -2559,7 +2563,7 @@ fn exec_remove_tree(path : String) -> Bool {
       value => value
     }
     for entry in entries {
-      if not(exec_remove_tree(path + "/" + entry)) {
+      if !exec_remove_tree(path + "/" + entry) {
         return false
       }
     }
@@ -2592,7 +2596,7 @@ fn exec_leaf_name(path : String) -> String {
 ///|
 fn exec_copy_tree(src : String, dst : String) -> Bool {
   if exec_is_dir(src) {
-    if not(ensure_exec_dir_recursive(dst)) {
+    if !ensure_exec_dir_recursive(dst) {
       return false
     }
     let entries = try @xfs.read_dir(src) catch {
@@ -2601,13 +2605,13 @@ fn exec_copy_tree(src : String, dst : String) -> Bool {
       value => value
     }
     for entry in entries {
-      if not(exec_copy_tree(src + "/" + entry, dst + "/" + entry)) {
+      if !exec_copy_tree(src + "/" + entry, dst + "/" + entry) {
         return false
       }
     }
     true
   } else {
-    if not(ensure_exec_dir_recursive(artifact_parent_dir(dst))) {
+    if !ensure_exec_dir_recursive(artifact_parent_dir(dst)) {
       return false
     }
     try @xfs.write_bytes_to_file(dst, @xfs.read_file_to_bytes(src)) catch {
@@ -2620,7 +2624,7 @@ fn exec_copy_tree(src : String, dst : String) -> Bool {
 
 ///|
 fn exec_clear_dir_contents(path : String) -> Bool {
-  if not(ensure_exec_dir_recursive(path)) {
+  if !ensure_exec_dir_recursive(path) {
     return false
   }
   let entries = try @xfs.read_dir(path) catch {
@@ -2633,7 +2637,7 @@ fn exec_clear_dir_contents(path : String) -> Bool {
     if entry == ".git" {
       continue
     }
-    if not(exec_remove_tree(path + "/" + entry)) {
+    if !exec_remove_tree(path + "/" + entry) {
       return false
     }
   }
@@ -2642,7 +2646,7 @@ fn exec_clear_dir_contents(path : String) -> Bool {
 
 ///|
 fn exec_copy_dir_contents(src : String, dst : String) -> Bool {
-  if not(exec_clear_dir_contents(dst)) {
+  if !exec_clear_dir_contents(dst) {
     return false
   }
   let entries = try @xfs.read_dir(src) catch {
@@ -2651,7 +2655,7 @@ fn exec_copy_dir_contents(src : String, dst : String) -> Bool {
     value => value
   }
   for entry in entries {
-    if not(exec_copy_tree(src + "/" + entry, dst + "/" + entry)) {
+    if !exec_copy_tree(src + "/" + entry, dst + "/" + entry) {
       return false
     }
   }
@@ -3031,7 +3035,7 @@ async fn execute_wasm_action_native(
     .get("ACTRUN_WASM_SKIP_VALIDATE")
     .unwrap_or(@xsys.get_env_var("ACTRUN_WASM_SKIP_VALIDATE").unwrap_or("")) ==
     "true"
-  if not(skip_validate) {
+  if !skip_validate {
     let wasm_bytes_opt : Bytes? = try
       @xfs.read_file_to_bytes(abs_module_path)
     catch {
@@ -3042,7 +3046,7 @@ async fn execute_wasm_action_native(
     match wasm_bytes_opt {
       Some(wasm_bytes) => {
         let info = inspect_wasm_module(wasm_bytes)
-        if not(info.valid) {
+        if !info.valid {
           return failure_execution_result(
             plan,
             workspace_root,
@@ -3092,6 +3096,7 @@ async fn execute_wasm_action_native(
         "failed"
       },
       code,
+      duration_ms: 0UL,
       shell: wasm_bin,
       script: abs_module_path,
       cwd,
@@ -3168,6 +3173,7 @@ async fn execute_node_action_native(
         "failed"
       },
       code,
+      duration_ms: 0UL,
       shell: plan.shell,
       script: plan.script,
       cwd,
@@ -3232,6 +3238,7 @@ async fn execute_docker_action_native(
           kind: plan.kind,
           status: "failed",
           code: build_code,
+          duration_ms: 0UL,
           shell: plan.shell,
           script: plan.script,
           cwd: action_root,
@@ -3302,6 +3309,7 @@ async fn execute_docker_action_native(
         "failed"
       },
       code,
+      duration_ms: 0UL,
       shell: plan.shell,
       script: plan.script,
       cwd: container_cwd,
@@ -3419,6 +3427,7 @@ async fn execute_job_container_node_action_native(
         "failed"
       },
       code,
+      duration_ms: 0UL,
       shell: plan.shell,
       script: plan.script,
       cwd: container_cwd,
@@ -3532,6 +3541,7 @@ async fn execute_job_container_run_native(
         "failed"
       },
       code,
+      duration_ms: 0UL,
       shell: cmd,
       script: resolved_script,
       cwd: container_cwd,
@@ -4122,6 +4132,7 @@ async fn execute_task_plan_native(
         "failed"
       },
       code,
+      duration_ms: 0UL,
       shell: cmd,
       script: resolved_script,
       cwd,
@@ -4318,6 +4329,7 @@ pub async fn execute_lowered_native(
               id: task.id,
               status: "cancelled",
               required: task.required,
+              duration_ms: 0UL,
               message,
             })
             if plan.kind == "barrier" {
@@ -4330,11 +4342,12 @@ pub async fn execute_lowered_native(
               id: task.id,
               status: "cancelled",
               required: task.required,
+              duration_ms: 0UL,
               message: "cancelled by matrix fail-fast",
             })
         }
         success[task.id] = false
-      } else if not(job_should_run) {
+      } else if !job_should_run {
         match plan_opt {
           Some(plan) => {
             let message = "job if condition evaluated to false"
@@ -4343,6 +4356,7 @@ pub async fn execute_lowered_native(
               id: task.id,
               status: "skipped",
               required: task.required,
+              duration_ms: 0UL,
               message,
             })
             if plan.kind == "barrier" {
@@ -4355,6 +4369,7 @@ pub async fn execute_lowered_native(
               id: task.id,
               status: "skipped",
               required: task.required,
+              duration_ms: 0UL,
               message: "job if condition evaluated to false",
             })
         }
@@ -4365,7 +4380,7 @@ pub async fn execute_lowered_native(
           if selected.get(dep) is None {
             continue
           }
-          if not(success.get(dep).unwrap_or(false)) {
+          if !success.get(dep).unwrap_or(false) {
             blocked_deps.push(dep)
           }
         }
@@ -4374,7 +4389,7 @@ pub async fn execute_lowered_native(
           None => false
         }
         let step_should_run = match plan_opt {
-          Some(plan) if not(is_barrier) => {
+          Some(plan) if !is_barrier => {
             let github_ctx = github_context(
               ir.name,
               plan,
@@ -4412,7 +4427,7 @@ pub async fn execute_lowered_native(
           }
           _ => true
         }
-        if not(is_barrier) && not(step_should_run) {
+        if !is_barrier && !step_should_run {
           match plan_opt {
             Some(plan) => {
               let message = "step if condition evaluated to false"
@@ -4432,6 +4447,7 @@ pub async fn execute_lowered_native(
                 id: task.id,
                 status: "skipped",
                 required: task.required,
+                duration_ms: 0UL,
                 message,
               })
             }
@@ -4440,6 +4456,7 @@ pub async fn execute_lowered_native(
                 id: task.id,
                 status: "skipped",
                 required: task.required,
+                duration_ms: 0UL,
                 message: "step if condition evaluated to false",
               })
           }
@@ -4449,6 +4466,7 @@ pub async fn execute_lowered_native(
             id: task.id,
             status: "blocked",
             required: task.required,
+            duration_ms: 0UL,
             message: "blocked by dependency: " + blocked_deps.join(", "),
           })
           match plan_opt {
@@ -4466,7 +4484,7 @@ pub async fn execute_lowered_native(
           match plan_opt {
             Some(plan) => {
               if plan.requires_action_started &&
-                not(action_scope_started(current_state, plan.action_scope)) {
+                !action_scope_started(current_state, plan.action_scope) {
                 reports.push(
                   task_report_skipped(
                     plan, workspace_root, "action lifecycle was not started",
@@ -4487,6 +4505,7 @@ pub async fn execute_lowered_native(
                   id: task.id,
                   status: "skipped",
                   required: task.required,
+                  duration_ms: 0UL,
                   message: "action lifecycle was not started",
                 })
                 success[task.id] = true
@@ -4533,6 +4552,7 @@ pub async fn execute_lowered_native(
                         id: task.id,
                         status: "failed",
                         required: task.required,
+                        duration_ms: 0UL,
                         message,
                       })
                       success[task.id] = false
@@ -4549,6 +4569,7 @@ pub async fn execute_lowered_native(
                 }
                 started_job_tasks[plan.job_id] = true
               }
+              let task_started_at_ms = @env.now()
               let result = execute_task_plan_native(
                 ir.name,
                 plan,
@@ -4564,7 +4585,11 @@ pub async fn execute_lowered_native(
                 sandbox_config~,
                 allow_destructive_checkout_clean~,
               )
-              let report = result.report
+              let task_finished_at_ms = @env.now()
+              let report = {
+                ..result.report,
+                duration_ms: task_finished_at_ms - task_started_at_ms,
+              }
               reports.push(report)
               let github_ctx = github_context(
                 ir.name,
@@ -4640,6 +4665,7 @@ pub async fn execute_lowered_native(
                   id: task.id,
                   status: "success",
                   required: task.required,
+                  duration_ms: report.duration_ms,
                   message: report.stdout,
                 })
                 success[task.id] = true
@@ -4659,6 +4685,7 @@ pub async fn execute_lowered_native(
                   id: task.id,
                   status: "skipped",
                   required: task.required,
+                  duration_ms: report.duration_ms,
                   message,
                 })
                 success[task.id] = true
@@ -4678,6 +4705,7 @@ pub async fn execute_lowered_native(
                   id: task.id,
                   status: "cancelled",
                   required: task.required,
+                  duration_ms: report.duration_ms,
                   message,
                 })
                 success[task.id] = false
@@ -4700,6 +4728,7 @@ pub async fn execute_lowered_native(
                   id: task.id,
                   status: "failed",
                   required: task.required,
+                  duration_ms: report.duration_ms,
                   message,
                 })
                 success[task.id] = task_conclusion_allows_dependents(conclusion)
@@ -4714,7 +4743,7 @@ pub async fn execute_lowered_native(
                     .unwrap_or(false) {
                     for job_member in matrix_groups.get(group).unwrap_or([]) {
                       if job_member != plan.job_id &&
-                        not(started_jobs.get(job_member).unwrap_or(false)) {
+                        !started_jobs.get(job_member).unwrap_or(false) {
                         cancelled_matrix_jobs[job_member] = true
                       }
                     }
@@ -4727,6 +4756,7 @@ pub async fn execute_lowered_native(
                 id: task.id,
                 status: "failed",
                 required: task.required,
+                duration_ms: 0UL,
                 message: "missing task plan",
               })
               success[task.id] = false
@@ -4769,7 +4799,7 @@ pub async fn execute_lowered_native(
   }
 
   {
-    ok: not(required_failed),
+    ok: !required_failed,
     state: if required_failed {
       "partial_failed"
     } else {
@@ -4794,7 +4824,7 @@ pub fn cleanup_run_temp_files(workspace_root : String) -> Unit {
 ///|
 fn cleanup_dir_entries_by_prefix(dir : String, prefix : String) -> Unit {
   let abs_dir = absolute_exec_path(dir)
-  if not(exec_is_dir(abs_dir)) {
+  if !exec_is_dir(abs_dir) {
     return
   }
   let entries = try @xfs.read_dir(abs_dir) catch {

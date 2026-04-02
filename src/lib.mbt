@@ -407,7 +407,7 @@ pub fn filter_workflow_steps(
   for job in workflow.jobs {
     let filtered_steps : Array[StepSpec] = []
     for step in job.steps {
-      if not(step_matches_skip_pattern(step, skip_patterns)) {
+      if !step_matches_skip_pattern(step, skip_patterns) {
         filtered_steps.push(step)
       }
     }
@@ -473,7 +473,7 @@ pub fn filter_workflow_jobs(
         break
       }
     }
-    if not(should_skip) {
+    if !should_skip {
       filtered_jobs.push(job)
     }
   }
@@ -722,6 +722,7 @@ pub struct TaskRunReport {
   kind : String
   status : String
   code : Int
+  duration_ms : UInt64
   shell : String
   script : String
   cwd : String
@@ -735,6 +736,7 @@ pub struct WorkflowStepReport {
   id : String
   status : String
   required : Bool
+  duration_ms : UInt64
   message : String
 }
 

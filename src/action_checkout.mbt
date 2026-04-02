@@ -58,7 +58,7 @@ fn checkout_sparse_match(
   is_dir : Bool,
   cone_mode : Bool,
 ) -> Bool {
-  if cone_mode && not(is_dir) && not(relative_path.contains("/")) {
+  if cone_mode && !is_dir && !relative_path.contains("/") {
     return true
   }
   for raw_pattern in patterns {
@@ -93,6 +93,12 @@ fn exec_relative_path(root : String, path : String) -> String {
 }
 
 ///|
+#warnings("-deprecated")
+fn action_checkout_parse_int64(value : StringView) -> Int64 raise {
+  @strconv.parse_int64(value)
+}
+
+///|
 fn exec_copy_workspace_snapshot(
   workspace_root : String,
   destination : String,
@@ -105,10 +111,10 @@ fn exec_copy_workspace_snapshot(
     Some(segment) => segment.to_string()
     None => relative_destination
   }
-  if not(exec_remove_tree(destination)) {
+  if !exec_remove_tree(destination) {
     return false
   }
-  if not(ensure_exec_dir_recursive(destination)) {
+  if !ensure_exec_dir_recursive(destination) {
     return false
   }
   let entries = try @xfs.read_dir(workspace_root) catch {
@@ -120,9 +126,7 @@ fn exec_copy_workspace_snapshot(
     if entry == top_level {
       continue
     }
-    if not(
-        exec_copy_tree(workspace_root + "/" + entry, destination + "/" + entry),
-      ) {
+    if !exec_copy_tree(workspace_root + "/" + entry, destination + "/" + entry) {
       return false
     }
   }
@@ -147,7 +151,7 @@ fn exec_prune_sparse_checkout(
       let child = current + "/" + entry
       if exec_prune_sparse_checkout(root, child, patterns, cone_mode) {
         kept_entries.push(entry)
-      } else if not(exec_remove_tree(child)) {
+      } else if !exec_remove_tree(child) {
         return false
       }
     }
@@ -169,7 +173,7 @@ fn parse_checkout_fetch_depth(value : String) -> Int? {
   if trimmed.length() == 0 {
     return Some(1)
   }
-  let parsed = @strconv.parse_int64(trimmed) catch { _ => return None }
+  let parsed = action_checkout_parse_int64(trimmed) catch { _ => return None }
   if parsed < 0 {
     None
   } else {
@@ -250,13 +254,13 @@ async fn exec_git_clone_into(
   filter? : String = "",
 ) -> (Int, String, String) {
   let args : Array[String] = ["clone"]
-  if not(show_progress) {
+  if !show_progress {
     args.push("--quiet")
   } else {
     args.push("--progress")
   }
   args.push("--no-local")
-  if not(fetch_tags) {
+  if !fetch_tags {
     args.push("--no-tags")
   }
   if fetch_depth > 0 {
@@ -313,7 +317,7 @@ async fn exec_git_update_submodules(
 /// Preserves all existing files including .git, untracked files, and
 /// tracked files that are not in the clone.
 fn exec_overwrite_from_clone(src : String, dst : String) -> Bool {
-  if not(ensure_exec_dir_recursive(dst)) {
+  if !ensure_exec_dir_recursive(dst) {
     return false
   }
   let entries = try @xfs.read_dir(src) catch {
@@ -326,7 +330,7 @@ fn exec_overwrite_from_clone(src : String, dst : String) -> Bool {
     if entry == ".git" {
       continue
     }
-    if not(exec_copy_tree(src + "/" + entry, dst + "/" + entry)) {
+    if !exec_copy_tree(src + "/" + entry, dst + "/" + entry) {
       return false
     }
   }
@@ -335,7 +339,7 @@ fn exec_overwrite_from_clone(src : String, dst : String) -> Bool {
 
 ///|
 fn exec_remove_checkout_contents_preserving_git(root : String) -> Bool {
-  if not(ensure_exec_dir_recursive(root)) {
+  if !ensure_exec_dir_recursive(root) {
     return false
   }
   let entries = try @xfs.read_dir(root) catch {
@@ -347,7 +351,7 @@ fn exec_remove_checkout_contents_preserving_git(root : String) -> Bool {
     if entry == ".git" {
       continue
     }
-    if not(exec_remove_tree(root + "/" + entry)) {
+    if !exec_remove_tree(root + "/" + entry) {
       return false
     }
   }
@@ -442,7 +446,7 @@ async fn exec_git_clone_checkout(
       }
     }
   }
-  if not(clone_ready) {
+  if !clone_ready {
     let (clone_code, clone_stdout, clone_stderr) = exec_git_clone_into(
       git_bin,
       source_root,
@@ -550,7 +554,7 @@ async fn exec_git_clone_checkout(
     )
   }
   // persist-credentials: false removes the credential helper
-  if not(persist_credentials) {
+  if !persist_credentials {
     ignore(
       exec_git_command_text(
         git_bin,
@@ -577,11 +581,11 @@ async fn exec_git_clone_checkout(
     }
   }
   let preserve_local_files = checkout_root == source_root &&
-    not(allow_destructive_clean)
+    !allow_destructive_clean
   if preserve_local_files {
     // Local mode: never delete any files — only overwrite with new content.
     // This prevents accidental data loss when running in the user's working directory.
-    if not(exec_overwrite_from_clone(temp_root, checkout_root)) {
+    if !exec_overwrite_from_clone(temp_root, checkout_root) {
       return Some(
         task_report_failure(
           plan, workspace_root, "failed to materialize checkout contents",
@@ -591,14 +595,14 @@ async fn exec_git_clone_checkout(
     return None
   }
   if checkout_root == source_root {
-    if clean && not(exec_remove_checkout_contents_preserving_git(checkout_root)) {
+    if clean && !exec_remove_checkout_contents_preserving_git(checkout_root) {
       return Some(
         task_report_failure(
           plan, workspace_root, "failed to clean checkout contents",
         ),
       )
     }
-    if not(exec_overwrite_from_clone(temp_root, checkout_root)) {
+    if !exec_overwrite_from_clone(temp_root, checkout_root) {
       return Some(
         task_report_failure(
           plan, workspace_root, "failed to materialize checkout contents",
@@ -607,14 +611,14 @@ async fn exec_git_clone_checkout(
     }
     return None
   }
-  if clean && not(exec_remove_tree(checkout_root)) {
+  if clean && !exec_remove_tree(checkout_root) {
     return Some(
       task_report_failure(
         plan, workspace_root, "failed to clean checkout contents",
       ),
     )
   }
-  if not(exec_copy_dir_contents(temp_root, checkout_root)) {
+  if !exec_copy_dir_contents(temp_root, checkout_root) {
     return Some(
       task_report_failure(
         plan, workspace_root, "failed to materialize checkout contents",
@@ -726,7 +730,7 @@ async fn execute_builtin_checkout_native(
       None => ()
     }
   } else if path_input.length() > 0 &&
-    not(exec_copy_workspace_snapshot(workspace_root, checkout_root)) {
+    !exec_copy_workspace_snapshot(workspace_root, checkout_root) {
     return task_report_failure(
       plan,
       workspace_root,
@@ -735,10 +739,8 @@ async fn execute_builtin_checkout_native(
   }
   let sparse_patterns = split_nonempty_lines(sparse_input)
   if sparse_patterns.length() > 0 &&
-    not(
-      exec_prune_sparse_checkout(
-        checkout_root, checkout_root, sparse_patterns, cone_mode,
-      ),
+    !exec_prune_sparse_checkout(
+      checkout_root, checkout_root, sparse_patterns, cone_mode,
     ) {
     return task_report_failure(
       plan, workspace_root, "failed to apply sparse-checkout",

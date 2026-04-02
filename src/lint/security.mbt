@@ -262,7 +262,7 @@ fn check_pull_request_target_permissions(
     return
   }
   // Check if yaml contains pull_request_target trigger
-  if not(yaml_text.contains("pull_request_target")) {
+  if !yaml_text.contains("pull_request_target") {
     return
   }
   // pull_request_target is present — check for permissions
@@ -277,7 +277,7 @@ fn check_pull_request_target_permissions(
           break
         }
       }
-      if not(all_jobs_have_perms) {
+      if !all_jobs_have_perms {
         diagnostics.push({
           severity: Warning,
           code: "missing-prt-permissions",
@@ -352,7 +352,7 @@ fn check_dangerous_checkout_in_prt(
   yaml_text : String,
   diagnostics : Array[LintDiagnostic],
 ) -> Unit {
-  if yaml_text.length() == 0 || not(yaml_text.contains("pull_request_target")) {
+  if yaml_text.length() == 0 || !yaml_text.contains("pull_request_target") {
     return
   }
   for job in workflow.jobs {

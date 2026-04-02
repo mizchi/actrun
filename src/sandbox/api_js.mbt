@@ -23,7 +23,10 @@ fn plan_handler(yaml_text : String) -> String {
 ///|
 /// Extract string-valued entries from a JSON object into a Map.
 #cfg(target="js")
-fn extract_string_map(m : Map[String, Json], key : String) -> Map[String, String] {
+fn extract_string_map(
+  m : Map[String, Json],
+  key : String,
+) -> Map[String, String] {
   let result : Map[String, String] = {}
   match m.get(key) {
     Some(Object(e)) =>
@@ -53,9 +56,7 @@ fn exec_shell_handler(config_json : String) -> String {
   let config : Json = @json.parse(config_json) catch {
     _ => return "{\"error\":\"invalid json\"}"
   }
-  guard config is Object(m) else {
-    return "{\"error\":\"invalid config\"}"
-  }
+  guard config is Object(m) else { return "{\"error\":\"invalid config\"}" }
   let script = match m.get("script") {
     Some(String(s)) => s
     _ => return "{\"error\":\"script required\"}"
@@ -276,9 +277,7 @@ fn exec_wasm_handler(config_json : String) -> String {
   let config : Json = @json.parse(config_json) catch {
     _ => return "{\"error\":\"invalid json\"}"
   }
-  guard config is Object(m) else {
-    return "{\"error\":\"invalid config\"}"
-  }
+  guard config is Object(m) else { return "{\"error\":\"invalid config\"}" }
   let module_id = match m.get("module_id") {
     Some(String(s)) => s
     _ => return "{\"error\":\"module_id required\"}"

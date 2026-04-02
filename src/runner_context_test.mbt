@@ -1,6 +1,6 @@
 ///|
 fn ensure_runner_context_dir(path : String) -> Unit raise {
-  if not(@xfs.path_exists(path)) {
+  if !@xfs.path_exists(path) {
     @xfs.create_dir(path)
   }
 }

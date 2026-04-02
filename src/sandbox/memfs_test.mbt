@@ -107,10 +107,7 @@ test "parse_key_values: value contains equals" {
   let fs = MemFs::new()
   fs.write("/out", "url=https://example.com?a=1&b=2\n", false)
   let kv = parse_key_values(fs, "/out")
-  inspect(
-    kv.get("url"),
-    content="Some(\"https://example.com?a=1&b=2\")",
-  )
+  inspect(kv.get("url"), content="Some(\"https://example.com?a=1&b=2\")")
 }
 
 ///|

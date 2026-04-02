@@ -415,7 +415,7 @@ fn matrix_expr_name(expression : String) -> String? {
     let key = text_slice(trimmed, 7, trimmed.length())
     let mut i = 0
     while i < key.length() {
-      if not(is_matrix_ident_code(key.unsafe_get(i))) {
+      if !is_matrix_ident_code(key.unsafe_get(i)) {
         return None
       }
       i += 1
@@ -934,7 +934,7 @@ fn workflow_call_number_literal_is_valid(value : String) -> Bool {
       idx += 1
       continue
     }
-    if ch == '.'.to_int().to_uint16() && not(has_dot) {
+    if ch == '.'.to_int().to_uint16() && !has_dot {
       has_dot = true
       idx += 1
       continue
@@ -1422,7 +1422,7 @@ fn expand_reusable_workflows_in_workspace(
                   )
                 }
                 guard parsed.workflow is Some(callee) else { continue }
-                if not(callee.workflow_call) {
+                if !callee.workflow_call {
                   errors.push(
                     "job '\{job.id}' reusable workflow '\{path}' must use on: workflow_call",
                   )
@@ -1785,7 +1785,7 @@ fn validate_step_if(
   if_condition : String,
   errors : Array[String],
 ) -> Unit {
-  if not(if_condition_supported(if_condition)) {
+  if !if_condition_supported(if_condition) {
     errors.push(
       "step '\{job_id}/\{step_id}' if='\{if_condition}' is not supported in MVP",
     )
@@ -1798,7 +1798,7 @@ fn validate_job_if(
   if_condition : String,
   errors : Array[String],
 ) -> Unit {
-  if not(if_condition_supported(if_condition)) {
+  if !if_condition_supported(if_condition) {
     errors.push("job '\{job_id}' if='\{if_condition}' is not supported in MVP")
   }
 }
@@ -1810,7 +1810,7 @@ fn validate_continue_on_error(
   continue_on_error : String,
   errors : Array[String],
 ) -> Unit {
-  if not(if_condition_supported(continue_on_error)) {
+  if !if_condition_supported(continue_on_error) {
     errors.push(
       "step '\{job_id}/\{step_id}' continue-on-error='\{continue_on_error}' is not supported in MVP",
     )

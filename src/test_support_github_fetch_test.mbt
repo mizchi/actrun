@@ -1,6 +1,6 @@
 ///|
 fn test_support_ensure_dir(path : String) -> Unit raise {
-  if not(@xfs.path_exists(path)) {
+  if !@xfs.path_exists(path) {
     @xfs.create_dir(path)
   }
 }
@@ -34,7 +34,7 @@ async fn test_support_make_executable(path : String) -> Unit {
 ///|
 #cfg(target="native")
 async fn test_support_remove_tree(path : String) -> Unit {
-  if not(@xfs.path_exists(path)) {
+  if !@xfs.path_exists(path) {
     return
   }
   let (code, _, stderr) = @process.collect_output("rm", ["-rf", path], cwd=".")

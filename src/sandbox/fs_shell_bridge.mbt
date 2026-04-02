@@ -2,7 +2,7 @@
 pub fn new_fs_shell_env(
   fs : &Fs,
   vars : Map[String, String],
-  cwd~ : String = "/workspace",
+  cwd? : String = "/workspace",
 ) -> @actrun.ShellEnv {
   @actrun.new_shell_env(
     vars,

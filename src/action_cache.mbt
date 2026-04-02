@@ -33,13 +33,19 @@ fn cache_store_path(workspace_root : String, key : String) -> String {
 }
 
 ///|
+#warnings("-deprecated")
+fn action_cache_parse_int64(value : StringView) -> Int64 raise {
+  @strconv.parse_int64(value)
+}
+
+///|
 fn read_exec_int(path : String) -> Int? {
   guard read_exec_text(path) is Some(content) else { return None }
   let trimmed = content.trim(chars=" \t\r\n").to_string()
   if trimmed.length() == 0 {
     return None
   }
-  let parsed = @strconv.parse_int64(trimmed) catch { _ => return None }
+  let parsed = action_cache_parse_int64(trimmed) catch { _ => return None }
   Some(parsed.to_int())
 }
 
@@ -53,15 +59,13 @@ fn write_cache_metadata(
       0,
     ) +
     1
-  if not(
-      write_exec_text(
-        cache_sequence_path(workspace_root),
-        next_sequence.to_string(),
-      ),
+  if !write_exec_text(
+      cache_sequence_path(workspace_root),
+      next_sequence.to_string(),
     ) {
     return false
   }
-  if not(write_exec_text(cache_key_metadata_path(cache_root), key)) {
+  if !write_exec_text(cache_key_metadata_path(cache_root), key) {
     return false
   }
   write_exec_text(
@@ -211,14 +215,14 @@ fn execute_save_cache_native(
     )
   }
   let cache_root = cache_store_path(workspace_root, key)
-  if not(exec_remove_tree(cache_root)) {
+  if !exec_remove_tree(cache_root) {
     return task_report_failure(
       plan,
       workspace_root,
       "failed to clear cache store for '\{key}'",
     )
   }
-  if not(ensure_exec_dir_recursive(cache_root)) {
+  if !ensure_exec_dir_recursive(cache_root) {
     return task_report_failure(
       plan,
       workspace_root,
@@ -228,7 +232,7 @@ fn execute_save_cache_native(
   let mut copied = false
   for input_path in cache_paths {
     let resolved_path = resolve_task_cwd(workspace_root, input_path)
-    if not(@xfs.path_exists(resolved_path)) {
+    if !@xfs.path_exists(resolved_path) {
       continue
     }
     guard workspace_relative_store_path(workspace_root, resolved_path)
@@ -240,7 +244,7 @@ fn execute_save_cache_native(
       )
     }
     let target = cache_root + "/" + relative_path
-    if not(exec_copy_tree(resolved_path, target)) {
+    if !exec_copy_tree(resolved_path, target) {
       return task_report_failure(
         plan,
         workspace_root,
@@ -249,14 +253,14 @@ fn execute_save_cache_native(
     }
     copied = true
   }
-  if not(copied) {
+  if !copied {
     return task_report_failure(
       plan,
       workspace_root,
       "cache-save found no files for '\{path_input}'",
     )
   }
-  if not(write_cache_metadata(workspace_root, key, cache_root)) {
+  if !write_cache_metadata(workspace_root, key, cache_root) {
     return task_report_failure(
       plan,
       workspace_root,
@@ -328,18 +332,16 @@ fn restore_cache_store_native(
         if root_entry.contains("..") {
           continue
         }
-        if not(
-            exec_copy_tree(
-              source + "/" + root_entry,
-              workspace_root + "/" + root_entry,
-            ),
+        if !exec_copy_tree(
+            source + "/" + root_entry,
+            workspace_root + "/" + root_entry,
           ) {
           return Err("failed to restore cache '\{matched_key}'")
         }
       }
     } else if entry.contains("..") {
       return Err("cache entry '\{entry}' contains invalid path component")
-    } else if not(exec_copy_tree(source, workspace_root + "/" + entry)) {
+    } else if !exec_copy_tree(source, workspace_root + "/" + entry) {
       return Err("failed to restore cache '\{matched_key}'")
     }
   }
@@ -489,7 +491,7 @@ fn execute_cache_post_save_native(
 ) -> TaskRunReport {
   let saved_state = action_scope_state(state, plan.action_scope)
   let save_always = saved_state.get("CACHE_SAVE_ALWAYS").unwrap_or("") == "true"
-  if not(save_always) {
+  if !save_always {
     if saved_state.get("CACHE_SKIP_POST").unwrap_or("") == "true" {
       return task_report_success(plan, workspace_root)
     }

@@ -1,6 +1,6 @@
 ///|
 fn ensure_dir(path : String) -> Unit raise {
-  if not(@xfs.path_exists(path)) {
+  if !@xfs.path_exists(path) {
     @xfs.create_dir(path)
   }
 }
@@ -57,7 +57,7 @@ fn executor_test_ensure_dir_all(path : String) -> Unit raise {
   if parent != path {
     executor_test_ensure_dir_all(parent)
   }
-  if not(@xfs.path_exists(path)) {
+  if !@xfs.path_exists(path) {
     @xfs.create_dir(path)
   }
 }
@@ -4702,13 +4702,11 @@ async test "executor: github repo docker action lifecycle shares GITHUB_STATE ac
 #cfg(target="native")
 fn check_no_workspace_entries(dir : String, workspace : String) -> Bool {
   let abs_dir = executor_test_absolute_path(dir)
-  if not(
-      try @xfs.is_dir(abs_dir) catch {
-        _ => false
-      } noraise {
-        v => v
-      },
-    ) {
+  if !(try @xfs.is_dir(abs_dir) catch {
+      _ => false
+    } noraise {
+      v => v
+    }) {
     return true
   }
   let entries = try @xfs.read_dir(abs_dir) catch {

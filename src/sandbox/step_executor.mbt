@@ -12,8 +12,8 @@ pub struct StepResult {
 pub fn execute_shell_step(
   script : String,
   fs : &Fs,
-  env~ : Map[String, String] = {},
-  workdir~ : String = "/workspace",
+  env? : Map[String, String] = {},
+  workdir? : String = "/workspace",
 ) -> StepResult {
   let output_path = workdir + "/github_output"
   let env_path = workdir + "/github_env"
@@ -34,7 +34,11 @@ pub fn execute_shell_step(
   let outputs = parse_key_values(fs, output_path)
   let env_updates = parse_key_values(fs, env_path)
   {
-    status: if exit_code == 0 { "success" } else { "failed" },
+    status: if exit_code == 0 {
+      "success"
+    } else {
+      "failed"
+    },
     exit_code,
     stdout,
     stderr,

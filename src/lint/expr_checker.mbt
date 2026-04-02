@@ -144,8 +144,8 @@ fn ExprChecker::check_binary(
         right_type != TyAny &&
         left_type != TyNull &&
         right_type != TyNull &&
-        not(left_type.is_assignable_to(right_type)) &&
-        not(right_type.is_assignable_to(left_type)) {
+        !left_type.is_assignable_to(right_type) &&
+        !right_type.is_assignable_to(left_type) {
         self.add_warning(
           "type-mismatch",
           "comparing \{format_type(left_type)} with \{format_type(right_type)}",

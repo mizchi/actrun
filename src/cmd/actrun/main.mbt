@@ -6,6 +6,7 @@ struct CliOptions {
   run_root : String?
   artifact_root : String?
   cache_root : String?
+  flow_cache_store : String?
   github_action_cache_root : String?
   registry_root : String?
   wasm_action_root : String?
@@ -19,6 +20,7 @@ struct CliOptions {
   changed_paths : Array[String]
   skip_actions : Array[String]
   dispatch_inputs : Map[String, String]
+  flow_signatures : Map[String, String]
   dry_run : Bool
   dump_context : Bool
   trust_actions : Bool
@@ -35,6 +37,12 @@ struct CliOptions {
   step_filter : String
   trigger : String
   include_dirty : Bool
+}
+
+///|
+#warnings("-deprecated")
+fn main_parse_int64(value : StringView) -> Int64 raise {
+  @strconv.parse_int64(value)
 }
 
 ///|
@@ -144,6 +152,13 @@ struct RunRecord {
 }
 
 ///|
+priv struct FlowCacheRecord {
+  store_path : String
+  plan_json : String?
+  writeback_json : String?
+}
+
+///|
 struct RunTaskFiles {
   stdout_path : String
   stderr_path : String
@@ -156,6 +171,7 @@ struct RunJobStepRecord {
   number : Int
   status : String
   conclusion : String
+  duration_ms : UInt64
 }
 
 ///|
@@ -278,6 +294,8 @@ fn usage_text() -> String {
   "  --job <id>                   Run only the specified job\n" +
   "  --step <id>                  Run only the specified step (use with --job)\n" +
   "  --trigger <event>            Force trigger type: push, pull_request, schedule, workflow_dispatch\n" +
+  "  --flow-cache-store <path>    Bitflow cache store JSON path\n" +
+  "  --flow-signature <key=value> Bitflow node signature (repeatable)\n" +
   "\n" +
   "Storage flags:\n" +
   "  --artifact-root <path>       Artifact storage root\n" +
@@ -382,7 +400,7 @@ async fn effective_workspace_mode(options : CliOptions) -> String {
     return mode
   }
   let source_root = local_workspace_root(options.workflow_path)
-  if not(git_is_repo_root(source_root)) {
+  if !git_is_repo_root(source_root) {
     "local"
   } else {
     mode
@@ -605,7 +623,7 @@ fn origin_remote_url_from_git_config(config_text : String) -> String? {
       in_origin = line == "[remote \"origin\"]"
       continue
     }
-    if not(in_origin) {
+    if !in_origin {
       continue
     }
     match line.find("=") {
@@ -926,10 +944,10 @@ fn ensure_dir(path : String) -> Unit raise {
     return
   }
   let parent = parent_dir(path)
-  if parent != path && not(@xfs.path_exists(parent)) {
+  if parent != path && !@xfs.path_exists(parent) {
     ensure_dir(parent)
   }
-  if not(@xfs.path_exists(path)) {
+  if !@xfs.path_exists(path) {
     @xfs.create_dir(path)
   }
 }
@@ -941,7 +959,7 @@ fn next_run_slot(run_root : String) -> (String, String) raise {
   while true {
     let run_id = "run-" + index.to_string()
     let run_dir = join_path(run_root, run_id)
-    if not(@xfs.path_exists(run_dir)) {
+    if !@xfs.path_exists(run_dir) {
       @xfs.create_dir(run_dir)
       return (run_id, run_dir)
     }
@@ -979,6 +997,357 @@ fn json_optional_string(value : String?) -> String {
   match value {
     Some(text) => json_string(text)
     None => "null"
+  }
+}
+
+///|
+fn flow_cache_record_json(record : FlowCacheRecord) -> String {
+  let parts : Array[String] = []
+  parts.push("\"store\": " + json_string(record.store_path))
+  match record.plan_json {
+    Some(text) => parts.push("\"plan\": " + text)
+    None => ()
+  }
+  match record.writeback_json {
+    Some(text) => parts.push("\"writeback\": " + text)
+    None => ()
+  }
+  "{ " + parts.join(", ") + " }"
+}
+
+///|
+fn flow_cache_task_is_barrier(task : @wf.FlowTask) -> Bool {
+  task.id.has_suffix("/__finish") || task.cmd == "__actrun_barrier__"
+}
+
+///|
+fn push_unique_string(values : Array[String], value : String) -> Unit {
+  if !values.contains(value) {
+    values.push(value)
+  }
+}
+
+///|
+fn flow_cache_task_map(
+  tasks : Array[@wf.FlowTask],
+) -> Map[String, @wf.FlowTask] {
+  let result : Map[String, @wf.FlowTask] = {}
+  for task in tasks {
+    result[task.id] = task
+  }
+  result
+}
+
+///|
+fn flow_cache_leaf_task_ids(
+  task_map : Map[String, @wf.FlowTask],
+  task_id : String,
+  seen : Map[String, Bool],
+) -> Array[String] {
+  if seen.get(task_id).unwrap_or(false) {
+    return []
+  }
+  seen[task_id] = true
+  match task_map.get(task_id) {
+    Some(task) =>
+      if flow_cache_task_is_barrier(task) {
+        let result : Array[String] = []
+        for need in task.needs {
+          for resolved in flow_cache_leaf_task_ids(task_map, need, seen) {
+            push_unique_string(result, resolved)
+          }
+        }
+        result
+      } else {
+        [task_id]
+      }
+    None => [task_id]
+  }
+}
+
+///|
+fn flatten_flow_cache_task_ids(
+  task_map : Map[String, @wf.FlowTask],
+  task_ids : Array[String],
+) -> Array[String] {
+  let result : Array[String] = []
+  let seen : Map[String, Bool] = {}
+  for task_id in task_ids {
+    for resolved in flow_cache_leaf_task_ids(task_map, task_id, seen) {
+      push_unique_string(result, resolved)
+    }
+  }
+  result
+}
+
+///|
+fn lowered_flow_cache_ir(lowered : @ar.LoweringResult) -> @wf.FlowIr {
+  let task_map = flow_cache_task_map(lowered.ir.tasks)
+  let tasks : Array[@wf.FlowTask] = []
+  for task in lowered.ir.tasks {
+    if flow_cache_task_is_barrier(task) {
+      continue
+    }
+    tasks.push(
+      @wf.new_task(
+        task.id,
+        task.node,
+        task.cmd,
+        flatten_flow_cache_task_ids(task_map, task.needs),
+        required=task.required,
+        srcs=task.srcs,
+        outs=task.outs,
+        env=task.env,
+        cwd=task.cwd,
+        trigger_mode=task.trigger_mode,
+      ),
+    )
+  }
+  @wf.new_ir(
+    lowered.ir.name,
+    lowered.ir.nodes,
+    tasks,
+    entry_targets=flatten_flow_cache_task_ids(
+      task_map,
+      lowered.ir.entry_targets,
+    ),
+    max_parallel=lowered.ir.max_parallel,
+  )
+}
+
+///|
+fn flow_cache_parent_signature_key(node_id : String) -> String? {
+  match node_id.find("__matrix_") {
+    Some(index) if index > 0 =>
+      Some(String::unsafe_substring(node_id, start=0, end=index))
+    _ =>
+      match node_id.find("__") {
+        Some(index) if index > 0 =>
+          Some(String::unsafe_substring(node_id, start=0, end=index))
+        _ => None
+      }
+  }
+}
+
+///|
+fn resolve_flow_cache_signatures(
+  lowered : @ar.LoweringResult,
+  requested : Map[String, String],
+) -> Map[String, String] {
+  let resolved : Map[String, String] = {}
+  let cache_ir = lowered_flow_cache_ir(lowered)
+  for node in cache_ir.nodes {
+    match requested.get(node.id) {
+      Some(signature) => {
+        resolved[node.id] = signature
+        continue
+      }
+      None => ()
+    }
+    match lowered.plan.job_matrix_groups.get(node.id) {
+      Some(group) =>
+        match requested.get(group) {
+          Some(signature) => {
+            resolved[node.id] = signature
+            continue
+          }
+          None => ()
+        }
+      None => ()
+    }
+    match flow_cache_parent_signature_key(node.id) {
+      Some(parent) =>
+        match requested.get(parent) {
+          Some(signature) => resolved[node.id] = signature
+          None => ()
+        }
+      None => ()
+    }
+  }
+  resolved
+}
+
+///|
+fn flow_cache_signature_issues(
+  cache_ir : @wf.FlowIr,
+  signatures : Map[String, String],
+) -> Array[String] {
+  let task_nodes : Map[String, Bool] = {}
+  for task in cache_ir.tasks {
+    task_nodes[task.node] = true
+  }
+  let issues : Array[String] = []
+  for node in cache_ir.nodes {
+    if task_nodes.get(node.id).unwrap_or(false) &&
+      signatures.get(node.id) is None {
+      issues.push("flow cache signature missing for node '\{node.id}'")
+    }
+  }
+  issues
+}
+
+///|
+fn flow_cache_adapter() -> @wf.WorkflowAdapter {
+  @wf.WorkflowAdapter::new(
+    @wf.FsAdapter::new(
+      fn(path : String) { read_text(path) },
+      fn(path : String, content : String) {
+        try @xfs.write_string_to_file(path, content) catch {
+          _ => false
+        } noraise {
+          _ => true
+        }
+      },
+      fn(path : String) { @xfs.path_exists(path) },
+      fn() { [] },
+    ),
+    @wf.CommandAdapter::none(),
+  )
+}
+
+///|
+priv struct FlowCachePlanContext {
+  store_path : String
+  cache_ir : @wf.FlowIr
+  signatures : Map[String, String]
+  cache_entries : Map[String, String]
+  plan_result : @wf.FlowTaskCachePlanResult
+}
+
+///|
+fn prepare_flow_cache_plan(
+  lowered : @ar.LoweringResult,
+  options : CliOptions,
+) -> FlowCachePlanContext? {
+  guard options.flow_cache_store is Some(store_path) else { return None }
+  let adapter = flow_cache_adapter()
+  let loaded = @wf.read_flow_cache_store(store_path, adapter)
+  let cache_ir = lowered_flow_cache_ir(lowered)
+  let signatures = resolve_flow_cache_signatures(
+    lowered,
+    options.flow_signatures,
+  )
+  let issues = flow_cache_signature_issues(cache_ir, signatures)
+  for issue in loaded.issues {
+    issues.push(issue)
+  }
+  let plan_result = if issues.length() > 0 {
+    @wf.new_task_cache_plan_result([], issues)
+  } else {
+    @wf.plan_task_cache(cache_ir, signatures, loaded.entries)
+  }
+  Some({
+    store_path,
+    cache_ir,
+    signatures,
+    cache_entries: loaded.entries,
+    plan_result,
+  })
+}
+
+///|
+fn successful_flow_cache_task_ids(
+  report : @ar.WorkflowRunReport,
+) -> Array[String] {
+  let task_ids : Array[String] = []
+  for task in report.task_reports {
+    if task.status == "success" {
+      task_ids.push(task.id)
+    }
+  }
+  task_ids
+}
+
+///|
+fn flow_cache_record_from_plan(
+  context : FlowCachePlanContext,
+) -> FlowCacheRecord {
+  {
+    store_path: context.store_path,
+    plan_json: Some(@wf.render_task_cache_plan_json(context.plan_result)),
+    writeback_json: None,
+  }
+}
+
+///|
+fn flow_cache_record_after_run(
+  context : FlowCachePlanContext,
+  report : @ar.WorkflowRunReport,
+) -> FlowCacheRecord {
+  let writeback = if context.plan_result.issues.length() > 0 {
+    @wf.new_task_cache_writeback_result(
+      context.cache_entries.copy(),
+      [],
+      context.plan_result.issues.copy(),
+    )
+  } else {
+    let result = @wf.writeback_task_cache(
+      context.cache_ir,
+      context.signatures,
+      context.cache_entries,
+      successful_flow_cache_task_ids(report),
+    )
+    if @wf.write_flow_cache_store(
+        context.store_path,
+        result.entries,
+        flow_cache_adapter(),
+      ) {
+      result
+    } else {
+      let issues = result.issues.copy()
+      issues.push(
+        "failed to write flow cache store '" + context.store_path + "'",
+      )
+      @wf.new_task_cache_writeback_result(
+        result.entries,
+        result.updated,
+        issues,
+      )
+    }
+  }
+  {
+    store_path: context.store_path,
+    plan_json: Some(@wf.render_task_cache_plan_json(context.plan_result)),
+    writeback_json: Some(@wf.render_task_cache_writeback_json(writeback)),
+  }
+}
+
+///|
+fn flow_cache_hit_summary(result : @wf.FlowTaskCachePlanResult) -> (Int, Int) {
+  let mut hits = 0
+  for decision in result.decisions {
+    if decision.hit {
+      hits += 1
+    }
+  }
+  (hits, result.decisions.length() - hits)
+}
+
+///|
+fn print_flow_cache_plan_summary(context : FlowCachePlanContext) -> Unit {
+  println("")
+  if context.plan_result.issues.length() > 0 {
+    for issue in context.plan_result.issues {
+      println("flow-cache: " + issue)
+    }
+    return
+  }
+  let (hits, misses) = flow_cache_hit_summary(context.plan_result)
+  println(
+    "flow-cache: store=" +
+    context.store_path +
+    " hits=" +
+    hits.to_string() +
+    " misses=" +
+    misses.to_string(),
+  )
+}
+
+///|
+fn print_flow_cache_writeback_summary(record : FlowCacheRecord) -> Unit {
+  match record.writeback_json {
+    Some(text) => println("flow-cache: writeback " + text)
+    None => ()
   }
 }
 
@@ -1061,7 +1430,7 @@ fn ms_to_iso8601(ms : UInt64) -> String {
 fn run_number_from_id(run_id : String) -> Int {
   if run_id.has_prefix("run-") {
     let num_str = run_id[4:].to_string()
-    let parsed = @strconv.parse_int64(num_str) catch { _ => return 0 }
+    let parsed = main_parse_int64(num_str) catch { _ => return 0 }
     parsed.to_int()
   } else {
     0
@@ -1206,6 +1575,15 @@ fn task_status_map(report : @ar.WorkflowRunReport) -> Map[String, String] {
 }
 
 ///|
+fn task_duration_map(report : @ar.WorkflowRunReport) -> Map[String, UInt64] {
+  let durations : Map[String, UInt64] = {}
+  for task in report.task_reports {
+    durations[task.id] = task.duration_ms
+  }
+  durations
+}
+
+///|
 fn derive_job_status(task_statuses : Array[String]) -> String {
   if task_statuses.length() == 0 {
     return "skipped"
@@ -1250,6 +1628,7 @@ fn collect_run_jobs(
   report : @ar.WorkflowRunReport,
 ) -> Array[RunJobRecord] {
   let task_statuses = task_status_map(report)
+  let task_durations = task_duration_map(report)
   let task_names : Map[String, String] = {}
   let by_job : Map[String, Array[String]] = {}
   let job_order : Array[String] = []
@@ -1276,6 +1655,7 @@ fn collect_run_jobs(
         number: i + 1,
         status: "completed",
         conclusion: task_conclusion_to_gh(task_status),
+        duration_ms: task_durations.get(task_id).unwrap_or(0UL),
       })
     }
     let conclusion = derive_job_status(statuses)
@@ -1318,13 +1698,65 @@ fn artifact_name_index(
 }
 
 ///|
+let managed_embedded_report_artifacts : Array[String] = [
+  "playwright-report", "vitest-report",
+]
+
+///|
+fn embedded_test_report_artifact_name(text : String) -> String? {
+  let trimmed = text.trim(chars=" \t\r\n").to_string()
+  if trimmed.length() == 0 {
+    return None
+  }
+  let payload = @json.parse(trimmed) catch { _ => return None }
+  guard payload is Object(fields) else { return None }
+  if fields.get("suites") is Some(Array(_)) {
+    return Some("playwright-report")
+  }
+  if fields.get("testResults") is Some(Array(_)) {
+    return Some("vitest-report")
+  }
+  None
+}
+
+///|
+fn persist_embedded_test_report_artifacts(
+  workspace_root : String,
+  report : @ar.WorkflowRunReport,
+) -> Unit raise {
+  let store_root = artifact_store_root_for_run(workspace_root)
+  ensure_dir(store_root)
+  for artifact_name in managed_embedded_report_artifacts {
+    ignore(
+      remove_tree(join_path(store_root, run_store_sanitize_id(artifact_name))),
+    )
+  }
+  for task in report.task_reports {
+    let artifact_name = match embedded_test_report_artifact_name(task.stdout) {
+      Some(name) => name
+      None => continue
+    }
+    let artifact_dir = join_path(
+      store_root,
+      run_store_sanitize_id(artifact_name),
+    )
+    ensure_dir(artifact_dir)
+    let file_name = task_file_stem(task.id) + ".json"
+    @xfs.write_string_to_file(
+      join_path(artifact_dir, file_name),
+      task.stdout.trim(chars=" \t\r\n").to_string() + "\n",
+    )
+  }
+}
+
+///|
 fn collect_run_artifacts(
   workspace_root : String,
   plan? : @ar.ExecutionPlan? = None,
   report? : @ar.WorkflowRunReport? = None,
 ) -> Array[RunArtifactRecord] {
   let store_root = artifact_store_root_for_run(workspace_root)
-  if not(@xfs.path_exists(store_root)) {
+  if !@xfs.path_exists(store_root) {
     return []
   }
   let name_map = match (plan, report) {
@@ -1335,7 +1767,7 @@ fn collect_run_artifacts(
   let artifacts : Array[RunArtifactRecord] = []
   for entry in sorted_dir_entries(store_root) {
     let artifact_root = join_path(store_root, entry)
-    if not(run_store_is_dir(artifact_root)) {
+    if !run_store_is_dir(artifact_root) {
       continue
     }
     artifacts.push({
@@ -1344,6 +1776,40 @@ fn collect_run_artifacts(
     })
   }
   artifacts
+}
+
+///|
+fn persist_run_artifact_files(
+  run_dir : String,
+  workspace_root : String,
+  artifacts : Array[RunArtifactRecord],
+) -> Unit raise {
+  if artifacts.length() == 0 {
+    return
+  }
+  let store_root = artifact_store_root_for_run(workspace_root)
+  let artifacts_dir = join_path(run_dir, "artifacts")
+  ensure_dir(artifacts_dir)
+  for artifact in artifacts {
+    let artifact_store_dir = join_path(
+      store_root,
+      run_store_sanitize_id(artifact.name),
+    )
+    if !@xfs.path_exists(artifact_store_dir) {
+      continue
+    }
+    let artifact_run_dir = join_path(
+      artifacts_dir,
+      run_store_sanitize_id(artifact.name),
+    )
+    ensure_dir(artifact_run_dir)
+    for relative_path in artifact.files {
+      let src = join_path(artifact_store_dir, relative_path)
+      let dst = join_path(artifact_run_dir, relative_path)
+      ensure_dir(parent_dir(dst))
+      @xfs.write_bytes_to_file(dst, @xfs.read_file_to_bytes(src))
+    }
+  }
 }
 
 ///|
@@ -1363,7 +1829,7 @@ fn read_cache_sequence(path : String) -> Int? {
       if trimmed.length() == 0 {
         return None
       }
-      let parsed = @strconv.parse_int64(trimmed) catch { _ => return None }
+      let parsed = main_parse_int64(trimmed) catch { _ => return None }
       Some(parsed.to_int())
     }
     None => None
@@ -1373,7 +1839,7 @@ fn read_cache_sequence(path : String) -> Int? {
 ///|
 fn collect_run_caches(workspace_root : String) -> Array[RunCacheRecord] {
   let store_root = cache_store_root_for_run(workspace_root)
-  if not(@xfs.path_exists(store_root)) {
+  if !@xfs.path_exists(store_root) {
     return []
   }
   let ignored : Map[String, Bool] = {
@@ -1386,7 +1852,7 @@ fn collect_run_caches(workspace_root : String) -> Array[RunCacheRecord] {
       continue
     }
     let cache_root = join_path(store_root, entry)
-    if not(run_store_is_dir(cache_root)) {
+    if !run_store_is_dir(cache_root) {
       continue
     }
     let key = match
@@ -1443,12 +1909,12 @@ fn collect_workflow_list_records(
   repo_root : String,
 ) -> Array[WorkflowListRecord] {
   let workflow_dir = join_path(repo_root, ".github/workflows")
-  if not(@xfs.path_exists(workflow_dir)) {
+  if !@xfs.path_exists(workflow_dir) {
     return []
   }
   let records : Array[WorkflowListRecord] = []
   for entry in sorted_dir_entries(workflow_dir) {
-    if not(entry.has_suffix(".yml")) && not(entry.has_suffix(".yaml")) {
+    if !entry.has_suffix(".yml") && !entry.has_suffix(".yaml") {
       continue
     }
     let relative_path = ".github/workflows/" + entry
@@ -1485,6 +1951,9 @@ fn run_job_step_json(step : RunJobStepRecord) -> String {
   ", " +
   "\"conclusion\": " +
   json_string(step.conclusion) +
+  ", " +
+  "\"duration_ms\": " +
+  json_uint64(step.duration_ms) +
   " }"
 }
 
@@ -1587,6 +2056,9 @@ fn run_step_json(step : @ar.WorkflowStepReport) -> String {
   "\"required\": " +
   (if step.required { "true" } else { "false" }) +
   ", " +
+  "\"duration_ms\": " +
+  json_uint64(step.duration_ms) +
+  ", " +
   "\"message\": " +
   json_string(step.message) +
   " }"
@@ -1619,6 +2091,9 @@ fn run_task_json(task : @ar.TaskRunReport, files : RunTaskFiles?) -> String {
   "\"code\": " +
   task.code.to_string() +
   ", " +
+  "\"duration_ms\": " +
+  json_uint64(task.duration_ms) +
+  ", " +
   "\"shell\": " +
   json_string(task.shell) +
   ", " +
@@ -1644,7 +2119,12 @@ fn run_record_json(
   artifacts? : Array[RunArtifactRecord] = [],
   caches? : Array[RunCacheRecord] = [],
   task_files? : Map[String, RunTaskFiles] = {},
+  flow_cache? : FlowCacheRecord? = None,
 ) -> String {
+  let flow_cache_json = match flow_cache {
+    Some(record) => ",\n  \"flow_cache\": " + flow_cache_record_json(record)
+    None => ""
+  }
   let order_json = match report {
     Some(run_report) => json_string_array(run_report.order)
     None => "[]"
@@ -1793,6 +2273,7 @@ fn run_record_json(
   ",\n" +
   "  \"caches\": " +
   caches_json +
+  flow_cache_json +
   "\n" +
   "}\n"
 }
@@ -1860,9 +2341,18 @@ fn persist_run_record(
   record : RunRecord,
   report? : @ar.WorkflowRunReport? = None,
   plan? : @ar.ExecutionPlan? = None,
+  flow_cache? : FlowCacheRecord? = None,
 ) -> String? {
   try {
     let (run_id, run_dir) = next_run_slot(run_root)
+    match report {
+      Some(run_report) =>
+        persist_embedded_test_report_artifacts(
+          record.workspace_root,
+          run_report,
+        )
+      None => ()
+    }
     let task_files = match report {
       Some(run_report) => persist_task_files(run_dir, run_report)
       None => {}
@@ -1874,6 +2364,7 @@ fn persist_run_record(
     }
     let artifacts = collect_run_artifacts(record.workspace_root, plan~, report~)
     let caches = collect_run_caches(record.workspace_root)
+    persist_run_artifact_files(run_dir, record.workspace_root, artifacts)
     persist_run_layout_files(run_dir, jobs, artifacts, caches)
     @xfs.write_string_to_file(
       join_path(run_dir, "run.json"),
@@ -1901,6 +2392,7 @@ fn persist_run_record(
         artifacts~,
         caches~,
         task_files~,
+        flow_cache~,
       ),
     )
     Some(run_id)
@@ -2131,7 +2623,7 @@ fn load_actrun_config(dir : String) -> ActrunConfig {
   } else {
     dir + "/actrun.toml"
   }
-  if not(@xfs.path_exists(config_path)) {
+  if !@xfs.path_exists(config_path) {
     return default_actrun_config()
   }
   let content = try @xfs.read_file_to_string(config_path) catch {
@@ -2152,7 +2644,7 @@ fn load_actrun_config(dir : String) -> ActrunConfig {
   guard root is @toml.TomlTable(table) else { return default_actrun_config() }
   // Warn on unknown top-level keys
   for key, _ in table {
-    if not(is_known_config_key(key)) {
+    if !is_known_config_key(key) {
       println("warning: unknown key '" + key + "' in " + config_path)
     }
   }
@@ -2236,6 +2728,7 @@ fn merge_config_into_options(
     run_root: options.run_root,
     artifact_root: options.artifact_root,
     cache_root: options.cache_root,
+    flow_cache_store: options.flow_cache_store,
     github_action_cache_root: options.github_action_cache_root,
     registry_root: options.registry_root,
     wasm_action_root: options.wasm_action_root,
@@ -2257,6 +2750,7 @@ fn merge_config_into_options(
       config.local_skip_actions
     },
     dispatch_inputs: options.dispatch_inputs,
+    flow_signatures: options.flow_signatures,
     dry_run: options.dry_run,
     dump_context: options.dump_context,
     trust_actions: if options.trust_actions {
@@ -2311,7 +2805,7 @@ fn find_latest_run_for_workflow(
   workflow_path : String,
   ok_only : Bool,
 ) -> (Json, String)? {
-  if not(@xfs.path_exists(run_root)) {
+  if !@xfs.path_exists(run_root) {
     return None
   }
   let entries = try @xfs.read_dir(run_root) catch {
@@ -2466,7 +2960,7 @@ fn glob_match(pattern : String, path : String) -> Bool {
         end=pattern.length() - 2,
       ) +
       "/"
-    if not(path.has_prefix(prefix)) {
+    if !path.has_prefix(prefix) {
       return false
     }
     // Check no further "/" after prefix
@@ -2475,7 +2969,7 @@ fn glob_match(pattern : String, path : String) -> Bool {
       start=prefix.length(),
       end=path.length(),
     )
-    return not(rest.contains("/"))
+    return !rest.contains("/")
   }
   // "dir/*.ext" → path starts with "dir/" and ends with ".ext", no subdirs
   if pattern.contains("/*") {
@@ -2492,7 +2986,7 @@ fn glob_match(pattern : String, path : String) -> Bool {
           start=star_idx + 2,
           end=pattern.length(),
         )
-        if not(path.has_prefix(dir_prefix)) {
+        if !path.has_prefix(dir_prefix) {
           return false
         }
         let rest = String::unsafe_substring(
@@ -2544,7 +3038,7 @@ fn extract_failed_job_ids(run_json : Json) -> Array[String] {
                           break
                         }
                       }
-                      if not(already) {
+                      if !already {
                         failed_jobs.push(job_id)
                       }
                     }
@@ -2625,9 +3119,7 @@ async fn handle_serve_command(args : Array[String]) -> Int {
       continue
     }
     if arg == "--interval" && index + 1 < args.length() {
-      interval = @strconv.parse_int64(args[index + 1]).to_int() catch {
-        _ => 30
-      }
+      interval = main_parse_int64(args[index + 1]).to_int() catch { _ => 30 }
       index += 2
       continue
     }
@@ -2894,7 +3386,7 @@ fn collect_list_workflows(
             file
           }
           if glob_match(pattern, full_rel) &&
-            not(seen.get(full_rel).unwrap_or(false)) {
+            !seen.get(full_rel).unwrap_or(false) {
             paths.push(full_rel)
             seen[full_rel] = true
           }
@@ -2905,12 +3397,12 @@ fn collect_list_workflows(
         // Directory: scan for yaml files
         let all_files = scan_yaml_files(pattern, pattern)
         for file in all_files {
-          if not(seen.get(file).unwrap_or(false)) {
+          if !seen.get(file).unwrap_or(false) {
             paths.push(file)
             seen[file] = true
           }
         }
-      } else if not(seen.get(pattern).unwrap_or(false)) {
+      } else if !seen.get(pattern).unwrap_or(false) {
         // Exact file
         paths.push(pattern)
         seen[pattern] = true
@@ -2995,8 +3487,8 @@ fn extract_cron_schedules(text : String) -> Array[String] {
           schedules.push(cron_part)
         }
       } else if line.length() > 0 &&
-        not(line.has_prefix("-")) &&
-        not(line.has_prefix("#")) {
+        !line.has_prefix("-") &&
+        !line.has_prefix("#") {
         in_schedule = false
       }
     }
@@ -3073,7 +3565,7 @@ async fn handle_cron_command(args : Array[String]) -> Int {
     if code == 0 {
       for line_view in stdout.split("\n") {
         let line = line_view.to_string()
-        if not(line.contains("# actrun:")) {
+        if !line.contains("# actrun:") {
           lines.push(line)
         }
       }
@@ -3467,6 +3959,27 @@ fn load_env_file(path : String) -> Array[String] {
 }
 
 ///|
+fn parse_cli_key_value_flag(
+  value : String,
+  target : Map[String, String],
+  errors : Array[String],
+  flag : String,
+) -> Unit {
+  match value.find("=") {
+    Some(eq) if eq > 0 => {
+      let key = String::unsafe_substring(value, start=0, end=eq)
+      let resolved = String::unsafe_substring(
+        value,
+        start=eq + 1,
+        end=value.length(),
+      )
+      target[key] = resolved
+    }
+    _ => errors.push(flag + " expects key=value")
+  }
+}
+
+///|
 fn parse_cli_args(args : Array[String]) -> CliParseResult {
   let errors : Array[String] = []
   let mut workflow_path = ""
@@ -3475,6 +3988,7 @@ fn parse_cli_args(args : Array[String]) -> CliParseResult {
   let mut run_root : String? = None
   let mut artifact_root : String? = None
   let mut cache_root : String? = None
+  let mut flow_cache_store : String? = None
   let mut github_action_cache_root : String? = None
   let mut registry_root : String? = None
   let mut wasm_action_root : String? = None
@@ -3488,6 +4002,7 @@ fn parse_cli_args(args : Array[String]) -> CliParseResult {
   let changed_paths : Array[String] = []
   let skip_actions : Array[String] = []
   let dispatch_inputs : Map[String, String] = {}
+  let flow_signatures : Map[String, String] = {}
   let mut dry_run = false
   let mut dump_context = false
   let mut trust_actions = false
@@ -3508,6 +4023,18 @@ fn parse_cli_args(args : Array[String]) -> CliParseResult {
 
   while index < args.length() {
     let arg = args[index]
+    if arg.has_prefix("--flow-signature=") {
+      let value = String::unsafe_substring(
+        arg,
+        start="--flow-signature=".length(),
+        end=arg.length(),
+      )
+      parse_cli_key_value_flag(
+        value, flow_signatures, errors, "--flow-signature",
+      )
+      index += 1
+      continue
+    }
     if arg == "--dry-run" {
       dry_run = true
       index += 1
@@ -3547,7 +4074,7 @@ fn parse_cli_args(args : Array[String]) -> CliParseResult {
       affected = true
       index += 1
       // Optional: --affected HEAD~3 or --affected abc123
-      if index < args.length() && not(args[index].has_prefix("-")) {
+      if index < args.length() && !args[index].has_prefix("-") {
         affected_base = args[index]
         index += 1
       }
@@ -3600,6 +4127,7 @@ fn parse_cli_args(args : Array[String]) -> CliParseResult {
       arg == "--run-root" ||
       arg == "--artifact-root" ||
       arg == "--cache-root" ||
+      arg == "--flow-cache-store" ||
       arg == "--github-action-cache-root" ||
       arg == "--registry-root" ||
       arg == "--wasm-action-root" ||
@@ -3614,6 +4142,7 @@ fn parse_cli_args(args : Array[String]) -> CliParseResult {
       arg == "--skip-action" ||
       arg == "--input" ||
       arg == "--env" ||
+      arg == "--flow-signature" ||
       arg == "--nix-packages" ||
       arg == "--container-runtime" ||
       arg == "--sandbox-writable" ||
@@ -3635,6 +4164,8 @@ fn parse_cli_args(args : Array[String]) -> CliParseResult {
         artifact_root = Some(value)
       } else if arg == "--cache-root" {
         cache_root = Some(value)
+      } else if arg == "--flow-cache-store" {
+        flow_cache_store = Some(value)
       } else if arg == "--github-action-cache-root" {
         github_action_cache_root = Some(value)
       } else if arg == "--registry-root" {
@@ -3682,6 +4213,10 @@ fn parse_cli_args(args : Array[String]) -> CliParseResult {
         for err in load_env_file(value) {
           errors.push(err)
         }
+      } else if arg == "--flow-signature" {
+        parse_cli_key_value_flag(
+          value, flow_signatures, errors, "--flow-signature",
+        )
       } else if arg == "--nix-packages" {
         for part_view in value.split(" ") {
           let part = part_view.trim(chars=" \t").to_string()
@@ -3733,8 +4268,16 @@ fn parse_cli_args(args : Array[String]) -> CliParseResult {
   if repo_root is Some(_) && workflow_path.has_prefix("/") {
     errors.push("workflow path must be relative when --repo is used")
   }
-  if workspace_mode.length() > 0 && not(valid_workspace_mode(workspace_mode)) {
+  if workspace_mode.length() > 0 && !valid_workspace_mode(workspace_mode) {
     errors.push("workspace mode must be one of: local, worktree, tmp, docker")
+  }
+  if flow_cache_store is Some(_) && flow_signatures.length() == 0 {
+    errors.push(
+      "--flow-cache-store requires at least one --flow-signature key=value",
+    )
+  }
+  if flow_cache_store is None && flow_signatures.length() > 0 {
+    errors.push("--flow-signature requires --flow-cache-store")
   }
   if errors.length() > 0 {
     return { options: None, errors }
@@ -3747,6 +4290,7 @@ fn parse_cli_args(args : Array[String]) -> CliParseResult {
       run_root,
       artifact_root,
       cache_root,
+      flow_cache_store,
       github_action_cache_root,
       registry_root,
       wasm_action_root,
@@ -3760,6 +4304,7 @@ fn parse_cli_args(args : Array[String]) -> CliParseResult {
       changed_paths,
       skip_actions,
       dispatch_inputs,
+      flow_signatures,
       dry_run,
       dump_context,
       trust_actions,
@@ -3842,7 +4387,7 @@ fn parse_run_read_args(args : Array[String]) -> RunReadParseResult {
       json_output = true
       index += 1
       // Check if next arg is a field list (not a flag)
-      if index < args.length() && not(args[index].has_prefix("--")) {
+      if index < args.length() && !args[index].has_prefix("--") {
         let fields_str = args[index]
         for part in fields_str.split(",") {
           let field = part.to_string().trim(chars=" ").to_string()
@@ -3905,7 +4450,7 @@ fn parse_run_read_args(args : Array[String]) -> RunReadParseResult {
       } else if arg == "--dir" {
         download_dir = value
       } else if arg == "--limit" || arg == "-L" {
-        let parsed = @strconv.parse_int64(value) catch { _ => 0L }
+        let parsed = main_parse_int64(value) catch { _ => 0L }
         limit = parsed.to_int()
       } else if arg == "--status" || arg == "-s" {
         status_filter = value
@@ -4006,7 +4551,7 @@ fn parse_artifact_read_args(args : Array[String]) -> ArtifactReadParseResult {
     if arg == "--json" {
       json_output = true
       index += 1
-      if index < args.length() && not(args[index].has_prefix("--")) {
+      if index < args.length() && !args[index].has_prefix("--") {
         for part in args[index].split(",") {
           let field = part.to_string().trim(chars=" ").to_string()
           if field.length() > 0 {
@@ -4100,7 +4645,7 @@ fn parse_cache_read_args(args : Array[String]) -> CacheReadParseResult {
     if arg == "--json" {
       json_output = true
       index += 1
-      if index < args.length() && not(args[index].has_prefix("--")) {
+      if index < args.length() && !args[index].has_prefix("--") {
         for part in args[index].split(",") {
           let field = part.to_string().trim(chars=" ").to_string()
           if field.length() > 0 {
@@ -4132,7 +4677,7 @@ fn parse_cache_read_args(args : Array[String]) -> CacheReadParseResult {
       } else if arg == "--key" {
         key_filter = value
       } else if arg == "--max-age" {
-        max_age_days = try @strconv.parse_int64(value).to_int() catch {
+        max_age_days = try main_parse_int64(value).to_int() catch {
           _ => {
             errors.push("--max-age must be a number")
             0
@@ -4141,7 +4686,7 @@ fn parse_cache_read_args(args : Array[String]) -> CacheReadParseResult {
           v => v
         }
       } else if arg == "--limit" || arg == "-L" {
-        let parsed = @strconv.parse_int64(value) catch { _ => 0L }
+        let parsed = main_parse_int64(value) catch { _ => 0L }
         limit = parsed.to_int()
       } else {
         workspace_key_filter = value
@@ -4158,7 +4703,7 @@ fn parse_cache_read_args(args : Array[String]) -> CacheReadParseResult {
   }
   if action == "prune" &&
     key_filter.length() == 0 &&
-    not(prune_all) &&
+    !prune_all &&
     max_age_days == 0 {
     errors.push("--key, --all, or --max-age is required for `cache prune`")
   }
@@ -4200,7 +4745,7 @@ fn parse_workflow_read_args(args : Array[String]) -> WorkflowReadParseResult {
     if arg == "--json" {
       json_output = true
       index += 1
-      if index < args.length() && not(args[index].has_prefix("--")) {
+      if index < args.length() && !args[index].has_prefix("--") {
         for part in args[index].split(",") {
           let field = part.to_string().trim(chars=" ").to_string()
           if field.length() > 0 {
@@ -4305,7 +4850,7 @@ fn handle_export_command(cli_args : Array[String]) -> Int {
         break
       }
     }
-    if not(found) {
+    if !found {
       println("error: job '" + job_filter + "' not found")
       return 1
     }
@@ -4647,7 +5192,7 @@ fn apply_hash_updates(
     let resolution = resolutions[i]
     // Only update mutable refs that resolved successfully
     if action_ref.is_sha_pinned ||
-      not(resolution.exists) ||
+      !resolution.exists ||
       resolution.sha.length() == 0 {
       continue
     }
@@ -5154,7 +5699,7 @@ fn collect_third_party_actions(
       match step.uses {
         Some(uses) => {
           // Direct third-party check
-          if not(is_trusted_action_owner(uses)) && not(seen.contains(uses)) {
+          if !is_trusted_action_owner(uses) && !seen.contains(uses) {
             seen[uses] = true
             result.push(uses)
           }
@@ -5185,7 +5730,7 @@ fn scan_steps_for_third_party(
   for step in steps {
     match step.uses {
       Some(uses) =>
-        if not(is_trusted_action_owner(uses)) && not(seen.contains(uses)) {
+        if !is_trusted_action_owner(uses) && !seen.contains(uses) {
           seen[uses] = true
           if via.length() > 0 {
             result.push(uses + " (via " + via + ")")
@@ -5228,8 +5773,8 @@ fn scan_local_action_manifest(
         .trim(chars=" \t'\"")
         .to_string()
       if uses.length() > 0 &&
-        not(is_trusted_action_owner(uses)) &&
-        not(seen.contains(uses)) {
+        !is_trusted_action_owner(uses) &&
+        !seen.contains(uses) {
         seen[uses] = true
         result.push(uses + " (via " + via + ")")
       }
@@ -5255,10 +5800,7 @@ async fn read_stdin_line() -> String {
 fn is_workspace_modifying_action(uses : String) -> Bool {
   uses.has_prefix("actions/checkout") ||
   uses.has_prefix("actions/cache/restore") ||
-  (
-    uses.has_prefix("actions/cache") &&
-    not(uses.has_prefix("actions/cache/save"))
-  )
+  (uses.has_prefix("actions/cache") && !uses.has_prefix("actions/cache/save"))
 }
 
 ///|
@@ -5334,10 +5876,11 @@ fn print_dry_run_plan(
 }
 
 ///|
-fn print_dry_run_plan_json(
+fn render_dry_run_plan_json(
   workflow : @ar.WorkflowSpec,
   lowered : @ar.LoweringResult,
-) -> Unit {
+  flow_cache? : FlowCacheRecord? = None,
+) -> String {
   let job_steps : Map[String, Array[String]] = {}
   let job_order : Array[String] = []
   for task in lowered.plan.tasks {
@@ -5395,7 +5938,21 @@ fn print_dry_run_plan_json(
   if lowered.errors.length() > 0 {
     root_parts.push("\"warnings\": " + json_string_array(lowered.errors))
   }
-  println("{ " + root_parts.join(", ") + " }")
+  match flow_cache {
+    Some(record) =>
+      root_parts.push("\"flow_cache\": " + flow_cache_record_json(record))
+    None => ()
+  }
+  "{ " + root_parts.join(", ") + " }"
+}
+
+///|
+fn print_dry_run_plan_json(
+  workflow : @ar.WorkflowSpec,
+  lowered : @ar.LoweringResult,
+  flow_cache? : FlowCacheRecord? = None,
+) -> Unit {
+  println(render_dry_run_plan_json(workflow, lowered, flow_cache~))
 }
 
 ///|
@@ -5470,7 +6027,7 @@ fn ensure_trailing_newline(text : String) -> String {
 
 ///|
 fn run_json_texts_in_order(run_root : String) -> Array[String] {
-  if not(@xfs.path_exists(run_root)) {
+  if !@xfs.path_exists(run_root) {
     return []
   }
   let entries = sorted_dir_entries(run_root)
@@ -5478,7 +6035,7 @@ fn run_json_texts_in_order(run_root : String) -> Array[String] {
   for idx in 0..<entries.length() {
     let entry = entries[entries.length() - 1 - idx]
     let run_dir = join_path(run_root, entry)
-    if not(run_store_is_dir(run_dir)) {
+    if !run_store_is_dir(run_dir) {
       continue
     }
     let run_json_path = join_path(run_dir, "run.json")
@@ -5513,7 +6070,7 @@ fn run_json_matches_filters(
   branch_filter : String,
   event_filter : String,
 ) -> Bool {
-  if not(run_json_matches_status(json_text, status_filter)) {
+  if !run_json_matches_status(json_text, status_filter) {
     return false
   }
   if workflow_filter.length() == 0 &&
@@ -5561,10 +6118,8 @@ fn filtered_run_json_texts(
   let all = run_json_texts_in_order(run_root)
   let result : Array[String] = []
   for text in all {
-    if not(
-        run_json_matches_filters(
-          text, status_filter, workflow_filter, branch_filter, event_filter,
-        ),
+    if !run_json_matches_filters(
+        text, status_filter, workflow_filter, branch_filter, event_filter,
       ) {
       continue
     }
@@ -5612,8 +6167,8 @@ fn format_elapsed(started_ms : String, finished_ms : String) -> String {
   if started_ms.length() == 0 || finished_ms.length() == 0 {
     return ""
   }
-  let s = @strconv.parse_int64(started_ms) catch { _ => return "" }
-  let f = @strconv.parse_int64(finished_ms) catch { _ => return "" }
+  let s = main_parse_int64(started_ms) catch { _ => return "" }
+  let f = main_parse_int64(finished_ms) catch { _ => return "" }
   let diff_ms = f - s
   if diff_ms >= 60000L {
     (diff_ms / 60000L).to_string() +
@@ -5711,7 +6266,7 @@ fn cache_store_base_root_for_read(cache_root_override : String?) -> String {
 fn collect_cache_list_records(
   cache_root_base : String,
 ) -> Array[CacheListRecord] {
-  if not(@xfs.path_exists(cache_root_base)) {
+  if !@xfs.path_exists(cache_root_base) {
     return []
   }
   let ignored : Map[String, Bool] = {
@@ -5721,7 +6276,7 @@ fn collect_cache_list_records(
   let caches : Array[CacheListRecord] = []
   for workspace_key in sorted_dir_entries(cache_root_base) {
     let workspace_root = join_path(cache_root_base, workspace_key)
-    if not(run_store_is_dir(workspace_root)) {
+    if !run_store_is_dir(workspace_root) {
       continue
     }
     for entry in sorted_dir_entries(workspace_root) {
@@ -5729,7 +6284,7 @@ fn collect_cache_list_records(
         continue
       }
       let cache_root = join_path(workspace_root, entry)
-      if not(run_store_is_dir(cache_root)) {
+      if !run_store_is_dir(cache_root) {
         continue
       }
       let key = match
@@ -5820,12 +6375,12 @@ fn cache_record_matches(
 ///|
 fn remove_tree(path : String) -> Bool {
   try {
-    if not(@xfs.path_exists(path)) {
+    if !@xfs.path_exists(path) {
       return true
     }
     if @xfs.is_dir(path) {
       for entry in @xfs.read_dir(path) {
-        if not(remove_tree(join_path(path, entry))) {
+        if !remove_tree(join_path(path, entry)) {
           return false
         }
       }
@@ -5844,12 +6399,12 @@ fn remove_tree(path : String) -> Bool {
 
 ///|
 fn prune_empty_workspace_cache_dirs(cache_root_base : String) -> Unit {
-  if not(@xfs.path_exists(cache_root_base)) {
+  if !@xfs.path_exists(cache_root_base) {
     return
   }
   for workspace_key in sorted_dir_entries(cache_root_base) {
     let workspace_dir = join_path(cache_root_base, workspace_key)
-    if not(run_store_is_dir(workspace_dir)) {
+    if !run_store_is_dir(workspace_dir) {
       continue
     }
     let entries = sorted_dir_entries(workspace_dir)
@@ -6007,8 +6562,8 @@ fn format_run_view_text(
   let started_text = run_json_number_text(payload, "started_at_ms")
   let finished_text = run_json_number_text(payload, "finished_at_ms")
   let elapsed = if started_text.length() > 0 && finished_text.length() > 0 {
-    let s = @strconv.parse_int64(started_text) catch { _ => 0L }
-    let f = @strconv.parse_int64(finished_text) catch { _ => 0L }
+    let s = main_parse_int64(started_text) catch { _ => 0L }
+    let f = main_parse_int64(finished_text) catch { _ => 0L }
     let diff_ms = f - s
     if diff_ms >= 60000L {
       (diff_ms / 60000L).to_string() + "m"
@@ -6098,7 +6653,7 @@ fn format_run_logs_text(
       Some(_) => matched_task = true
       None => ()
     }
-    if not(task_matches_job(id, job_filter)) {
+    if !task_matches_job(id, job_filter) {
       continue
     }
     if log_failed {
@@ -6135,7 +6690,7 @@ fn format_run_logs_text(
       _ => ()
     }
   }
-  if not(matched_task) {
+  if !matched_task {
     return None
   }
   Some(sections.join("\n"))
@@ -6168,7 +6723,7 @@ fn run_task_logs_json(
       Some(_) => matched_task = true
       None => ()
     }
-    if not(task_matches_job(id, job_filter)) {
+    if !task_matches_job(id, job_filter) {
       continue
     }
     if log_failed {
@@ -6210,7 +6765,7 @@ fn run_task_logs_json(
       " }",
     )
   }
-  if not(matched_task) {
+  if !matched_task {
     return None
   }
   Some("{ \"tasks\": [" + items.join(", ") + "] }")
@@ -6349,7 +6904,7 @@ fn handle_artifact_read_command(options : ArtifactReadOptions) -> Int {
     artifact_store_root_for_read(workspace_root, options.artifact_root),
     run_store_sanitize_id(options.artifact_name),
   )
-  if not(@xfs.path_exists(artifact_dir)) {
+  if !@xfs.path_exists(artifact_dir) {
     print_errors(["failed to read artifact dir " + artifact_dir])
     return 1
   }
@@ -6358,7 +6913,7 @@ fn handle_artifact_read_command(options : ArtifactReadOptions) -> Int {
   for relative_path in artifact_files {
     let src = join_path(artifact_dir, relative_path)
     let dst = join_path(download_dir, relative_path)
-    if not(copy_file(src, dst)) {
+    if !copy_file(src, dst) {
       print_errors(["failed to copy artifact file " + relative_path])
       return 1
     }
@@ -6399,7 +6954,7 @@ fn handle_cache_read_command(options : CacheReadOptions) -> Int {
   ignore(now_ms)
   if options.action == "prune" {
     for cache in filtered {
-      if not(remove_tree(cache.store_path)) {
+      if !remove_tree(cache.store_path) {
         print_errors(["failed to remove cache " + cache.key])
         return 1
       }
@@ -6478,14 +7033,14 @@ fn handle_run_download_command(
       store_root,
       run_store_sanitize_id(artifact_name),
     )
-    if not(@xfs.path_exists(artifact_dir)) {
+    if !@xfs.path_exists(artifact_dir) {
       print_errors(["failed to read artifact dir " + artifact_dir])
       return 1
     }
     for relative_path in artifact_files {
       let src = join_path(artifact_dir, relative_path)
       let dst = join_path(join_path(download_dir, artifact_name), relative_path)
-      if not(copy_file(src, dst)) {
+      if !copy_file(src, dst) {
         print_errors(["failed to copy artifact file " + relative_path])
         return 1
       }
@@ -6638,7 +7193,7 @@ async fn handle_run_watch_command(options : RunReadOptions) -> Int {
     if run_state_is_terminal(state) {
       let exit_code_text = run_json_number_text(payload, "exit_code")
       let exit_code = if exit_code_text.length() > 0 {
-        let parsed = @strconv.parse_int64(exit_code_text) catch {
+        let parsed = main_parse_int64(exit_code_text) catch {
           _ => return run_state_exit_code(state)
         }
         parsed.to_int()
@@ -6680,11 +7235,11 @@ fn handle_run_read_command(options : RunReadOptions) -> Int {
   let run_root = options.run_root.unwrap_or(default_run_root())
   if options.action == "delete" {
     let run_dir = join_path(run_root, options.run_id)
-    if not(@xfs.path_exists(run_dir)) {
+    if !@xfs.path_exists(run_dir) {
       print_errors(["run not found: " + options.run_id])
       return 1
     }
-    if not(remove_tree(run_dir)) {
+    if !remove_tree(run_dir) {
       print_errors(["failed to delete " + run_dir])
       return 1
     }
@@ -7116,7 +7671,7 @@ async fn handle_workflow_run_command(raw_options : CliOptions) -> Int {
   }
   if options.trigger.length() == 0 &&
     should_check_trigger(options) &&
-    not(@ar.matches_push_trigger(effective_trigger, trigger_event)) {
+    !@ar.matches_push_trigger(effective_trigger, trigger_event) {
     let skipped_run_dir = persist_run_record(run_root, {
       run_id: "",
       workflow_name: workflow.name,
@@ -7207,7 +7762,7 @@ async fn handle_workflow_run_command(raw_options : CliOptions) -> Int {
         } else {
           git_uncommitted_files()
         }
-        if not(files_match_patterns(changed, patterns)) {
+        if !files_match_patterns(changed, patterns) {
           println(
             "affected: no changes match patterns for " +
             wf_key +
@@ -7215,7 +7770,7 @@ async fn handle_workflow_run_command(raw_options : CliOptions) -> Int {
             base_label +
             ")",
           )
-          if not(options.dry_run) {
+          if !options.dry_run {
             return 0
           }
           println("affected: would skip (dry-run continues)")
@@ -7279,7 +7834,7 @@ async fn handle_workflow_run_command(raw_options : CliOptions) -> Int {
                             break
                           }
                         }
-                        if not(is_failed) {
+                        if !is_failed {
                           let mut already = false
                           for j in retry_skip_jobs {
                             if j == job_id {
@@ -7287,7 +7842,7 @@ async fn handle_workflow_run_command(raw_options : CliOptions) -> Int {
                               break
                             }
                           }
-                          if not(already) {
+                          if !already {
                             retry_skip_jobs.push(job_id)
                           }
                         }
@@ -7431,10 +7986,18 @@ async fn handle_workflow_run_command(raw_options : CliOptions) -> Int {
     let lowered = @ar.lower_push_workflow_in_workspace(
       filtered_workflow, execution_root,
     )
+    let flow_cache = prepare_flow_cache_plan(lowered, options)
     let cli_args = @xsys.get_cli_args()
     let json_mode = cli_args.contains("--json")
     if json_mode {
-      print_dry_run_plan_json(filtered_workflow, lowered)
+      print_dry_run_plan_json(
+        filtered_workflow,
+        lowered,
+        flow_cache=match flow_cache {
+          Some(context) => Some(flow_cache_record_from_plan(context))
+          None => None
+        },
+      )
     } else {
       if lowered.errors.length() > 0 {
         for err in lowered.errors {
@@ -7442,13 +8005,17 @@ async fn handle_workflow_run_command(raw_options : CliOptions) -> Int {
         }
       }
       print_dry_run_plan(filtered_workflow, lowered)
+      match flow_cache {
+        Some(context) => print_flow_cache_plan_summary(context)
+        None => ()
+      }
     }
     return 0
   }
 
   // Check for third-party actions and prompt for confirmation
   let trust_env = @xsys.get_env_var("ACTRUN_TRUST").unwrap_or("") == "true"
-  if not(options.trust_actions) && not(trust_env) && not(options.dry_run) {
+  if !options.trust_actions && !trust_env && !options.dry_run {
     let third_party = collect_third_party_actions(filtered_workflow)
     if third_party.length() > 0 {
       println("The following third-party actions will be fetched and executed:")
@@ -7469,9 +8036,9 @@ async fn handle_workflow_run_command(raw_options : CliOptions) -> Int {
 
   // Warn when local mode will modify workspace files
   if workspace_mode == "local" &&
-    not(options.trust_actions) &&
-    not(trust_env) &&
-    not(options.dry_run) {
+    !options.trust_actions &&
+    !trust_env &&
+    !options.dry_run {
     let modifying = collect_workspace_modifying_steps(filtered_workflow)
     if modifying.length() > 0 {
       println(
@@ -7509,6 +8076,7 @@ async fn handle_workflow_run_command(raw_options : CliOptions) -> Int {
     print_errors(lowered.errors)
     return 1
   }
+  let flow_cache = prepare_flow_cache_plan(lowered, options)
   let raw_report = @ar.execute_lowered_native(
     lowered,
     workspace_root=execution_root,
@@ -7524,6 +8092,14 @@ async fn handle_workflow_run_command(raw_options : CliOptions) -> Int {
   let report = @ar.mask_report_secrets(raw_report, @ar.collect_secret_values())
   if report.issues.length() > 0 {
     print_errors(report.issues)
+  }
+  let flow_cache_record = match flow_cache {
+    Some(context) => Some(flow_cache_record_after_run(context, report))
+    None => None
+  }
+  match flow_cache_record {
+    Some(record) => print_flow_cache_writeback_summary(record)
+    None => ()
   }
   let run_dir = persist_run_record(
     run_root,
@@ -7551,6 +8127,7 @@ async fn handle_workflow_run_command(raw_options : CliOptions) -> Int {
     },
     report=Some(report),
     plan=Some(lowered.plan),
+    flow_cache=flow_cache_record,
   )
   let run_id = run_dir.unwrap_or("")
   print_report(workflow, report, run_id~)
@@ -7559,7 +8136,7 @@ async fn handle_workflow_run_command(raw_options : CliOptions) -> Int {
     Some(ws) => cleanup_local_workspace(ws)
     None => ()
   }
-  if not(report.ok) && not(options.watch) {
+  if !report.ok && !options.watch {
     return 1
   }
 

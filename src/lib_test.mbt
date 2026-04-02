@@ -34,7 +34,7 @@ fn expect_local_action(parsed : LocalActionParseResult) -> LocalActionSpec {
 
 ///|
 fn test_ensure_dir(path : String) -> Unit raise {
-  if not(@xfs.path_exists(path)) {
+  if !@xfs.path_exists(path) {
     @xfs.create_dir(path)
   }
 }
@@ -76,7 +76,7 @@ fn test_ensure_dir_all(path : String) -> Unit raise {
   if parent != path {
     test_ensure_dir_all(parent)
   }
-  if not(@xfs.path_exists(path)) {
+  if !@xfs.path_exists(path) {
     @xfs.create_dir(path)
   }
 }
