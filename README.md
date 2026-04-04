@@ -94,6 +94,16 @@ nix develop
 }
 ```
 
+### Without flakes
+
+```nix
+# default.nix provides a ready-to-use derivation
+let
+  actrun = import (builtins.fetchTarball "https://github.com/mizchi/actrun/archive/main.tar.gz") { };
+in
+  actrun
+```
+
 ## Quick Start
 
 ```bash

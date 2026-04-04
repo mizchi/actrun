@@ -1,5 +1,23 @@
 {
   "nodes": {
+    "flake-parts": {
+      "inputs": {
+        "nixpkgs-lib": "nixpkgs-lib"
+      },
+      "locked": {
+        "lastModified": 1772408722,
+        "narHash": "sha256-rHuJtdcOjK7rAHpHphUb1iCvgkU3GpfvicLMwwnfMT0=",
+        "owner": "hercules-ci",
+        "repo": "flake-parts",
+        "rev": "f20dc5d9b8027381c474144ecabc9034d6a839a3",
+        "type": "github"
+      },
+      "original": {
+        "owner": "hercules-ci",
+        "repo": "flake-parts",
+        "type": "github"
+      }
+    },
     "moon-registry": {
       "flake": false,
       "locked": {
@@ -22,16 +40,15 @@
         "treefmt-nix": "treefmt-nix"
       },
       "locked": {
-        "lastModified": 1774725309,
-        "narHash": "sha256-6A+KPyYuubWS2CW8+0LN1/IMREZR1JA4CKIiwBze1ss=",
-        "owner": "ryoppippi",
+        "lastModified": 1774948263,
+        "narHash": "sha256-5g6Fl5+39UlOjTa+dm9mOTtklHmAr+ai0G9fmq/L+kg=",
+        "owner": "moonbit-community",
         "repo": "moonbit-overlay",
-        "rev": "4ffc0aab45588a519342178cca9231be94c9bab0",
+        "rev": "50118f5c3c0298b5cb17cc6f1c346165801014c8",
         "type": "github"
       },
       "original": {
-        "owner": "ryoppippi",
-        "ref": "fix/moonplatform-bugs",
+        "owner": "moonbit-community",
         "repo": "moonbit-overlay",
         "type": "github"
       }
@@ -49,6 +66,21 @@
         "owner": "NixOS",
         "ref": "nixpkgs-unstable",
         "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "nixpkgs-lib": {
+      "locked": {
+        "lastModified": 1772328832,
+        "narHash": "sha256-e+/T/pmEkLP6BHhYjx6GmwP5ivonQQn0bJdH9YrRB+Q=",
+        "owner": "nix-community",
+        "repo": "nixpkgs.lib",
+        "rev": "c185c7a5e5dd8f9add5b2f8ebeff00888b070742",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nix-community",
+        "repo": "nixpkgs.lib",
         "type": "github"
       }
     },
@@ -70,6 +102,7 @@
     },
     "root": {
       "inputs": {
+        "flake-parts": "flake-parts",
         "moon-registry": "moon-registry",
         "moonbit-overlay": "moonbit-overlay",
         "nixpkgs": "nixpkgs_2"
