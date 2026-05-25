@@ -5352,6 +5352,16 @@ fn doctor_wasm_runner_bin() -> String {
 }
 
 ///|
+async fn doctor_bin_exists(bin : String) -> Bool {
+  if bin.contains("/") {
+    @xfs.path_exists(bin)
+  } else {
+    let (code, _, _) = run_command("which", [bin], cwd=".")
+    code == 0
+  }
+}
+
+///|
 async fn handle_doctor_command() -> Int {
   let checks : Array[DoctorCheck] = [
     { name: "git", bin: "git", env_override: "ACTRUN_GIT_BIN", required: true },
@@ -5391,6 +5401,20 @@ async fn handle_doctor_command() -> Int {
       @xsys.get_env_var(check.env_override).unwrap_or(check.bin)
     } else {
       check.bin
+    }
+    if !doctor_bin_exists(bin) {
+      if check.required {
+        println("ERR " + check.name + ": not found (required)")
+        has_error = true
+      } else {
+        let hint = if check.env_override.length() > 0 {
+          " (optional, override with " + check.env_override + ")"
+        } else {
+          " (optional)"
+        }
+        println("--  " + check.name + ": not found" + hint)
+      }
+      continue
     }
     let (code, stdout, _) = run_command(bin, ["--version"], cwd=".")
     if code == 0 {
