@@ -654,7 +654,9 @@ async test "compat docs: job container fixture executes run step via docker adap
     ),
   )
   @debug.debug_inspect(
-    executor_test_strip_repo_root(@xfs.read_file_to_string(workspace + "/out.txt")),
+    executor_test_strip_repo_root(
+      @xfs.read_file_to_string(workspace + "/out.txt"),
+    ),
     content=(
       #|"from-container|<repo>/_build/test-compat-docs-workspaces/job-container-basic/nested"
     ),

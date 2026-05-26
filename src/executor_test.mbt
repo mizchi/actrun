@@ -1780,7 +1780,9 @@ async test "executor: cached github repo composite action runs inner steps" {
   )
   let verify = expect_task_report(report, "build/verify")
   @debug.debug_inspect(
-    executor_test_strip_repo_root(verify.stdout.trim(chars=" \n\r\t").to_owned()),
+    executor_test_strip_repo_root(
+      verify.stdout.trim(chars=" \n\r\t").to_owned(),
+    ),
     content=(
       #|"write|mizchi-test/demo-action|v1|write|<repo>/_build/actrun/github_actions/mizchi-test/demo-action/v1/composite"
     ),
@@ -1843,7 +1845,9 @@ async test "executor: cached github repo node action runs main entrypoint" {
   )
   let verify = expect_task_report(report, "build/verify")
   @debug.debug_inspect(
-    executor_test_strip_repo_root(verify.stdout.trim(chars=" \n\r\t").to_owned()),
+    executor_test_strip_repo_root(
+      verify.stdout.trim(chars=" \n\r\t").to_owned(),
+    ),
     content=(
       #|"from-input|mizchitestnodeactionaction|<repo>/_build/actrun/github_actions/mizchi-test/node-action/v1/action|mizchi-test/node-action|v1"
     ),
@@ -1908,7 +1912,9 @@ async test "executor: job container runs github repo node action via docker adap
     ),
   )
   @debug.debug_inspect(
-    executor_test_strip_repo_root(@xfs.read_file_to_string(workspace + "/node.txt")),
+    executor_test_strip_repo_root(
+      @xfs.read_file_to_string(workspace + "/node.txt"),
+    ),
     content=(
       #|"from-container|<repo>/_build/test-workspaces/executor-job-container-node-action|<repo>/_build/actrun/github_actions/mizchi-test/node-action-container/v1/action"
     ),
@@ -3632,7 +3638,9 @@ async test "executor: local composite action runs inner steps" {
   )
   let verify = expect_task_report(report, "build/verify")
   @debug.debug_inspect(
-    executor_test_strip_repo_root(verify.stdout.trim(chars=" \n\r\t").to_owned()),
+    executor_test_strip_repo_root(
+      verify.stdout.trim(chars=" \n\r\t").to_owned(),
+    ),
     content=(
       #|"from-local-action|<repo>/_build/test-workspaces/executor-local-action/.github/actions/setup"
     ),
@@ -3866,7 +3874,9 @@ async test "executor: github action_path context is available in local composite
     ),
   )
   @debug.debug_inspect(
-    executor_test_strip_repo_root(@xfs.read_file_to_string(workspace + "/action-path.txt")),
+    executor_test_strip_repo_root(
+      @xfs.read_file_to_string(workspace + "/action-path.txt"),
+    ),
     content=(
       #|"<repo>/_build/test-workspaces/executor-local-action-github-action-path/.github/actions/setup"
     ),
@@ -5380,7 +5390,9 @@ async test "executor: job container runs run steps via docker adapter" {
     ),
   )
   @debug.debug_inspect(
-    executor_test_strip_repo_root(expect_task_report(report, "build/show").stdout),
+    executor_test_strip_repo_root(
+      expect_task_report(report, "build/show").stdout,
+    ),
     content=(
       #|"from-container|from-step|<repo>/_build/test-workspaces/executor-job-container/nested"
     ),
@@ -5755,7 +5767,9 @@ async test "executor: github repo node action lifecycle shares GITHUB_STATE acro
     ),
   )
   @debug.debug_inspect(
-    executor_test_strip_repo_root(@xfs.read_file_to_string(workspace + "/post.txt")),
+    executor_test_strip_repo_root(
+      @xfs.read_file_to_string(workspace + "/post.txt"),
+    ),
     content=(
       #|"main|<repo>/_build/test-workspaces/executor-github-node-lifecycle"
     ),
@@ -5833,7 +5847,9 @@ async test "executor: github repo docker action lifecycle shares GITHUB_STATE ac
     ),
   )
   @debug.debug_inspect(
-    executor_test_strip_repo_root(@xfs.read_file_to_string(workspace + "/post.txt")),
+    executor_test_strip_repo_root(
+      @xfs.read_file_to_string(workspace + "/post.txt"),
+    ),
     content=(
       #|"main|<repo>/_build/test-workspaces/executor-github-docker-lifecycle"
     ),
