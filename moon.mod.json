@@ -1,0 +1,28 @@
+{
+  "name": "mizchi/actrun",
+  "version": "0.30.0",
+  "deps": {
+    "moonbitlang/async": "0.16.6",
+    "mizchi/bitflow": "0.4.0",
+    "mizchi/bit": "0.39.2",
+    "moonbitlang/x": "0.4.40",
+    "moonbitlang/quickcheck": "0.9.10",
+    "moonbit-community/yaml": "0.0.4",
+    "mizchi/moomaid": "0.1.2",
+    "bobzhang/toml": "0.1.8",
+    "mizchi/jq": "0.2.1",
+    "mizchi/wite": "0.11.0"
+  },
+  "readme": "src/README.mbt.md",
+  "repository": "https://github.com/mizchi/actrun",
+  "license": "Apache-2.0",
+  "keywords": [
+    "github-actions",
+    "workflow",
+    "runner",
+    "ci"
+  ],
+  "description": "MVP GitHub Actions-compatible push CI runner with bitflow lowering, native execution, and bit workspace materialization.",
+  "source": "src",
+  "preferred-target": "native"
+}
