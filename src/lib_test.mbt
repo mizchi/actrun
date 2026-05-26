@@ -948,9 +948,9 @@ test "lowering: custom registry node action resolves backend from manifest" {
     ),
   )
   @debug.debug_inspect(
-    setup_plan.action.unwrap().entrypoint.unwrap_or(""),
+    executor_test_strip_repo_root(setup_plan.action.unwrap().entrypoint.unwrap_or("")),
     content=(
-      #|"/Users/mz/ghq/github.com/mizchi/actrun/_build/test-workspaces/custom-registry-node-root/bit/std/cache/v1/index.sh"
+      #|"<repo>/_build/test-workspaces/custom-registry-node-root/bit/std/cache/v1/index.sh"
     ),
   )
   @debug.debug_inspect(
@@ -1685,15 +1685,15 @@ test "lowering: cached github repo node action becomes node task" {
     ),
   )
   @debug.debug_inspect(
-    remote_plan.action.unwrap().entrypoint.unwrap_or(""),
+    executor_test_strip_repo_root(remote_plan.action.unwrap().entrypoint.unwrap_or("")),
     content=(
-      #|"/Users/mz/ghq/github.com/mizchi/actrun/_build/actrun/github_actions/mizchi-test/node-action/v1/action/main.sh"
+      #|"<repo>/_build/actrun/github_actions/mizchi-test/node-action/v1/action/main.sh"
     ),
   )
   @debug.debug_inspect(
-    remote_plan.action.unwrap().action_path.unwrap_or(""),
+    executor_test_strip_repo_root(remote_plan.action.unwrap().action_path.unwrap_or("")),
     content=(
-      #|"/Users/mz/ghq/github.com/mizchi/actrun/_build/actrun/github_actions/mizchi-test/node-action/v1/action"
+      #|"<repo>/_build/actrun/github_actions/mizchi-test/node-action/v1/action"
     ),
   )
   @debug.debug_inspect(
@@ -1715,9 +1715,9 @@ test "lowering: cached github repo node action becomes node task" {
     ),
   )
   @debug.debug_inspect(
-    remote_plan.env.get("GITHUB_ACTION_PATH").unwrap_or(""),
+    executor_test_strip_repo_root(remote_plan.env.get("GITHUB_ACTION_PATH").unwrap_or("")),
     content=(
-      #|"/Users/mz/ghq/github.com/mizchi/actrun/_build/actrun/github_actions/mizchi-test/node-action/v1/action"
+      #|"<repo>/_build/actrun/github_actions/mizchi-test/node-action/v1/action"
     ),
   )
 }
@@ -1832,9 +1832,9 @@ test "lowering: cached github repo docker action becomes docker task" {
     ),
   )
   @debug.debug_inspect(
-    remote_plan.action.unwrap().image.unwrap_or(""),
+    executor_test_strip_repo_root(remote_plan.action.unwrap().image.unwrap_or("")),
     content=(
-      #|"/Users/mz/ghq/github.com/mizchi/actrun/_build/actrun/github_actions/mizchi-test/docker-action/v1/action/Dockerfile"
+      #|"<repo>/_build/actrun/github_actions/mizchi-test/docker-action/v1/action/Dockerfile"
     ),
   )
   @debug.debug_inspect(

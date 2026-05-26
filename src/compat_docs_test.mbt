@@ -654,9 +654,9 @@ async test "compat docs: job container fixture executes run step via docker adap
     ),
   )
   @debug.debug_inspect(
-    @xfs.read_file_to_string(workspace + "/out.txt"),
+    executor_test_strip_repo_root(@xfs.read_file_to_string(workspace + "/out.txt")),
     content=(
-      #|"from-container|/Users/mz/ghq/github.com/mizchi/actrun/_build/test-compat-docs-workspaces/job-container-basic/nested"
+      #|"from-container|<repo>/_build/test-compat-docs-workspaces/job-container-basic/nested"
     ),
   )
   @debug.debug_inspect(
@@ -2590,9 +2590,9 @@ async test "compat docs: github context is available in step script" {
     ),
   )
   @debug.debug_inspect(
-    task.stdout,
+    executor_test_strip_repo_root(task.stdout),
     content=(
-      #|"<github-context|build|/Users/mz/ghq/github.com/mizchi/actrun/_build/test-compat-docs-workspaces/context-github-script>"
+      #|"<github-context|build|<repo>/_build/test-compat-docs-workspaces/context-github-script>"
     ),
   )
 }
