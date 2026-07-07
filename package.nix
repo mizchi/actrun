@@ -1,6 +1,7 @@
 {
   lib,
   git,
+  openssl,
   autoPatchelfHook,
   stdenv,
   moonPlatform,
@@ -14,6 +15,7 @@ moonPlatform.buildMoonPackage {
   doCheck = false;
   propagatedBuildInputs = [ git ];
   nativeBuildInputs = lib.optionals stdenv.isLinux [ autoPatchelfHook ];
+  runtimeDependencies = lib.optionals stdenv.isLinux [ (lib.getLib openssl) ];
 
   meta = {
     description = "Run GitHub Actions locally";
