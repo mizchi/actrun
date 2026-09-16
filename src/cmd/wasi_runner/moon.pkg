@@ -5,7 +5,8 @@ import {
 
 warnings = "-0029"
 
+pkgtype(kind: "executable")
+
 options(
-  "is-main": true,
   targets: { "run_js.mbt": [ "js" ], "run_native.mbt": [ "native" ] },
 )

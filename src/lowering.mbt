@@ -3,7 +3,7 @@ fn merge_env(
   base : Map[String, String],
   overlay : Map[String, String],
 ) -> Map[String, String] {
-  let merged : Map[String, String] = {}
+  let merged : Map[String, String] = Map([])
   for key, value in base {
     merged[key] = value
   }
@@ -74,7 +74,7 @@ priv struct ExpandedJob {
 
 ///|
 fn job_id_set(jobs : Array[JobSpec]) -> Map[String, Bool] {
-  let seen : Map[String, Bool] = {}
+  let seen : Map[String, Bool] = Map([])
   for job in jobs {
     seen[job.id] = true
   }
@@ -149,7 +149,7 @@ fn absolute_lowering_path(path : String) -> String {
   if path.has_prefix("/") {
     return path
   }
-  let cwd = @xsys.get_env_var("PWD").unwrap_or(".")
+  let cwd = @env.get_env_var("PWD").unwrap_or(".")
   if cwd.has_suffix("/") {
     cwd + path
   } else {
@@ -236,7 +236,7 @@ fn rewrite_reusable_step_local_uses(
 ///|
 fn github_action_cache_root() -> String {
   absolute_lowering_path(
-    @xsys.get_env_var("ACTRUN_GITHUB_ACTION_CACHE_ROOT").unwrap_or(
+    @env.get_env_var("ACTRUN_GITHUB_ACTION_CACHE_ROOT").unwrap_or(
       "_build/actrun/github_actions",
     ),
   )
@@ -245,7 +245,7 @@ fn github_action_cache_root() -> String {
 ///|
 fn action_registry_root() -> String {
   absolute_lowering_path(
-    @xsys.get_env_var("ACTRUN_ACTION_REGISTRY_ROOT").unwrap_or(
+    @env.get_env_var("ACTRUN_ACTION_REGISTRY_ROOT").unwrap_or(
       "_build/actrun/registry_actions",
     ),
   )
@@ -469,7 +469,7 @@ fn substitute_matrix_refs_in_expr(
 ///|
 fn quote_expr_string_literal(value : String) -> String {
   let sq = '\''
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   buf.write_char(sq)
   for ch in value {
     if ch == sq {
@@ -592,7 +592,7 @@ fn substitute_inputs_map(
   values : Map[String, String],
   inputs : Map[String, String],
 ) -> Map[String, String] {
-  let result : Map[String, String] = {}
+  let result : Map[String, String] = Map([])
   for key, value in values {
     result[key] = substitute_inputs_text(value, inputs)
   }
@@ -604,7 +604,7 @@ fn substitute_matrix_map(
   values : Map[String, String],
   matrix_values : Map[String, String],
 ) -> Map[String, String] {
-  let result : Map[String, String] = {}
+  let result : Map[String, String] = Map([])
   for key, value in values {
     result[key] = substitute_matrix_text(value, matrix_values)
   }
@@ -656,7 +656,7 @@ fn reusable_job_id(caller_job_id : String, callee_job_id : String) -> String {
 
 ///|
 fn terminal_job_ids(jobs : Array[JobSpec]) -> Array[String] {
-  let depended : Map[String, Bool] = {}
+  let depended : Map[String, Bool] = Map([])
   for job in jobs {
     for need in job.needs {
       depended[need] = true
@@ -750,7 +750,7 @@ fn substitute_reusable_needs_map(
   values : Map[String, String],
   replacements : Map[String, String],
 ) -> Map[String, String] {
-  let result : Map[String, String] = {}
+  let result : Map[String, String] = Map([])
   for key, value in values {
     result[key] = substitute_reusable_needs_text(value, replacements)
   }
@@ -841,7 +841,7 @@ fn substitute_reusable_bindings_map(
   inputs : Map[String, String],
   secrets : Map[String, String],
 ) -> Map[String, String] {
-  let result : Map[String, String] = {}
+  let result : Map[String, String] = Map([])
   for key, value in values {
     result[key] = substitute_reusable_bindings_text(value, inputs, secrets)
   }
@@ -1134,7 +1134,7 @@ fn matrix_job_id(logical_id : String, index : Int) -> String {
 
 ///|
 fn expanded_job_ids(jobs : Array[JobSpec]) -> Map[String, Array[String]] {
-  let result : Map[String, Array[String]] = {}
+  let result : Map[String, Array[String]] = Map([])
   for job in jobs {
     match job.matrix {
       Some(matrix) => {
@@ -1163,7 +1163,7 @@ fn resolve_job_targets(
         [id]
       } else {
         let resolved : Array[String] = []
-        let seen : Map[String, Bool] = {}
+        let seen : Map[String, Bool] = Map([])
         for target in targets {
           for actual in resolve_job_targets(job_ids, target) {
             if seen.get(actual) is None {
@@ -1181,7 +1181,7 @@ fn resolve_job_targets(
 ///|
 fn expand_matrix_jobs(
   jobs : Array[JobSpec],
-  aliases? : Map[String, Array[String]] = {},
+  aliases? : Map[String, Array[String]] = Map([]),
 ) -> Array[ExpandedJob] {
   let expanded : Array[ExpandedJob] = []
   let job_ids = expanded_job_ids(jobs)
@@ -1195,7 +1195,7 @@ fn expand_matrix_jobs(
         let mut row_index = 0
         for row in matrix.rows {
           let actual_needs : Array[String] = []
-          let need_targets : Map[String, Array[String]] = {}
+          let need_targets : Map[String, Array[String]] = Map([])
           for need in job.needs {
             let targets = resolve_job_targets(job_ids, need)
             let target_ids : Array[String] = []
@@ -1225,7 +1225,7 @@ fn expand_matrix_jobs(
       }
       None => {
         let actual_needs : Array[String] = []
-        let need_targets : Map[String, Array[String]] = {}
+        let need_targets : Map[String, Array[String]] = Map([])
         for need in job.needs {
           let targets = resolve_job_targets(job_ids, need)
           let target_ids : Array[String] = []
@@ -1332,7 +1332,7 @@ fn reusable_workflow_source(
     let resolved_path = join_path(workspace_root, normalized)
     // Primary: workspace_root + path (GitHub Actions spec)
     if @xfs.path_exists(resolved_path) {
-      return Some({ workflow_path: resolved_path, source_root: workspace_root })
+      return Some({ workflow_path: resolved_path, source_root: workspace_root, })
     }
     // Fallback: try just the filename in workspace_root
     // Handles cases where workflow is outside .github/workflows/
@@ -1342,10 +1342,10 @@ fn reusable_workflow_source(
       lowering_leaf_name(normalized),
     )
     if @xfs.path_exists(fallback_path) {
-      return Some({ workflow_path: fallback_path, source_root: workspace_root })
+      return Some({ workflow_path: fallback_path, source_root: workspace_root, })
     }
     // Return primary path (will fail at read_text with clear error)
-    return Some({ workflow_path: resolved_path, source_root: workspace_root })
+    return Some({ workflow_path: resolved_path, source_root: workspace_root, })
   }
   guard remote_reusable_workflow_ref(path) is Some(action_ref) else {
     return None
@@ -1376,9 +1376,9 @@ fn expand_reusable_workflows_in_workspace(
   errors : Array[String],
 ) -> ReusableWorkflowExpansion {
   let expanded : Array[JobSpec] = []
-  let aliases : Map[String, Array[String]] = {}
-  let alias_outputs : Map[String, Map[String, String]] = {}
-  let alias_output_targets : Map[String, Map[String, Array[String]]] = {}
+  let aliases : Map[String, Array[String]] = Map([])
+  let alias_outputs : Map[String, Map[String, String]] = Map([])
+  let alias_output_targets : Map[String, Map[String, Array[String]]] = Map([])
   for job in jobs {
     match job.reusable_workflow {
       Some(path) => {
@@ -1431,7 +1431,7 @@ fn expand_reusable_workflows_in_workspace(
                 let workflow_call = callee.workflow_call_spec.unwrap_or(
                   new_workflow_call_spec(),
                 )
-                let bound_inputs : Map[String, String] = {}
+                let bound_inputs : Map[String, String] = Map([])
                 for input_name, input_spec in workflow_call.inputs {
                   let bound_value = match
                     job.reusable_workflow_with.get(input_name) {
@@ -1476,7 +1476,7 @@ fn expand_reusable_workflows_in_workspace(
                     )
                   }
                 }
-                let bound_secrets : Map[String, String] = {}
+                let bound_secrets : Map[String, String] = Map([])
                 for secret_name, secret_spec in workflow_call.secrets {
                   if job.reusable_workflow_inherit_secrets {
                     let dollar = "$"
@@ -1506,7 +1506,7 @@ fn expand_reusable_workflows_in_workspace(
                 // permissions and concurrency silently ignored
                 ignore(callee.permissions)
                 ignore(callee.concurrency)
-                let callee_ids : Map[String, String] = {}
+                let callee_ids : Map[String, String] = Map([])
                 for callee_job in callee.jobs {
                   callee_ids[callee_job.id] = reusable_job_id(
                     job.id,
@@ -1548,7 +1548,8 @@ fn expand_reusable_workflows_in_workspace(
                     }
                     aliases[job.id] = row_ids
                     if workflow_call.outputs.length() > 0 {
-                      let workflow_output_targets : Map[String, Array[String]] = {}
+                      let workflow_output_targets : Map[String, Array[String]] = Map([],
+                      )
                       for output_name, _ in workflow_call.outputs {
                         workflow_output_targets[output_name] = row_ids
                       }
@@ -1710,7 +1711,7 @@ fn expand_reusable_workflows_in_workspace(
                   alias_output_targets[alias_id] = targets
                 }
                 let terminals : Array[String] = []
-                let seen_terminals : Map[String, Bool] = {}
+                let seen_terminals : Map[String, Bool] = Map([])
                 for terminal_id in terminal_job_ids(callee.jobs) {
                   let namespaced = callee_ids
                     .get(terminal_id)
@@ -1726,7 +1727,7 @@ fn expand_reusable_workflows_in_workspace(
                   }
                 }
                 aliases[job.id] = terminals
-                let workflow_outputs : Map[String, String] = {}
+                let workflow_outputs : Map[String, String] = Map([])
                 for output_name, output_spec in workflow_call.outputs {
                   workflow_outputs[output_name] = workflow_job_output_reference(
                     substitute_reusable_bindings_text(
@@ -1753,7 +1754,7 @@ fn expand_reusable_workflows_in_workspace(
       None => expanded.push(job)
     }
   }
-  { jobs: expanded, aliases, alias_outputs, alias_output_targets }
+  { jobs: expanded, aliases, alias_outputs, alias_output_targets, }
 }
 
 ///|
@@ -1832,7 +1833,7 @@ fn append_run_task(
   if_condition : String,
   continue_on_error : String,
   env : Map[String, String],
-  with_values? : Map[String, String] = {},
+  with_values? : Map[String, String] = Map([]),
   action_scope? : String? = None,
   timeout_minutes? : Int = 0,
 ) -> Unit {
@@ -1875,7 +1876,7 @@ fn append_action_task(
   continue_on_error : String,
   env : Map[String, String],
   action : ResolvedAction,
-  with_values? : Map[String, String] = {},
+  with_values? : Map[String, String] = Map([]),
   action_scope? : String? = None,
   requires_action_started? : Bool = false,
   timeout_minutes? : Int = 0,
@@ -1976,7 +1977,7 @@ fn action_input_env(
   defaults : Map[String, String],
   overrides : Map[String, String],
 ) -> Map[String, String] {
-  let env : Map[String, String] = {}
+  let env : Map[String, String] = Map([])
   for key, value in merge_env(defaults, overrides) {
     // Resolve unresolved ${{ }} expressions in action.yml defaults
     // github.token is resolved later in executor; keep it as-is
@@ -2006,7 +2007,7 @@ fn action_input_env(
 
 ///|
 fn github_action_context_env(action_ref : ActionRef) -> Map[String, String] {
-  let env : Map[String, String] = {}
+  let env : Map[String, String] = Map([])
   match action_ref {
     GitHubRepo(owner, repo, version, _) => {
       env["GITHUB_ACTION_REPOSITORY"] = owner + "/" + repo
@@ -2125,7 +2126,7 @@ fn lower_manifest_backed_action(
   task_plans : Array[TaskPlan],
   deferred_post_tasks : Array[DeferredActionTask],
   errors : Array[String],
-  composite_output_mappings? : Map[String, Map[String, String]] = {},
+  composite_output_mappings? : Map[String, Map[String, String]] = Map([]),
 ) -> String {
   guard find_local_action_manifest(workspace_root, cached_root)
     is Some((_, manifest_text)) else {
@@ -2483,8 +2484,8 @@ fn lower_local_action(
   task_plans : Array[TaskPlan],
   deferred_post_tasks : Array[DeferredActionTask],
   errors : Array[String],
-  action_context_env? : Map[String, String] = {},
-  composite_output_mappings? : Map[String, Map[String, String]] = {},
+  action_context_env? : Map[String, String] = Map([]),
+  composite_output_mappings? : Map[String, Map[String, String]] = Map([]),
 ) -> String {
   if workspace_root.length() == 0 {
     errors.push(
@@ -2746,7 +2747,7 @@ fn lower_local_action(
   // outputs map: output_name → expression (e.g., "${{ steps.write.outputs.value }}")
   // We resolve inner step references relative to the outer step scope
   if action.outputs.length() > 0 {
-    let resolved_outputs : Map[String, String] = {}
+    let resolved_outputs : Map[String, String] = Map([])
     for output_name, expression in action.outputs {
       // Rewrite inner step references to composite step IDs
       // e.g., "steps.write.outputs.value" → look up "outer__write" in step_outputs
@@ -2854,19 +2855,20 @@ pub fn lower_push_workflow_in_workspace(
   let nodes : Array[@wf.FlowNode] = []
   let tasks : Array[@wf.FlowTask] = []
   let task_plans : Array[TaskPlan] = []
-  let job_outputs : Map[String, Map[String, String]] = {}
-  let job_if_conditions : Map[String, String] = {}
-  let job_needs : Map[String, Array[String]] = {}
-  let job_need_targets : Map[String, Map[String, Array[String]]] = {}
-  let job_virtual_targets : Map[String, Array[String]] = {}
-  let job_virtual_output_targets : Map[String, Map[String, Array[String]]] = {}
-  let job_matrix_groups : Map[String, String] = {}
-  let job_matrix_fail_fast : Map[String, Bool] = {}
-  let job_containers : Map[String, JobContainerSpec] = {}
-  let job_services : Map[String, Map[String, JobContainerSpec]] = {}
-  let composite_output_mappings : Map[String, Map[String, String]] = {}
+  let job_outputs : Map[String, Map[String, String]] = Map([])
+  let job_if_conditions : Map[String, String] = Map([])
+  let job_needs : Map[String, Array[String]] = Map([])
+  let job_need_targets : Map[String, Map[String, Array[String]]] = Map([])
+  let job_virtual_targets : Map[String, Array[String]] = Map([])
+  let job_virtual_output_targets : Map[String, Map[String, Array[String]]] = Map([],
+  )
+  let job_matrix_groups : Map[String, String] = Map([])
+  let job_matrix_fail_fast : Map[String, Bool] = Map([])
+  let job_containers : Map[String, JobContainerSpec] = Map([])
+  let job_services : Map[String, Map[String, JobContainerSpec]] = Map([])
+  let composite_output_mappings : Map[String, Map[String, String]] = Map([])
   let entry_targets : Array[String] = []
-  let seen_jobs : Map[String, Bool] = {}
+  let seen_jobs : Map[String, Bool] = Map([])
   if workflow.workflow_call {
     errors.push("workflow_call is not supported in MVP")
   }

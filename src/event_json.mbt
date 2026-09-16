@@ -1,6 +1,6 @@
 ///|
 fn push_event_json_error(message : String) -> PushEventJsonParseResult {
-  { event: None, errors: [message] }
+  { event: None, errors: [message], }
 }
 
 ///|
@@ -137,7 +137,7 @@ pub fn parse_github_push_event_json(text : String) -> PushEventJsonParseResult {
     errors.push("push event JSON is missing string field `after`")
   }
   if errors.length() > 0 {
-    return { event: None, errors }
+    return { event: None, errors, }
   }
 
   let repository = match push_event_json_object(payload, "repository") {

@@ -233,6 +233,7 @@ just check        # 型チェック
 just test         # テスト実行
 just e2e          # E2E シナリオ実行
 just release-check  # fmt + info + check + test + e2e
+just build-js     # npm 向け CLI バンドル (dist/actrun.js) とライブラリ (lib/actrun.js) をビルド
 ```
 
 ### ライブ互換性テスト

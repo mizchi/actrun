@@ -7,7 +7,7 @@ pub struct Parser {
 
 ///|
 pub fn Parser::new(tokens : Array[Token]) -> Parser {
-  { tokens, pos: 0 }
+  { tokens, pos: 0, }
 }
 
 ///|
@@ -270,7 +270,7 @@ fn Parser::parse_redirect(self : Parser) -> Redirect raise ParseError {
     }
     _ => raise ParseError::ExpectedWord(self.peek().line, self.peek().col)
   }
-  { kind, fd: None, target }
+  { kind, fd: None, target, }
 }
 
 ///|
@@ -333,7 +333,7 @@ fn Parser::parse_if(self : Parser) -> Command raise ParseError {
   }
   self.skip_newlines()
   let _ = self.expect(Fi)
-  IfCmd({ condition, then_body, elif_parts, else_body })
+  IfCmd({ condition, then_body, elif_parts, else_body, })
 }
 
 ///|

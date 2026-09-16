@@ -33,7 +33,7 @@ pub fn parse_word_parts(s : String) -> Word {
     } else if c == '\\' && i + 1 < chars.length() {
       // Escape sequence
       i += 1
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       buf.write_char(chars[i])
       parts.push(Literal(buf.to_string()))
       i += 1
@@ -67,7 +67,7 @@ fn parse_double_quoted(
 ) -> (Array[WordPart], Int) {
   let parts : Array[WordPart] = []
   let mut i = start
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   fn flush_literal() -> Unit {
     if buf.to_string().length() > 0 {
       parts.push(Literal(buf.to_string()))
@@ -247,7 +247,7 @@ fn string_to_chars(s : String) -> Array[Char] {
 
 ///|
 fn chars_to_string(chars : Array[Char], start : Int, end : Int) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   for i = start; i < end && i < chars.length(); i = i + 1 {
     buf.write_char(chars[i])
   }

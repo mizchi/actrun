@@ -283,8 +283,8 @@ test "configured_wasm_runner_kind_error: rejects unsupported explicit runner" {
 
 ///|
 test "configured_wasm_bin: v8 defaults to ACTRUN_NODE_BIN" {
-  let previous = @xsys.get_env_var("ACTRUN_NODE_BIN")
-  @xsys.set_env_var("ACTRUN_NODE_BIN", "/tmp/tools/node24")
+  let previous = @env.get_env_var("ACTRUN_NODE_BIN")
+  @env.set_env_var("ACTRUN_NODE_BIN", "/tmp/tools/node24")
   let wasm_bin = configured_wasm_runner_bin({ "ACTRUN_WASM_RUNNER": "v8" })
   @debug.debug_inspect(
     wasm_bin,
@@ -293,8 +293,8 @@ test "configured_wasm_bin: v8 defaults to ACTRUN_NODE_BIN" {
     ),
   )
   match previous {
-    Some(value) => @xsys.set_env_var("ACTRUN_NODE_BIN", value)
-    None => @xsys.unset_env_var("ACTRUN_NODE_BIN")
+    Some(value) => @env.set_env_var("ACTRUN_NODE_BIN", value)
+    None => @env.unset_env_var("ACTRUN_NODE_BIN")
   }
 }
 

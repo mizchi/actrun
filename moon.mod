@@ -1,18 +1,17 @@
 name = "mizchi/actrun"
 
-version = "0.30.1"
+version = "0.31.0"
 
 import {
-  "moonbitlang/async@0.16.6",
-  "mizchi/bitflow@0.4.0",
-  "mizchi/bit@0.39.2",
-  "moonbitlang/x@0.4.40",
-  "moonbitlang/quickcheck@0.9.10",
-  "moonbit-community/yaml@0.0.4",
-  "mizchi/moomaid@0.1.2",
-  "bobzhang/toml@0.1.8",
-  "mizchi/jq@0.2.1",
-  "mizchi/wite@0.11.0",
+  "moonbitlang/async@0.22.1",
+  "mizchi/bitflow@0.4.1",
+  "moonbitlang/x@0.5.5",
+  "moonbitlang/quickcheck@0.14.0",
+  "moonbit-community/yaml@0.0.6",
+  "bobzhang/toml@0.4.3",
+  "mizchi/jq@0.2.2",
+  "mizchi/wite@0.11.3",
+  "mizchi/wit@0.3.3",
 }
 
 readme = "src/README.mbt.md"
@@ -27,6 +26,4 @@ description = "MVP GitHub Actions-compatible push CI runner with bitflow lowerin
 
 preferred_target = "native"
 
-options(
-  source: "src",
-)
+source = "src"

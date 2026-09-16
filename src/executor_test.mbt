@@ -12,7 +12,7 @@ fn ensure_dir(path : String) -> Unit raise {
 /// (e.g. `/Users/me/ghq/github.com/mizchi/actrun/...`) and break on
 /// CI / other machines.
 fn executor_test_strip_repo_root(s : String) -> String {
-  let cwd = @xsys.get_env_var("PWD").unwrap_or(".")
+  let cwd = @env.get_env_var("PWD").unwrap_or(".")
   let prefix = if cwd.has_suffix("/") { cwd } else { cwd + "/" }
   s.replace_all(old=prefix, new="<repo>/")
 }
@@ -22,7 +22,7 @@ fn executor_test_absolute_path(path : String) -> String {
   if path.has_prefix("/") {
     return path
   }
-  let cwd = @xsys.get_env_var("PWD").unwrap_or(".")
+  let cwd = @env.get_env_var("PWD").unwrap_or(".")
   if cwd.has_suffix("/") {
     cwd + path
   } else {
@@ -32,16 +32,16 @@ fn executor_test_absolute_path(path : String) -> String {
 
 ///|
 fn executor_test_set_env_var(key : String, value : String) -> String? {
-  let previous = @xsys.get_env_var(key)
-  @xsys.set_env_var(key, value)
+  let previous = @env.get_env_var(key)
+  @env.set_env_var(key, value)
   previous
 }
 
 ///|
 fn executor_test_restore_env_var(key : String, previous : String?) -> Unit {
   match previous {
-    Some(value) => @xsys.set_env_var(key, value)
-    None => @xsys.unset_env_var(key)
+    Some(value) => @env.set_env_var(key, value)
+    None => @env.unset_env_var(key)
   }
 }
 
@@ -97,7 +97,7 @@ async fn executor_test_run_env(
   cmd : String,
   args : Array[String],
   cwd : String,
-  env? : Map[String, String] = {},
+  env? : Map[String, String] = Map([]),
 ) -> (Int, String, String) {
   let command_args : Array[String] = []
   for key, value in env {
@@ -122,7 +122,7 @@ async fn executor_test_require_ok(
   cmd : String,
   args : Array[String],
   cwd : String,
-  env? : Map[String, String] = {},
+  env? : Map[String, String] = Map([]),
 ) -> Unit {
   let (code, stdout, stderr) = executor_test_run_env(cmd, args, cwd, env~)
   if code != 0 {
@@ -5870,7 +5870,7 @@ fn check_no_workspace_entries(dir : String, workspace : String) -> Bool {
   let entries = try @xfs.read_dir(abs_dir) catch {
     _ => []
   } noraise {
-    value => value
+    value => value.to_owned()
   }
   // workspace key is the sanitized absolute path
   let workspace_key = workspace

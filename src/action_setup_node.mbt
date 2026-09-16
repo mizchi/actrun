@@ -347,14 +347,14 @@ async fn execute_setup_node_native(
   }
   let configured_node_fallback = resolved_plan_env
     .get("ACTRUN_NODE_BIN")
-    .unwrap_or(@xsys.get_env_var("ACTRUN_NODE_BIN").unwrap_or("node"))
+    .unwrap_or(@env.get_env_var("ACTRUN_NODE_BIN").unwrap_or("node"))
   let fallback_node_bin = resolve_exec_bin_for_workspace(
     configured_node_fallback, workspace_root,
   )
   let configured_setup_node_bin = resolved_plan_env
     .get("ACTRUN_SETUP_NODE_BIN")
     .unwrap_or(
-      @xsys.get_env_var("ACTRUN_SETUP_NODE_BIN").unwrap_or(fallback_node_bin),
+      @env.get_env_var("ACTRUN_SETUP_NODE_BIN").unwrap_or(fallback_node_bin),
     )
   let node_bin = resolve_exec_bin_for_workspace(
     configured_setup_node_bin, workspace_root,
@@ -394,12 +394,12 @@ async fn execute_setup_node_native(
     .unwrap_or("")
     .trim(chars=" \t\r\n")
     .to_owned()
-  let env_updates : Map[String, String] = {}
+  let env_updates : Map[String, String] = Map([])
   let output_values : Map[String, String] = { "node-version": node_version }
   if architecture_input.length() > 0 {
     output_values["node-architecture"] = architecture_input
   }
-  let state_updates : Map[String, String] = {}
+  let state_updates : Map[String, String] = Map([])
   if normalized_cache_input.length() > 0 {
     if normalized_cache_input != "npm" {
       return failure_execution_result(
@@ -476,9 +476,7 @@ async fn execute_setup_node_native(
     let node_auth_token = resolved_plan_env
       .get("NODE_AUTH_TOKEN")
       .unwrap_or(
-        @xsys.get_env_var("NODE_AUTH_TOKEN").unwrap_or(
-          "XXXXX-XXXXX-XXXXX-XXXXX",
-        ),
+        @env.get_env_var("NODE_AUTH_TOKEN").unwrap_or("XXXXX-XXXXX-XXXXX-XXXXX"),
       )
     env_updates["NPM_CONFIG_USERCONFIG"] = npmrc_path
     env_updates["NODE_AUTH_TOKEN"] = node_auth_token

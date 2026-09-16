@@ -95,7 +95,7 @@ fn exec_relative_path(root : String, path : String) -> String {
 ///|
 #warnings("-deprecated")
 fn action_checkout_parse_int64(value : StringView) -> Int64 raise {
-  @strconv.parse_int64(value)
+  @string.parse_int64(value)
 }
 
 ///|
@@ -120,7 +120,7 @@ fn exec_copy_workspace_snapshot(
   let entries = try @xfs.read_dir(workspace_root) catch {
     _ => []
   } noraise {
-    value => value
+    value => value.to_owned()
   }
   for entry in entries {
     if entry == top_level {
@@ -144,7 +144,7 @@ fn exec_prune_sparse_checkout(
     let entries = try @xfs.read_dir(current) catch {
       _ => []
     } noraise {
-      value => value
+      value => value.to_owned()
     }
     let kept_entries : Array[String] = []
     for entry in entries {
@@ -323,7 +323,7 @@ fn exec_overwrite_from_clone(src : String, dst : String) -> Bool {
   let entries = try @xfs.read_dir(src) catch {
     _ => []
   } noraise {
-    value => value
+    value => value.to_owned()
   }
   for entry in entries {
     // Never touch .git — keep the user's original .git intact
@@ -345,7 +345,7 @@ fn exec_remove_checkout_contents_preserving_git(root : String) -> Bool {
   let entries = try @xfs.read_dir(root) catch {
     _ => []
   } noraise {
-    value => value
+    value => value.to_owned()
   }
   for entry in entries {
     if entry == ".git" {

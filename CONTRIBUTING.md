@@ -8,7 +8,7 @@ Thank you for your interest in contributing to actrun!
 
 - [MoonBit](https://docs.moonbitlang.com) toolchain
 - [just](https://github.com/casey/just) command runner
-- Node.js (for action execution)
+- Node.js 18+ and [pnpm](https://pnpm.io) (for action execution and the npm build)
 - Git
 
 ### Setup
@@ -29,6 +29,20 @@ just test       # run tests
 just e2e        # run E2E scenarios
 just run        # run main
 ```
+
+### JavaScript / npm Build
+
+The CLI also ships as the `@mizchi/actrun` npm package. Build and smoke test it with:
+
+```bash
+just build-js          # moon build (js) + node scripts/bundle-js.js -> dist/actrun.js, lib/actrun.js
+node dist/actrun.js --help
+just check-js          # moon check --deny-warn --target js
+```
+
+`npm run build` runs the same steps and is invoked automatically by `prepublishOnly`.
+The release workflow attaches the `npm pack` tarball to the GitHub release and publishes
+to npm when the `NPM_TOKEN` secret is configured.
 
 ### Before Submitting
 

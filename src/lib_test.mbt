@@ -44,7 +44,7 @@ fn test_absolute_path(path : String) -> String {
   if path.has_prefix("/") {
     return path
   }
-  let cwd = @xsys.get_env_var("PWD").unwrap_or(".")
+  let cwd = @env.get_env_var("PWD").unwrap_or(".")
   if cwd.has_suffix("/") {
     cwd + path
   } else {
@@ -135,16 +135,16 @@ fn prepare_cached_github_action_root(
 
 ///|
 fn lib_test_set_env_var(key : String, value : String) -> String? {
-  let previous = @xsys.get_env_var(key)
-  @xsys.set_env_var(key, value)
+  let previous = @env.get_env_var(key)
+  @env.set_env_var(key, value)
   previous
 }
 
 ///|
 fn lib_test_restore_env_var(key : String, previous : String?) -> Unit {
   match previous {
-    Some(value) => @xsys.set_env_var(key, value)
-    None => @xsys.unset_env_var(key)
+    Some(value) => @env.set_env_var(key, value)
+    None => @env.unset_env_var(key)
   }
 }
 

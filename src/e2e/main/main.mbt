@@ -66,7 +66,7 @@ fn e2e_absolute_path(path : String) -> String {
   if path.has_prefix("/") {
     return path
   }
-  let cwd = @xsys.get_env_var("PWD").unwrap_or(".")
+  let cwd = @env.get_env_var("PWD").unwrap_or(".")
   if cwd.has_suffix("/") {
     cwd + path
   } else {
@@ -92,9 +92,10 @@ fn e2e_is_dir(path : String) -> Bool {
 
 ///|
 fn e2e_read_dir(path : String) -> Array[String] {
-  @xfs.read_dir(path) catch {
+  let entries = @xfs.read_dir(path) catch {
     _ => abort("failed to read dir: " + path)
   }
+  entries.to_owned()
 }
 
 ///|
@@ -288,7 +289,7 @@ async fn e2e_run_env(
   cmd : String,
   args : Array[String],
   cwd : String,
-  env? : Map[String, String] = {},
+  env? : Map[String, String] = Map([]),
 ) -> E2eProcessResult {
   let command_args : Array[String] = []
   for key, value in env {
@@ -303,7 +304,7 @@ async fn e2e_run_env(
     command_args,
     cwd~,
   )
-  { code, stdout: stdout.text(), stderr: stderr.text() }
+  { code, stdout: stdout.text(), stderr: stderr.text(), }
 }
 
 ///|
@@ -313,7 +314,7 @@ async fn e2e_require_ok(
   cmd : String,
   args : Array[String],
   cwd : String,
-  env? : Map[String, String] = {},
+  env? : Map[String, String] = Map([]),
 ) -> Unit {
   let result = e2e_run_env(cmd, args, cwd, env~)
   if result.code != 0 {
@@ -814,7 +815,7 @@ async fn e2e_prepare_fake_docker_bin(
 #cfg(target="native")
 async fn e2e_run_cli(
   args : Array[String],
-  env? : Map[String, String] = {},
+  env? : Map[String, String] = Map([]),
 ) -> E2eProcessResult {
   let effective_env = env
   if effective_env.get("ACTRUN_TRUST") is None {
@@ -833,7 +834,7 @@ async fn e2e_run_cli(
     command_args,
     cwd=".",
   )
-  { code, stdout: stdout.text(), stderr: stderr.text() }
+  { code, stdout: stdout.text(), stderr: stderr.text(), }
 }
 
 ///|
@@ -851,37 +852,69 @@ fn e2e_write_repo_file(repo_root : String, file : E2eRepoFile) -> Unit {
 }
 
 ///|
-fn e2e_commit_repo_files(
+fn e2e_git_env(timestamp : Int64) -> Map[String, String] {
+  let date = timestamp.to_string() + " +0000"
+  {
+    "GIT_AUTHOR_NAME": "Author",
+    "GIT_AUTHOR_EMAIL": "a@b.com",
+    "GIT_COMMITTER_NAME": "Author",
+    "GIT_COMMITTER_EMAIL": "a@b.com",
+    "GIT_AUTHOR_DATE": date,
+    "GIT_COMMITTER_DATE": date,
+    "GIT_CONFIG_GLOBAL": "/dev/null",
+    "GIT_CONFIG_NOSYSTEM": "1",
+  }
+}
+
+///|
+async fn e2e_git(
+  repo_root : String,
+  args : Array[String],
+  timestamp : Int64,
+) -> String {
+  let (code, stdout, stderr) = @process.collect_output(
+    "git",
+    args,
+    cwd=repo_root,
+    extra_env=e2e_git_env(timestamp),
+  )
+  if code != 0 {
+    abort(
+      "git " +
+      args.join(" ") +
+      " failed for repo " +
+      repo_root +
+      ": " +
+      stderr.text(),
+    )
+  }
+  stdout.text().trim().to_owned()
+}
+
+///|
+async fn e2e_commit_repo_files(
   repo_root : String,
   files : Array[E2eRepoFile],
   message : String,
   timestamp : Int64,
   init? : Bool = false,
 ) -> String {
-  let fs = @bitosfs.OsFs::new()
   e2e_ensure_dir(repo_root)
   if init {
-    ignore(try? @bitlib.init_repo(fs, repo_root))
+    ignore(e2e_git(repo_root, ["init", "--quiet"], timestamp))
+    ignore(
+      e2e_git(repo_root, ["symbolic-ref", "HEAD", "refs/heads/main"], timestamp),
+    )
+    ignore(e2e_git(repo_root, ["config", "commit.gpgsign", "false"], timestamp))
   }
-  let paths : Array[String] = []
+  let add_args = ["add", "--"]
   for file in files {
     e2e_write_repo_file(repo_root, file)
-    paths.push(file.path)
+    add_args.push(file.path)
   }
-  let add_ok = try @bitlib.add_paths(fs, fs, repo_root, paths) catch {
-    _ => false
-  } noraise {
-    _ => true
-  }
-  if !add_ok {
-    abort("bit add failed for repo: " + repo_root)
-  }
-  let commit_id = @bitlib.commit(
-    fs, fs, repo_root, message, "Author <a@b.com>", timestamp,
-  ) catch {
-    _ => abort("bit commit failed for repo: " + repo_root)
-  }
-  commit_id.to_hex()
+  ignore(e2e_git(repo_root, add_args, timestamp))
+  ignore(e2e_git(repo_root, ["commit", "--quiet", "-m", message], timestamp))
+  e2e_git(repo_root, ["rev-parse", "HEAD"], timestamp)
 }
 
 ///|
@@ -4421,8 +4454,8 @@ async fn run_repo_push_bit() -> Unit {
   let before_sha = e2e_commit_repo_files(
     repo_root,
     [
-      { path: ".github/workflows/ci.yml", content: workflow_text },
-      { path: "src/message.txt", content: "before\n" },
+      { path: ".github/workflows/ci.yml", content: workflow_text, },
+      { path: "src/message.txt", content: "before\n", },
     ],
     "Initial commit",
     1700000100L,
@@ -4430,7 +4463,7 @@ async fn run_repo_push_bit() -> Unit {
   )
   let after_sha = e2e_commit_repo_files(
     repo_root,
-    [{ path: "src/message.txt", content: "after\n" }],
+    [{ path: "src/message.txt", content: "after\n", }],
     "Update message",
     1700000101L,
   )
@@ -4469,8 +4502,8 @@ async fn run_repo_needs_output() -> Unit {
   let before_sha = e2e_commit_repo_files(
     repo_root,
     [
-      { path: ".github/workflows/ci.yml", content: workflow_text },
-      { path: "src/message.txt", content: "before-needs\n" },
+      { path: ".github/workflows/ci.yml", content: workflow_text, },
+      { path: "src/message.txt", content: "before-needs\n", },
     ],
     "Initial needs commit",
     1700000500L,
@@ -4478,7 +4511,7 @@ async fn run_repo_needs_output() -> Unit {
   )
   let after_sha = e2e_commit_repo_files(
     repo_root,
-    [{ path: "src/message.txt", content: "after-needs\n" }],
+    [{ path: "src/message.txt", content: "after-needs\n", }],
     "Update needs message",
     1700000501L,
   )
@@ -4513,8 +4546,8 @@ async fn run_repo_job_file_commands() -> Unit {
   let before_sha = e2e_commit_repo_files(
     repo_root,
     [
-      { path: ".github/workflows/ci.yml", content: workflow_text },
-      { path: "src/message.txt", content: "before-job-file\n" },
+      { path: ".github/workflows/ci.yml", content: workflow_text, },
+      { path: "src/message.txt", content: "before-job-file\n", },
     ],
     "Initial job file commit",
     1700000800L,
@@ -4522,7 +4555,7 @@ async fn run_repo_job_file_commands() -> Unit {
   )
   let after_sha = e2e_commit_repo_files(
     repo_root,
-    [{ path: "src/message.txt", content: "after-job-file\n" }],
+    [{ path: "src/message.txt", content: "after-job-file\n", }],
     "Update job file message",
     1700000801L,
   )
@@ -4557,8 +4590,8 @@ async fn run_repo_multi_job_summary() -> Unit {
   let before_sha = e2e_commit_repo_files(
     repo_root,
     [
-      { path: ".github/workflows/ci.yml", content: workflow_text },
-      { path: "src/message.txt", content: "before-summary\n" },
+      { path: ".github/workflows/ci.yml", content: workflow_text, },
+      { path: "src/message.txt", content: "before-summary\n", },
     ],
     "Initial summary commit",
     1700000900L,
@@ -4566,7 +4599,7 @@ async fn run_repo_multi_job_summary() -> Unit {
   )
   let after_sha = e2e_commit_repo_files(
     repo_root,
-    [{ path: "src/message.txt", content: "after-summary\n" }],
+    [{ path: "src/message.txt", content: "after-summary\n", }],
     "Update summary message",
     1700000901L,
   )
@@ -4606,8 +4639,8 @@ async fn run_repo_needs_summary() -> Unit {
   let before_sha = e2e_commit_repo_files(
     repo_root,
     [
-      { path: ".github/workflows/ci.yml", content: workflow_text },
-      { path: "src/message.txt", content: "before-needs-summary\n" },
+      { path: ".github/workflows/ci.yml", content: workflow_text, },
+      { path: "src/message.txt", content: "before-needs-summary\n", },
     ],
     "Initial needs summary commit",
     1700000950L,
@@ -4615,7 +4648,7 @@ async fn run_repo_needs_summary() -> Unit {
   )
   let after_sha = e2e_commit_repo_files(
     repo_root,
-    [{ path: "src/message.txt", content: "after-needs-summary\n" }],
+    [{ path: "src/message.txt", content: "after-needs-summary\n", }],
     "Update needs summary message",
     1700000951L,
   )
@@ -4664,8 +4697,8 @@ async fn run_repo_remote_node_failure_cleanup() -> Unit {
   let before_sha = e2e_commit_repo_files(
     repo_root,
     [
-      { path: ".github/workflows/ci.yml", content: workflow_text },
-      { path: "src/message.txt", content: "before-repo-node-failure\n" },
+      { path: ".github/workflows/ci.yml", content: workflow_text, },
+      { path: "src/message.txt", content: "before-repo-node-failure\n", },
     ],
     "Initial repo node failure commit",
     1700000960L,
@@ -4673,7 +4706,7 @@ async fn run_repo_remote_node_failure_cleanup() -> Unit {
   )
   let after_sha = e2e_commit_repo_files(
     repo_root,
-    [{ path: "src/message.txt", content: "after-repo-node-failure\n" }],
+    [{ path: "src/message.txt", content: "after-repo-node-failure\n", }],
     "Update repo node failure message",
     1700000961L,
   )
@@ -4741,8 +4774,8 @@ async fn run_repo_remote_node_failure_cache_hit() -> Unit {
   let before_sha = e2e_commit_repo_files(
     repo_root,
     [
-      { path: ".github/workflows/ci.yml", content: workflow_text },
-      { path: "src/message.txt", content: "before-repo-node-failure-cache\n" },
+      { path: ".github/workflows/ci.yml", content: workflow_text, },
+      { path: "src/message.txt", content: "before-repo-node-failure-cache\n", },
     ],
     "Initial repo node failure cache commit",
     1700000962L,
@@ -4750,7 +4783,7 @@ async fn run_repo_remote_node_failure_cache_hit() -> Unit {
   )
   let after_sha = e2e_commit_repo_files(
     repo_root,
-    [{ path: "src/message.txt", content: "after-repo-node-failure-cache\n" }],
+    [{ path: "src/message.txt", content: "after-repo-node-failure-cache\n", }],
     "Update repo node failure cache message",
     1700000963L,
   )
@@ -4818,8 +4851,8 @@ async fn run_repo_remote_docker_failure_cleanup() -> Unit {
   let before_sha = e2e_commit_repo_files(
     repo_root,
     [
-      { path: ".github/workflows/ci.yml", content: workflow_text },
-      { path: "src/message.txt", content: "before-repo-docker-failure\n" },
+      { path: ".github/workflows/ci.yml", content: workflow_text, },
+      { path: "src/message.txt", content: "before-repo-docker-failure\n", },
     ],
     "Initial repo docker failure commit",
     1700000970L,
@@ -4827,7 +4860,7 @@ async fn run_repo_remote_docker_failure_cleanup() -> Unit {
   )
   let after_sha = e2e_commit_repo_files(
     repo_root,
-    [{ path: "src/message.txt", content: "after-repo-docker-failure\n" }],
+    [{ path: "src/message.txt", content: "after-repo-docker-failure\n", }],
     "Update repo docker failure message",
     1700000971L,
   )
@@ -4896,8 +4929,11 @@ async fn run_repo_remote_docker_failure_cache_hit() -> Unit {
   let before_sha = e2e_commit_repo_files(
     repo_root,
     [
-      { path: ".github/workflows/ci.yml", content: workflow_text },
-      { path: "src/message.txt", content: "before-repo-docker-failure-cache\n" },
+      { path: ".github/workflows/ci.yml", content: workflow_text, },
+      {
+        path: "src/message.txt",
+        content: "before-repo-docker-failure-cache\n",
+      },
     ],
     "Initial repo docker failure cache commit",
     1700000972L,
@@ -4905,7 +4941,7 @@ async fn run_repo_remote_docker_failure_cache_hit() -> Unit {
   )
   let after_sha = e2e_commit_repo_files(
     repo_root,
-    [{ path: "src/message.txt", content: "after-repo-docker-failure-cache\n" }],
+    [{ path: "src/message.txt", content: "after-repo-docker-failure-cache\n", }],
     "Update repo docker failure cache message",
     1700000973L,
   )
@@ -4975,8 +5011,8 @@ async fn run_repo_event_json() -> Unit {
   let before_sha = e2e_commit_repo_files(
     repo_root,
     [
-      { path: ".github/workflows/ci.yml", content: workflow_text },
-      { path: "src/message.txt", content: "before-event\n" },
+      { path: ".github/workflows/ci.yml", content: workflow_text, },
+      { path: "src/message.txt", content: "before-event\n", },
     ],
     "Initial event commit",
     1700000300L,
@@ -4984,7 +5020,7 @@ async fn run_repo_event_json() -> Unit {
   )
   let after_sha = e2e_commit_repo_files(
     repo_root,
-    [{ path: "src/message.txt", content: "after-event\n" }],
+    [{ path: "src/message.txt", content: "after-event\n", }],
     "Update event message",
     1700000301L,
   )
@@ -5046,8 +5082,8 @@ async fn run_repo_event_head_commit() -> Unit {
   let before_sha = e2e_commit_repo_files(
     repo_root,
     [
-      { path: ".github/workflows/ci.yml", content: workflow_text },
-      { path: "src/message.txt", content: "before-head-event\n" },
+      { path: ".github/workflows/ci.yml", content: workflow_text, },
+      { path: "src/message.txt", content: "before-head-event\n", },
     ],
     "Initial head event commit",
     1700000600L,
@@ -5055,7 +5091,7 @@ async fn run_repo_event_head_commit() -> Unit {
   )
   let after_sha = e2e_commit_repo_files(
     repo_root,
-    [{ path: "src/message.txt", content: "after-head-event\n" }],
+    [{ path: "src/message.txt", content: "after-head-event\n", }],
     "Update head event message",
     1700000601L,
   )
@@ -5116,8 +5152,8 @@ async fn run_repo_auto_detect_repository() -> Unit {
   let after_sha = e2e_commit_repo_files(
     repo_root,
     [
-      { path: ".github/workflows/ci.yml", content: workflow_text },
-      { path: "src/message.txt", content: "detect\n" },
+      { path: ".github/workflows/ci.yml", content: workflow_text, },
+      { path: "src/message.txt", content: "detect\n", },
     ],
     "Initial detect commit",
     1700000200L,
@@ -5162,8 +5198,8 @@ async fn run_repo_event_auto_detect_repository() -> Unit {
   let before_sha = e2e_commit_repo_files(
     repo_root,
     [
-      { path: ".github/workflows/ci.yml", content: workflow_text },
-      { path: "src/message.txt", content: "before-detect-event\n" },
+      { path: ".github/workflows/ci.yml", content: workflow_text, },
+      { path: "src/message.txt", content: "before-detect-event\n", },
     ],
     "Initial detect event commit",
     1700000400L,
@@ -5171,7 +5207,7 @@ async fn run_repo_event_auto_detect_repository() -> Unit {
   )
   let after_sha = e2e_commit_repo_files(
     repo_root,
-    [{ path: "src/message.txt", content: "after-detect-event\n" }],
+    [{ path: "src/message.txt", content: "after-detect-event\n", }],
     "Update detect event message",
     1700000401L,
   )
@@ -5235,8 +5271,8 @@ async fn run_repo_event_head_commit_auto_detect_repository() -> Unit {
   let before_sha = e2e_commit_repo_files(
     repo_root,
     [
-      { path: ".github/workflows/ci.yml", content: workflow_text },
-      { path: "src/message.txt", content: "before-head-detect\n" },
+      { path: ".github/workflows/ci.yml", content: workflow_text, },
+      { path: "src/message.txt", content: "before-head-detect\n", },
     ],
     "Initial head detect commit",
     1700000700L,
@@ -5244,7 +5280,7 @@ async fn run_repo_event_head_commit_auto_detect_repository() -> Unit {
   )
   let after_sha = e2e_commit_repo_files(
     repo_root,
-    [{ path: "src/message.txt", content: "after-head-detect\n" }],
+    [{ path: "src/message.txt", content: "after-head-detect\n", }],
     "Update head detect message",
     1700000701L,
   )
@@ -5734,8 +5770,8 @@ async fn run_substrate_parity() -> Unit {
     ("tmp", "tmp"),
   ]
 
-  let run_roots : Map[String, String] = {}
-  let results : Map[String, E2eProcessResult] = {}
+  let run_roots : Map[String, String] = Map([])
+  let results : Map[String, E2eProcessResult] = Map([])
 
   for item in modes {
     let (mode, _label) = item

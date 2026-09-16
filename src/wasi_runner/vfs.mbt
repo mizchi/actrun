@@ -9,7 +9,7 @@ pub struct VirtualFs {
 
 ///|
 pub fn VirtualFs::new() -> VirtualFs {
-  { files: {} }
+  { files: {}, }
 }
 
 ///|
@@ -42,7 +42,7 @@ pub fn VirtualFs::parse_key_values(
   self : VirtualFs,
   path : String,
 ) -> Map[String, String] {
-  let result : Map[String, String] = {}
+  let result : Map[String, String] = Map([])
   let content = self.files.get(path).unwrap_or("")
   let lines = split_lines(content)
   for line in lines {
@@ -64,7 +64,7 @@ pub fn VirtualFs::parse_key_values(
 ///|
 fn split_lines(s : String) -> Array[String] {
   let lines : Array[String] = []
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   for ch in s {
     if ch == '\n' {
       lines.push(buf.to_string())

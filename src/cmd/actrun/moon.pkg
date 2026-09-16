@@ -8,7 +8,7 @@ import {
   "moonbitlang/async/process",
   "moonbitlang/core/env",
   "moonbitlang/core/json",
-  "moonbitlang/core/strconv",
+  "moonbitlang/core/string",
   "moonbitlang/x/fs" @xfs,
   "moonbitlang/x/sys" @xsys,
 }
@@ -17,6 +17,6 @@ import {
   "moonbitlang/core/debug",
 } for "wbtest"
 
-options(
-  "is-main": true,
-)
+warnings = "-0029-0067"
+
+pkgtype(kind: "executable")

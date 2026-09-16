@@ -53,7 +53,7 @@ fn compat_trim_cr(text : String) -> String {
 
 ///|
 fn compat_parse_metadata(text : String) -> Map[String, String] {
-  let values : Map[String, String] = {}
+  let values : Map[String, String] = Map([])
   for line_view in text.split("\n") {
     let line = compat_trim_cr(line_view.to_owned()).trim(chars=" ").to_owned()
     if line.length() == 0 || line.has_prefix("#") {
@@ -133,10 +133,13 @@ fn load_compat_fixture(dir : String) -> CompatFixtureLoadResult {
   let workflow_path = compat_join_path(dir, "workflow.yml")
 
   guard compat_read_text(metadata_path) is Some(metadata_text) else {
-    return { fixture: None, errors: ["missing fixture.txt: " + metadata_path] }
+    return { fixture: None, errors: ["missing fixture.txt: " + metadata_path], }
   }
   guard compat_read_text(workflow_path) is Some(workflow_text) else {
-    return { fixture: None, errors: ["missing workflow.yml: " + workflow_path] }
+    return {
+      fixture: None,
+      errors: ["missing workflow.yml: " + workflow_path],
+    }
   }
 
   let metadata = compat_parse_metadata(metadata_text)
@@ -170,7 +173,7 @@ fn load_compat_fixture(dir : String) -> CompatFixtureLoadResult {
   let event_path = compat_join_path(dir, "event.json")
   let event_text = compat_read_text(event_path)
   if errors.length() > 0 {
-    return { fixture: None, errors }
+    return { fixture: None, errors, }
   }
 
   {
@@ -283,9 +286,9 @@ fn compat_push_event_fixture(fixture : CompatFixture) -> PushEvent? {
   match fixture.event_text {
     Some(event_text) =>
       match parse_github_push_event_json(event_text) {
-        { event: Some(event), errors: [] } => Some(event)
-        { event: None, errors } => abort(errors.join("\n"))
-        { event: Some(_), errors } if errors.length() > 0 =>
+        { event: Some(event), errors: [], } => Some(event)
+        { event: None, errors, } => abort(errors.join("\n"))
+        { event: Some(_), errors, } if errors.length() > 0 =>
           abort(errors.join("\n"))
         _ => None
       }
@@ -350,7 +353,7 @@ fn compat_absolute_path(path : String) -> String {
   if path.has_prefix("/") {
     return path
   }
-  let cwd = @xsys.get_env_var("PWD").unwrap_or(".")
+  let cwd = @env.get_env_var("PWD").unwrap_or(".")
   if cwd.has_suffix("/") {
     cwd + path
   } else {
@@ -868,7 +871,7 @@ test "compat fixture: act fixtures include official docs refs" {
 ///|
 test "compat fixture: upstream fixtures are classified with stable metadata" {
   let fixture_dirs = compat_fixture_dirs("testdata/upstream")
-  let ids : Map[String, Bool] = {}
+  let ids : Map[String, Bool] = Map([])
 
   @debug.debug_inspect(fixture_dirs.length() > 0, content="true")
   for dir in fixture_dirs {

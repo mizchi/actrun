@@ -1,6 +1,6 @@
 ///|
 fn cache_store_root(workspace_root : String) -> String {
-  let configured = @xsys.get_env_var("ACTRUN_CACHE_ROOT").unwrap_or(
+  let configured = @env.get_env_var("ACTRUN_CACHE_ROOT").unwrap_or(
     "_build/actrun/cache",
   )
   ignore(ensure_exec_dir_recursive(configured))
@@ -35,7 +35,7 @@ fn cache_store_path(workspace_root : String, key : String) -> String {
 ///|
 #warnings("-deprecated")
 fn action_cache_parse_int64(value : StringView) -> Int64 raise {
-  @strconv.parse_int64(value)
+  @string.parse_int64(value)
 }
 
 ///|
@@ -175,13 +175,13 @@ fn workspace_relative_store_path(
 fn normalize_cache_path(path : String) -> String {
   let trimmed = path.trim(chars=" \t\r\n").to_owned()
   if trimmed.has_prefix("~/") {
-    let home = @xsys.get_env_var("HOME").unwrap_or("")
+    let home = @env.get_env_var("HOME").unwrap_or("")
     if home.length() > 0 {
       return home + exec_text_slice(trimmed, 1, trimmed.length())
     }
   }
   if trimmed == "~" {
-    return @xsys.get_env_var("HOME").unwrap_or(trimmed)
+    return @env.get_env_var("HOME").unwrap_or(trimmed)
   }
   trimmed
 }

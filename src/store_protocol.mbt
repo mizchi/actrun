@@ -62,7 +62,7 @@ pub struct StoreStepResult {
 
 ///|
 pub fn empty_step_result() -> StoreStepResult {
-  { outputs: {}, env_updates: {}, path_entries: [], summary: "" }
+  { outputs: {}, env_updates: {}, path_entries: [], summary: "", }
 }
 
 ///|

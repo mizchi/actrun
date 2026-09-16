@@ -1,12 +1,10 @@
+supported_targets = "native"
+
 import {
-  "mizchi/bit/lib" @bitlib,
-  "mizchi/bit/osfs" @bitosfs,
   "moonbitlang/async",
+  "moonbitlang/core/env",
   "moonbitlang/async/process",
   "moonbitlang/x/fs" @xfs,
-  "moonbitlang/x/sys" @xsys,
 }
 
-options(
-  "is-main": true,
-)
+pkgtype(kind: "executable")

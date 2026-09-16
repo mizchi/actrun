@@ -5,7 +5,7 @@ pub struct MemFs {
 
 ///|
 pub fn MemFs::new() -> MemFs {
-  { files: {} }
+  { files: {}, }
 }
 
 ///|

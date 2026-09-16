@@ -99,7 +99,11 @@ fn if_hash_files_collect_files(
   relative_prefix : String,
   files : Array[String],
 ) -> Unit {
-  let entries = @xfs.read_dir(current_abs) catch { _ => [] }
+  let entries = try @xfs.read_dir(current_abs) catch {
+    _ => []
+  } noraise {
+    value => value.to_owned()
+  }
   entries.sort_by(String::lexical_compare)
   for entry in entries {
     let next_abs = if_hash_files_join(current_abs, entry)
@@ -127,7 +131,7 @@ fn if_hash_files_selected_paths(
   let workspace_abs = absolute_exec_path(workspace_root)
   let all_files : Array[String] = []
   if_hash_files_collect_files(workspace_abs, "", all_files)
-  let selected : Map[String, Bool] = {}
+  let selected : Map[String, Bool] = Map([])
   for raw_pattern in patterns {
     let trimmed = raw_pattern.trim(chars=" \t\r\n").to_owned()
     if trimmed.length() == 0 {

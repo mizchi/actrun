@@ -14,7 +14,7 @@ pub fn Lexer::new(input : String) -> Lexer {
   for c in input {
     chars.push(c)
   }
-  { input, chars, pos: 0, line: 1, col: 1 }
+  { input, chars, pos: 0, line: 1, col: 1, }
 }
 
 ///|
@@ -102,7 +102,7 @@ fn is_meta_char(c : Char) -> Bool {
 /// Read a single-quoted string
 fn Lexer::read_single_quoted(self : Lexer) -> String raise LexError {
   let _ = self.advance() // consume opening '
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   while true {
     match self.advance() {
       Some('\'') => break
@@ -117,7 +117,7 @@ fn Lexer::read_single_quoted(self : Lexer) -> String raise LexError {
 /// Read a double-quoted string (returns raw content, expansion done later)
 fn Lexer::read_double_quoted(self : Lexer) -> String raise LexError {
   let _ = self.advance() // consume opening "
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   while true {
     match self.peek() {
       Some('"') => {
@@ -152,7 +152,7 @@ fn Lexer::read_double_quoted(self : Lexer) -> String raise LexError {
 ///|
 /// Read digits only
 fn Lexer::read_digits(self : Lexer) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   while true {
     match self.peek() {
       Some(c) if is_digit(c) => {
@@ -168,7 +168,7 @@ fn Lexer::read_digits(self : Lexer) -> String {
 ///|
 /// Read a word (unquoted)
 fn Lexer::read_word(self : Lexer) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   while true {
     match self.peek() {
       Some('\\') => {
@@ -507,7 +507,7 @@ fn substring_str(s : String, start : Int, end : Int) -> String {
   for c in s {
     chars.push(c)
   }
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   for i = start; i < end && i < chars.length(); i = i + 1 {
     buf.write_char(chars[i])
   }

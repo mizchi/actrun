@@ -40,7 +40,7 @@ pub struct WasmSandboxResult {
 ///|
 pub fn create_wasm_sandbox(step_id : String) -> WasmSandbox? {
   let safe_id = sanitize_path_component(step_id)
-  let pid = @xsys.get_env_var("PPID").unwrap_or("0")
+  let pid = @env.get_env_var("PPID").unwrap_or("0")
   let tempdir = "/tmp/actrun-wasm-" + pid + "-" + safe_id
   if @xfs.path_exists(tempdir) {
     ignore(exec_remove_tree(tempdir))
@@ -67,12 +67,12 @@ pub fn create_wasm_sandbox(step_id : String) -> WasmSandbox? {
   } noraise {
     _ => ()
   }
-  Some({ tempdir, env_path, output_path, path_path, summary_path, state_path })
+  Some({ tempdir, env_path, output_path, path_path, summary_path, state_path, })
 }
 
 ///|
 fn sanitize_path_component(s : String) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   for ch in s {
     if (ch >= 'a' && ch <= 'z') ||
       (ch >= 'A' && ch <= 'Z') ||

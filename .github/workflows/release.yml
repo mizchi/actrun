@@ -67,6 +67,60 @@ jobs:
             gh release create "$TAG" *.tar.gz --generate-notes -R "$REPO"
           fi
 
+  npm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      id-token: write
+    env:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+      - name: Install MoonBit CLI
+        uses: ./.github/actions/setup-moonbit
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - name: Setup pnpm
+        uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4
+      - name: Install JS dev dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build npm bundle
+        run: |
+          moon update
+          npm run build
+      - name: Smoke test bundled CLI
+        run: npm run test:smoke
+      - name: Verify package version matches tag
+        run: |
+          PKG_VERSION="$(node -p "require('./package.json').version")"
+          test "v${PKG_VERSION}" = "${GITHUB_REF_NAME}" || {
+            echo "package.json version ${PKG_VERSION} does not match tag ${GITHUB_REF_NAME}" >&2
+            exit 1
+          }
+      - name: Pack
+        run: npm pack
+      - name: Attach tarball to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          REPO="${GITHUB_REPOSITORY}"
+          if gh release view "$TAG" -R "$REPO" >/dev/null 2>&1; then
+            gh release upload "$TAG" mizchi-actrun-*.tgz --clobber -R "$REPO"
+          else
+            gh release create "$TAG" mizchi-actrun-*.tgz --generate-notes -R "$REPO"
+          fi
+      - name: Publish to npm
+        if: ${{ env.NPM_TOKEN != '' }}
+        env:
+          NODE_AUTH_TOKEN: ${{ env.NPM_TOKEN }}
+        run: npm publish --provenance --access public
+
   docker:
     runs-on: ubuntu-latest
     timeout-minutes: 30

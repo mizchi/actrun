@@ -12,7 +12,7 @@ pub struct StepResult {
 pub fn execute_shell_step(
   script : String,
   fs : &Fs,
-  env? : Map[String, String] = {},
+  env? : Map[String, String] = Map([]),
   workdir? : String = "/workspace",
 ) -> StepResult {
   let output_path = workdir + "/github_output"
@@ -20,7 +20,7 @@ pub fn execute_shell_step(
   // Unconditionally initialize — idempotent for empty files
   fs.write(output_path, "", false)
   fs.write(env_path, "", false)
-  let merged_env : Map[String, String] = {}
+  let merged_env : Map[String, String] = Map([])
   for k, v in env {
     merged_env[k] = v
   }
