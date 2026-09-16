@@ -2,6 +2,7 @@
 package "mizchi/actrun"
 
 import {
+  "mizchi/bit_types",
   "mizchi/bitflow/workflow",
   "moonbitlang/core/debug",
   "moonbitlang/core/json",
@@ -22,7 +23,9 @@ pub fn cli_args() -> Array[String]
 
 pub fn collect_secret_values() -> Array[String]
 
-pub async fn compute_git_changed_paths(String, PushEvent) -> GitChangedPathsResult noraise
+pub fn compute_bit_changed_paths(&@bit_types.RepoFileSystem, String, PushEvent) -> BitChangedPathsResult
+
+pub fn compute_bit_changed_paths_native(String, PushEvent) -> BitChangedPathsResult
 
 pub fn create_wasm_sandbox(String) -> WasmSandbox?
 
@@ -56,7 +59,9 @@ pub fn mask_secrets(String, Array[String]) -> String
 
 pub fn matches_push_trigger(PushTrigger, PushEvent) -> Bool
 
-pub async fn materialize_git_push_workspace(String, PushEvent, String, remote_url? : String) -> GitWorkspaceResult noraise
+pub fn materialize_bit_push_workspace(&@bit_types.FileSystem, &@bit_types.RepoFileSystem, String, PushEvent, String, remote_url? : String) -> BitWorkspaceResult
+
+pub fn materialize_bit_push_workspace_native(String, PushEvent, String, remote_url? : String) -> BitWorkspaceResult
 
 pub fn new_backend_capabilities(host? : Bool, docker? : Bool, wasm? : Bool) -> BackendCapabilities
 
@@ -178,6 +183,27 @@ pub struct BackendCapabilities {
   wasm : Bool
 }
 
+pub struct BitChangedPathsResult {
+  paths : Array[String]
+  base_sha : String
+  head_sha : String
+  errors : Array[String]
+}
+
+pub struct BitWorkspace {
+  repo_root : String
+  git_dir : String
+  workspace_root : String
+  commit_sha : String
+  refname : String
+  remote_url : String
+}
+
+pub struct BitWorkspaceResult {
+  workspace : BitWorkspace?
+  errors : Array[String]
+}
+
 pub struct ConcurrencySpec {
   group : String
   cancel_in_progress : String?
@@ -198,29 +224,8 @@ pub struct ExecutionPlan {
   composite_output_mappings : Map[String, Map[String, String]]
 }
 
-pub struct GitChangedPathsResult {
-  paths : Array[String]
-  base_sha : String
-  head_sha : String
-  errors : Array[String]
-}
-
 pub struct GitHubActionPrefetchResult {
   fetched : Array[String]
-  errors : Array[String]
-}
-
-pub struct GitWorkspace {
-  repo_root : String
-  git_dir : String
-  workspace_root : String
-  commit_sha : String
-  refname : String
-  remote_url : String
-}
-
-pub struct GitWorkspaceResult {
-  workspace : GitWorkspace?
   errors : Array[String]
 }
 

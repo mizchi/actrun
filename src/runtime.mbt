@@ -1,22 +1,10 @@
 ///|
-/// Error raised when a `git` subcommand fails or cannot be spawned.
-priv suberror GitCliError {
-  GitCliError(String)
-}
-
-///|
-fn GitCliError::message(self : GitCliError) -> String {
-  let GitCliError(message) = self
-  message
-}
-
-///|
-fn git_workspace_error(message : String) -> GitWorkspaceResult {
+fn bit_workspace_error(message : String) -> BitWorkspaceResult {
   { workspace: None, errors: [message], }
 }
 
 ///|
-fn git_changed_paths_error(message : String) -> GitChangedPathsResult {
+fn bit_changed_paths_error(message : String) -> BitChangedPathsResult {
   { paths: [], base_sha: "", head_sha: "", errors: [message], }
 }
 
@@ -42,55 +30,22 @@ fn paths_overlap(left : String, right : String) -> Bool {
 }
 
 ///|
-/// Run `git` with the given arguments inside `cwd` and return
-/// `(exit_code, stdout, stderr)`. Spawn failures are reported as exit code -1.
-async fn git_exec(
-  cwd : String,
-  args : Array[String],
-) -> (Int, String, String) noraise {
-  run_command("git", args, cwd~) catch {
-    _ => (-1, "", "failed to run git " + args.join(" "))
+fn clear_workspace_root(
+  fs : &@bit.FileSystem,
+  rfs : &@bit.RepoFileSystem,
+  path : String,
+) -> Unit raise @bit.GitError {
+  if rfs.is_file(path) {
+    fs.remove_file(path)
+    return
   }
-}
-
-///|
-/// Run `git` and return trimmed stdout, raising when the command fails.
-async fn git_stdout(
-  cwd : String,
-  args : Array[String],
-) -> String raise GitCliError {
-  let (code, stdout, stderr) = git_exec(cwd, args)
-  if code != 0 {
-    let detail = stderr.trim().to_owned()
-    let message = "git " + args.join(" ") + " failed"
-    raise GitCliError(
-      if detail.length() > 0 {
-        message + ": " + detail
-      } else {
-        message
-      },
-    )
+  if !rfs.is_dir(path) {
+    return
   }
-  stdout.trim().to_owned()
-}
-
-///|
-/// Run `git` for its side effects, raising when the command fails.
-async fn git_run(cwd : String, args : Array[String]) -> Unit raise GitCliError {
-  ignore(git_stdout(cwd, args))
-}
-
-///|
-/// Locate the git directory that backs `repo_root`.
-/// Returns `(git_dir, is_bare)` or `None` when `repo_root` is not a repository.
-async fn detect_git_dir(repo_root : String) -> (String, Bool)? noraise {
-  let git_dir = git_stdout(repo_root, ["rev-parse", "--absolute-git-dir"]) catch {
-    _ => return None
+  for entry in rfs.readdir(path) {
+    clear_workspace_root(fs, rfs, @bit.join_path(path, entry))
   }
-  let bare = git_stdout(repo_root, ["rev-parse", "--is-bare-repository"]) catch {
-    _ => "false"
-  }
-  Some((git_dir, bare == "true"))
+  fs.remove_dir(path)
 }
 
 ///|
@@ -105,21 +60,23 @@ fn strip_ref_prefix(ref_name : String) -> String {
 }
 
 ///|
-async fn resolve_event_ref_name(
-  repo_root : String,
+fn resolve_event_ref_name(
+  rfs : &@bit.RepoFileSystem,
+  git_dir : String,
   ref_name : String,
-) -> String noraise {
+) -> String {
   if ref_name.length() > 0 {
     return strip_ref_prefix(ref_name)
   }
-  let symbolic = git_stdout(repo_root, ["symbolic-ref", "--quiet", "HEAD"]) catch {
-    _ => return "HEAD"
+  let head_path = @bit.join_path(git_dir, "HEAD")
+  let head_bytes = rfs.read_file(head_path) catch { _ => return "HEAD" }
+  let head_text = @utf8.decode_lossy(head_bytes[:]).trim().to_owned()
+  if head_text.has_prefix("ref: refs/heads/") {
+    return strip_ref_prefix(
+      String::unsafe_substring(head_text, start=5, end=head_text.length()),
+    )
   }
-  if symbolic.has_prefix("refs/heads/") {
-    strip_ref_prefix(symbolic)
-  } else {
-    "HEAD"
-  }
+  "HEAD"
 }
 
 ///|
@@ -147,70 +104,57 @@ fn is_zero_sha(sha : String) -> Bool {
 }
 
 ///|
-/// Resolve `revision` to a full commit sha inside `repo_root`.
-async fn resolve_commit_sha(
-  repo_root : String,
-  revision : String,
-  missing_message : String,
-) -> String raise GitCliError {
-  let sha = git_stdout(repo_root, [
-    "rev-parse",
-    "--verify",
-    "--quiet",
-    revision + "^{commit}",
-  ]) catch {
-    _ => raise GitCliError(missing_message)
-  }
-  if sha.length() == 0 {
-    raise GitCliError(missing_message)
-  }
-  sha
-}
-
-///|
-async fn resolve_push_commit_sha(
-  repo_root : String,
+fn resolve_push_commit_id(
+  rfs : &@bit.RepoFileSystem,
+  git_dir : String,
   event : PushEvent,
-) -> String raise GitCliError {
+) -> @bit.ObjectId raise @bit.GitError {
   if event.after_sha.length() > 0 {
-    return resolve_commit_sha(
-      repo_root,
-      event.after_sha,
-      "Missing commit object: " + event.after_sha,
-    )
+    return @bit.ObjectId::from_hex(event.after_sha)
   }
-  resolve_commit_sha(repo_root, "HEAD", "HEAD commit is missing")
+  match @bitlib.resolve_head_commit(rfs, git_dir) {
+    Some(commit_id) => commit_id
+    None => raise @bit.GitError::InvalidObject("HEAD commit is missing")
+  }
 }
 
 ///|
-async fn resolve_push_base_commit_sha(
-  repo_root : String,
+fn resolve_push_base_commit_id(
+  store : @bit.ObjectStore,
   event : PushEvent,
-  head_sha : String,
-) -> String? raise GitCliError {
+  head_commit_id : @bit.ObjectId,
+) -> @bit.ObjectId? raise @bit.GitError {
   if event.before_sha.length() > 0 && !is_zero_sha(event.before_sha) {
-    return Some(
-      resolve_commit_sha(
-        repo_root,
-        event.before_sha,
-        "Missing commit object: " + event.before_sha,
-      ),
-    )
+    return Some(@bit.ObjectId::from_hex(event.before_sha))
   }
-  // Fall back to the first parent; a root commit has no base.
-  let parent = git_stdout(repo_root, [
-    "rev-parse",
-    "--verify",
-    "--quiet",
-    head_sha + "^1",
-  ]) catch {
-    _ => return None
+  let commit_obj = store.get(head_commit_id)
+  guard commit_obj is Some(obj) else {
+    raise @bit.GitError::InvalidObject("Missing commit object")
   }
-  if parent.length() == 0 {
+  if obj.obj_type != @bit.ObjectType::Commit {
+    raise @bit.GitError::InvalidObject("Object is not a commit")
+  }
+  let info = @bit.parse_commit(obj.data)
+  if info.parents.length() == 0 {
     None
   } else {
-    Some(parent)
+    Some(info.parents[0])
   }
+}
+
+///|
+fn commit_tree_id(
+  store : @bit.ObjectStore,
+  commit_id : @bit.ObjectId,
+) -> @bit.ObjectId raise @bit.GitError {
+  let commit_obj = store.get(commit_id)
+  guard commit_obj is Some(obj) else {
+    raise @bit.GitError::InvalidObject("Missing commit object")
+  }
+  if obj.obj_type != @bit.ObjectType::Commit {
+    raise @bit.GitError::InvalidObject("Object is not a commit")
+  }
+  @bit.parse_commit(obj.data).tree
 }
 
 ///|
@@ -221,132 +165,128 @@ fn sort_paths(paths : Array[String]) -> Array[String] {
 }
 
 ///|
-fn split_output_lines(text : String) -> Array[String] {
-  let lines : Array[String] = []
-  for line in text.split("\n") {
-    let trimmed = line.trim(chars="\r").to_owned()
-    if trimmed.length() > 0 {
-      lines.push(trimmed)
-    }
-  }
-  lines
-}
-
-///|
-/// Compute the paths touched between the push base and head commits of
-/// the repository at `repo_root` using the `git` CLI.
-pub async fn compute_git_changed_paths(
+pub fn compute_bit_changed_paths(
+  rfs : &@bit.RepoFileSystem,
   repo_root : String,
   event : PushEvent,
-) -> GitChangedPathsResult noraise {
-  guard detect_git_dir(repo_root) is Some(_) else {
-    return git_changed_paths_error("git repository not found: " + repo_root)
+) -> BitChangedPathsResult {
+  let detected = @bitlib.detect_git_dir(rfs, repo_root)
+  guard detected is Some((git_dir, _is_bare)) else {
+    return bit_changed_paths_error("bit repository not found: " + repo_root)
   }
-  let head_sha = resolve_push_commit_sha(repo_root, event) catch {
-    err => return git_changed_paths_error(err.message())
+
+  let head_commit_id = resolve_push_commit_id(rfs, git_dir, event) catch {
+    err => return bit_changed_paths_error(err.to_string())
   }
-  let base_sha = resolve_push_base_commit_sha(repo_root, event, head_sha) catch {
-    err => return git_changed_paths_error(err.message())
+  let store = @bitlib.load_object_store_from_fs(rfs, git_dir) catch {
+    err => return bit_changed_paths_error(err.to_string())
   }
-  let diff_args = [
-    "-c", "core.quotePath=false", "diff-tree", "-r", "--no-commit-id", "--name-only",
-    "--no-renames",
-  ]
-  match base_sha {
-    Some(base) => {
-      diff_args.push(base)
-      diff_args.push(head_sha)
+  let base_commit_id = resolve_push_base_commit_id(store, event, head_commit_id) catch {
+    err => return bit_changed_paths_error(err.to_string())
+  }
+  let new_tree = commit_tree_id(store, head_commit_id) catch {
+    err => return bit_changed_paths_error(err.to_string())
+  }
+  let old_tree = match base_commit_id {
+    Some(id) => {
+      let tree_id = commit_tree_id(store, id) catch {
+        err => return bit_changed_paths_error(err.to_string())
+      }
+      Some(tree_id)
     }
-    None => {
-      diff_args.push("--root")
-      diff_args.push(head_sha)
-    }
+    None => None
   }
-  let output = git_stdout(repo_root, diff_args) catch {
-    err => return git_changed_paths_error(err.message())
+  let diff_files = @bitdiff.diff_trees(rfs, git_dir, old_tree, new_tree) catch {
+    err => return bit_changed_paths_error(err.to_string())
+  }
+  let paths : Array[String] = []
+  for diff in diff_files {
+    paths.push(diff.path)
   }
   {
-    paths: sort_paths(split_output_lines(output)),
-    base_sha: base_sha.unwrap_or(""),
-    head_sha,
+    paths: sort_paths(paths),
+    base_sha: base_commit_id.map(id => id.to_hex()).unwrap_or(""),
+    head_sha: head_commit_id.to_hex(),
     errors: [],
   }
 }
 
 ///|
-fn remove_path_recursive(path : String) -> Unit raise {
-  if !@xfs.path_exists(path) {
-    return
-  }
-  if @xfs.is_dir(path) {
-    for entry in @xfs.read_dir(path) {
-      remove_path_recursive(path + "/" + entry)
-    }
-    @xfs.remove_dir(path)
-  } else {
-    @xfs.remove_file(path)
-  }
+pub fn compute_bit_changed_paths_native(
+  repo_root : String,
+  event : PushEvent,
+) -> BitChangedPathsResult {
+  let fs = @bitosfs.OsFs::new()
+  compute_bit_changed_paths(fs, repo_root, event)
 }
 
 ///|
-/// Materialize the push head commit of `repo_root` into `workspace_root`
-/// as a fresh git checkout whose `origin` points at `remote_url`
-/// (or `repo_root` when omitted).
-pub async fn materialize_git_push_workspace(
+pub fn materialize_bit_push_workspace(
+  fs : &@bit.FileSystem,
+  rfs : &@bit.RepoFileSystem,
   repo_root : String,
   event : PushEvent,
   workspace_root : String,
   remote_url? : String = "",
-) -> GitWorkspaceResult noraise {
-  guard detect_git_dir(repo_root) is Some((git_dir, _is_bare)) else {
-    return git_workspace_error("git repository not found: " + repo_root)
+) -> BitWorkspaceResult {
+  let detected = @bitlib.detect_git_dir(rfs, repo_root)
+  guard detected is Some((git_dir, _is_bare)) else {
+    return bit_workspace_error("bit repository not found: " + repo_root)
   }
   if paths_overlap(repo_root, workspace_root) {
-    return git_workspace_error("workspace root must not overlap repo root")
+    return bit_workspace_error("workspace root must not overlap repo root")
   }
-  let commit_sha = resolve_push_commit_sha(repo_root, event) catch {
-    err => return git_workspace_error(err.message())
+
+  let commit_id = resolve_push_commit_id(rfs, git_dir, event) catch {
+    err => return bit_workspace_error(err.to_string())
   }
-  let refname = resolve_event_ref_name(repo_root, event.ref_name)
+  let store = @bitlib.load_object_store_from_fs(rfs, git_dir) catch {
+    err => return bit_workspace_error(err.to_string())
+  }
+  let refname = resolve_event_ref_name(rfs, git_dir, event.ref_name)
   let git_refname = git_refname_from_event_ref(refname)
   let resolved_remote_url = if remote_url.length() > 0 {
     remote_url
   } else {
     repo_root
   }
-  remove_path_recursive(workspace_root) catch {
-    err =>
-      return git_workspace_error(
-        "failed to clear workspace root: " + err.to_string(),
-      )
+
+  clear_workspace_root(fs, rfs, workspace_root) catch {
+    err => return bit_workspace_error(err.to_string())
   }
-  let materialize = async fn() -> Unit raise GitCliError {
-    git_run(".", [
-      "clone", "--quiet", "--no-checkout", repo_root, workspace_root,
-    ])
-    if git_refname == "HEAD" {
-      git_run(workspace_root, [
-        "-c", "advice.detachedHead=false", "checkout", "--quiet", "--detach", commit_sha,
-      ])
-    } else {
-      git_run(workspace_root, ["update-ref", git_refname, commit_sha])
-      git_run(workspace_root, ["symbolic-ref", "HEAD", git_refname])
-      git_run(workspace_root, ["reset", "--quiet", "--hard", commit_sha])
-    }
-    git_run(workspace_root, ["remote", "set-url", "origin", resolved_remote_url])
+  @bit.materialize_clone_to_fs(
+    store, commit_id, git_refname, resolved_remote_url, fs, workspace_root, rfs,
+  ) catch {
+    err => return bit_workspace_error(err.to_string())
   }
-  materialize() catch {
-    err => return git_workspace_error(err.message())
-  }
+
   {
     workspace: Some({
       repo_root,
       git_dir,
       workspace_root,
-      commit_sha,
+      commit_sha: commit_id.to_hex(),
       refname,
       remote_url: resolved_remote_url,
     }),
     errors: [],
   }
+}
+
+///|
+pub fn materialize_bit_push_workspace_native(
+  repo_root : String,
+  event : PushEvent,
+  workspace_root : String,
+  remote_url? : String = "",
+) -> BitWorkspaceResult {
+  let fs = @bitosfs.OsFs::new()
+  materialize_bit_push_workspace(
+    fs,
+    fs,
+    repo_root,
+    event,
+    workspace_root,
+    remote_url~,
+  )
 }

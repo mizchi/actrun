@@ -1,6 +1,8 @@
 supported_targets = "native"
 
 import {
+  "mizchi/bit_lib" @bitlib,
+  "mizchi/bit_osfs" @bitosfs,
   "moonbitlang/async",
   "moonbitlang/core/env",
   "moonbitlang/async/process",

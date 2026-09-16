@@ -7656,7 +7656,7 @@ async fn handle_workflow_run_command(raw_options : CliOptions) -> Int {
     let workspace_root = options.workspace_root.unwrap_or(
       default_workspace_root(),
     )
-    let workspace_result = @ar.materialize_git_push_workspace(
+    let workspace_result = @ar.materialize_bit_push_workspace_native(
       repo_root,
       trigger_event,
       workspace_root,
@@ -7667,7 +7667,7 @@ async fn handle_workflow_run_command(raw_options : CliOptions) -> Int {
       return 1
     }
     guard workspace_result.workspace is Some(workspace) else {
-      print_errors(["failed to materialize git workspace"])
+      print_errors(["failed to materialize bit workspace"])
       return 1
     }
     workflow_path = join_path(workspace.workspace_root, options.workflow_path)
@@ -7681,7 +7681,7 @@ async fn handle_workflow_run_command(raw_options : CliOptions) -> Int {
       actor=trigger_event.actor,
     )
     if changed_paths.length() == 0 {
-      let changed_result = @ar.compute_git_changed_paths(
+      let changed_result = @ar.compute_bit_changed_paths_native(
         repo_root, computed_event,
       )
       if changed_result.errors.length() > 0 {

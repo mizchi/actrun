@@ -681,7 +681,7 @@ pub struct LocalActionParseResult {
 }
 
 ///|
-pub struct GitWorkspace {
+pub struct BitWorkspace {
   repo_root : String
   git_dir : String
   workspace_root : String
@@ -691,13 +691,13 @@ pub struct GitWorkspace {
 }
 
 ///|
-pub struct GitWorkspaceResult {
-  workspace : GitWorkspace?
+pub struct BitWorkspaceResult {
+  workspace : BitWorkspace?
   errors : Array[String]
 }
 
 ///|
-pub struct GitChangedPathsResult {
+pub struct BitChangedPathsResult {
   paths : Array[String]
   base_sha : String
   head_sha : String

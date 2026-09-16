@@ -4,6 +4,10 @@
   "deps": {
     "moonbitlang/async": "0.22.1",
     "mizchi/bitflow": "0.4.1",
+    "mizchi/bit_core": "0.46.4",
+    "mizchi/bit_diff": "0.46.4",
+    "mizchi/bit_lib": "0.46.4",
+    "mizchi/bit_osfs": "0.46.4",
     "moonbitlang/x": "0.5.5",
     "moonbitlang/quickcheck": "0.14.0",
     "moonbit-community/yaml": "0.0.6",

@@ -11,9 +11,13 @@
 
 ### Changes
 
-- Replace the `mizchi/bit` in-process git implementation with the `git` CLI for push workspace materialization and changed-path detection (`materialize_git_push_workspace`, `compute_git_changed_paths`); `mizchi/bit` no longer compiles on current MoonBit
+- Follow the `mizchi/bit` module split: `mizchi/bit` is now an executable module, so the library imports move to `mizchi/bit_core`, `mizchi/bit_lib`, `mizchi/bit_diff` and `mizchi/bit_osfs` (`materialize_bit_push_workspace` / `compute_bit_changed_paths` keep their behavior; `@bit.materialize_clone_to_fs` gained a `RepoFileSystem` argument)
 - Replace the `mizchi/moomaid` renderer used by `actrun viz` with a built-in layered DAG renderer for ASCII and SVG output (`mizchi/moomaid` dropped native support)
 - YAML parse errors now report the line and column of the failure
+
+### Known Issues
+
+- `mizchi/bit` 0.46.4 as published does not compile against `moonc v0.10.13` (`@strconv.parse_*` removal, `@fs.read_dir` returning `ArrayView`, `@http` headers keyed by `CaseInsensitiveString`). Building actrun requires a `bit` release that carries those fixes; bump the `mizchi/bit_*` pins in `moon.mod` once it ships.
 
 ### JS / npm
 

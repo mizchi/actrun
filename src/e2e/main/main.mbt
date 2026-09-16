@@ -852,69 +852,39 @@ fn e2e_write_repo_file(repo_root : String, file : E2eRepoFile) -> Unit {
 }
 
 ///|
-fn e2e_git_env(timestamp : Int64) -> Map[String, String] {
-  let date = timestamp.to_string() + " +0000"
-  {
-    "GIT_AUTHOR_NAME": "Author",
-    "GIT_AUTHOR_EMAIL": "a@b.com",
-    "GIT_COMMITTER_NAME": "Author",
-    "GIT_COMMITTER_EMAIL": "a@b.com",
-    "GIT_AUTHOR_DATE": date,
-    "GIT_COMMITTER_DATE": date,
-    "GIT_CONFIG_GLOBAL": "/dev/null",
-    "GIT_CONFIG_NOSYSTEM": "1",
-  }
-}
-
-///|
-async fn e2e_git(
-  repo_root : String,
-  args : Array[String],
-  timestamp : Int64,
-) -> String {
-  let (code, stdout, stderr) = @process.collect_output(
-    "git",
-    args,
-    cwd=repo_root,
-    extra_env=e2e_git_env(timestamp),
-  )
-  if code != 0 {
-    abort(
-      "git " +
-      args.join(" ") +
-      " failed for repo " +
-      repo_root +
-      ": " +
-      stderr.text(),
-    )
-  }
-  stdout.text().trim().to_owned()
-}
-
-///|
-async fn e2e_commit_repo_files(
+fn e2e_commit_repo_files(
   repo_root : String,
   files : Array[E2eRepoFile],
   message : String,
   timestamp : Int64,
   init? : Bool = false,
 ) -> String {
+  let fs = @bitosfs.OsFs::new()
   e2e_ensure_dir(repo_root)
   if init {
-    ignore(e2e_git(repo_root, ["init", "--quiet"], timestamp))
-    ignore(
-      e2e_git(repo_root, ["symbolic-ref", "HEAD", "refs/heads/main"], timestamp),
-    )
-    ignore(e2e_git(repo_root, ["config", "commit.gpgsign", "false"], timestamp))
+    @bitlib.init_repo(fs, repo_root) catch {
+      _ => ()
+    }
   }
-  let add_args = ["add", "--"]
+  let paths : Array[String] = []
   for file in files {
     e2e_write_repo_file(repo_root, file)
-    add_args.push(file.path)
+    paths.push(file.path)
   }
-  ignore(e2e_git(repo_root, add_args, timestamp))
-  ignore(e2e_git(repo_root, ["commit", "--quiet", "-m", message], timestamp))
-  e2e_git(repo_root, ["rev-parse", "HEAD"], timestamp)
+  let add_ok = try @bitlib.add_paths(fs, fs, repo_root, paths) catch {
+    _ => false
+  } noraise {
+    _ => true
+  }
+  if !add_ok {
+    abort("bit add failed for repo: " + repo_root)
+  }
+  let commit_id = @bitlib.commit(
+    fs, fs, repo_root, message, "Author <a@b.com>", timestamp,
+  ) catch {
+    _ => abort("bit commit failed for repo: " + repo_root)
+  }
+  commit_id.to_hex()
 }
 
 ///|
