@@ -6,7 +6,7 @@
 
 - Support the latest MoonBit toolchain (`moon 0.1.20260915` / `moonc v0.10.13`): `moon check --deny-warn` passes with zero warnings on both the `native` and `js` targets
 - Migrate to the new `moon.mod` module format; the Nix build reads its copy from `nix/moon.mod.json`
-- Update dependencies: `moonbitlang/async` 0.22, `moonbitlang/x` 0.5, `moonbitlang/quickcheck` 0.14, `moonbit-community/yaml` 0.0.6, `bobzhang/toml` 0.4, `mizchi/jq` 0.2.2, `mizchi/wite` 0.11.3
+- Update dependencies: `moonbitlang/async` 0.22, `moonbitlang/x` 0.5, `moonbitlang/quickcheck` 0.14, `moonbit-community/yaml` 0.0.6, `bobzhang/toml` 0.4, `mizchi/jq` 0.2.2, `mizchi/wite` 0.11.3, `mizchi/bit_*` 0.47.0 (0.46.4 does not compile on this toolchain)
 - Replace deprecated core APIs (`@strconv.parse_*` → `@string.parse_*`, `@xsys` env helpers → `@env`, `StringBuilder::new()`, `Map::new()`, `{}` map literals, `Char::from_int`, `try?`)
 
 ### Changes
@@ -14,10 +14,6 @@
 - Follow the `mizchi/bit` module split: `mizchi/bit` is now an executable module, so the library imports move to `mizchi/bit_core`, `mizchi/bit_lib`, `mizchi/bit_diff` and `mizchi/bit_osfs` (`materialize_bit_push_workspace` / `compute_bit_changed_paths` keep their behavior; `@bit.materialize_clone_to_fs` gained a `RepoFileSystem` argument)
 - Replace the `mizchi/moomaid` renderer used by `actrun viz` with a built-in layered DAG renderer for ASCII and SVG output (`mizchi/moomaid` dropped native support)
 - YAML parse errors now report the line and column of the failure
-
-### Known Issues
-
-- `mizchi/bit` 0.46.4 as published does not compile against `moonc v0.10.13` (`@strconv.parse_*` removal, `@fs.read_dir` returning `ArrayView`, `@http` headers keyed by `CaseInsensitiveString`). Building actrun requires a `bit` release that carries those fixes; bump the `mizchi/bit_*` pins in `moon.mod` once it ships.
 
 ### JS / npm
 
