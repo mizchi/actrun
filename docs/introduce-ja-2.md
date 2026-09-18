@@ -108,14 +108,15 @@ ignore_rules = ["unknown-property", "unused-outputs"]
 ```
 $ actrun viz .github/workflows/release.yml
 
-┌───────┐    ┌────────┐
-│ build │    │ docker │
-└───────┘    └────────┘
-    └┐
-     │
-┌─────────┐
-│ release │
-└─────────┘
+┌───────┐    ┌─────┐    ┌────────┐
+│ build │    │ npm │    │ docker │
+└───────┘    └─────┘    └────────┘
+    │
+    └────────────┐
+                 │
+            ┌─────────┐
+            │ release │
+            └─────────┘
 ```
 
 `--mermaid` で Mermaid テキストを出力。PR の description にそのまま貼れる。
@@ -128,7 +129,7 @@ graph TD
   e2e["e2e (7 steps)"]
 ```
 
-`--detail` でステップレベルの subgraph も出る。`--svg` で画像出力。[mizchi/moomaid](https://github.com/mizchi/moomaid) を使っている。
+`--detail` でステップレベルの subgraph も出る。`--svg` で画像出力。ASCII / SVG の描画は actrun 組み込みのレイヤードレンダラーで行う。
 
 ## actrun export — ワークフローをシェルスクリプトに変換
 

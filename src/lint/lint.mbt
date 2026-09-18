@@ -7,7 +7,7 @@ pub struct LintOptions {
 
 ///|
 pub fn default_lint_options() -> LintOptions {
-  { strict: false, online: false, yaml_text: "" }
+  { strict: false, online: false, yaml_text: "", }
 }
 
 ///|
@@ -16,7 +16,7 @@ pub fn new_lint_options(
   online? : Bool = false,
   yaml_text? : String = "",
 ) -> LintOptions {
-  { strict, online, yaml_text }
+  { strict, online, yaml_text, }
 }
 
 ///|
@@ -34,7 +34,7 @@ pub fn apply_preset(preset : String) -> (Bool, Bool) {
 pub fn lint_workflow(
   workflow : @ar.WorkflowSpec,
   yaml_text? : String = "",
-  options? : LintOptions = { strict: false, online: false, yaml_text: "" },
+  options? : LintOptions = { strict: false, online: false, yaml_text: "", },
 ) -> Array[LintDiagnostic] {
   let effective_yaml = if yaml_text.length() > 0 {
     yaml_text

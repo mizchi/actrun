@@ -8,7 +8,7 @@
 }:
 moonPlatform.buildMoonPackage {
   src = ./.;
-  moonModJson = ./moon.mod.json;
+  moonModJson = ./nix/moon.mod.json;
   inherit moonRegistryIndex;
 
   doCheck = false;

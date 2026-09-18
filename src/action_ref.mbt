@@ -25,7 +25,7 @@ pub fn new_backend_capabilities(
   docker? : Bool = false,
   wasm? : Bool = false,
 ) -> BackendCapabilities {
-  { host, docker, wasm }
+  { host, docker, wasm, }
 }
 
 ///|
@@ -111,24 +111,24 @@ pub fn backend_capabilities_for(backend : String) -> BackendCapabilities {
 
 ///|
 fn action_parse_error(text : String, msg : String) -> ActionRefParseResult {
-  { action: None, errors: ["action ref '\{text}' " + msg] }
+  { action: None, errors: ["action ref '\{text}' " + msg], }
 }
 
 ///|
 pub fn parse_action_ref(text : String) -> ActionRefParseResult {
   let uses = text.trim(chars=" ").to_owned()
   if uses.length() == 0 {
-    return { action: None, errors: ["action ref is empty"] }
+    return { action: None, errors: ["action ref is empty"], }
   }
   if uses.has_prefix("./") || uses.has_prefix("../") {
-    return { action: Some(LocalPath(uses)), errors: [] }
+    return { action: Some(LocalPath(uses)), errors: [], }
   }
   if uses.has_prefix("docker://") {
     let image = substring(uses, 9, uses.length())
     if image.length() == 0 {
       return action_parse_error(uses, "must include an image name")
     }
-    return { action: Some(DockerImage(image)), errors: [] }
+    return { action: Some(DockerImage(image)), errors: [], }
   }
   match uses.find("://") {
     Some(idx) => {
@@ -141,7 +141,7 @@ pub fn parse_action_ref(text : String) -> ActionRefParseResult {
       if name.length() == 0 {
         return action_parse_error(uses, "must include an action name")
       }
-      { action: Some(Registry(scheme, name, version)), errors: [] }
+      { action: Some(Registry(scheme, name, version)), errors: [], }
     }
     None => {
       let (path, version) = split_action_version(uses)
@@ -168,7 +168,7 @@ pub fn parse_action_ref(text : String) -> ActionRefParseResult {
       } else {
         None
       }
-      { action: Some(GitHubRepo(owner, repo, version, subpath)), errors: [] }
+      { action: Some(GitHubRepo(owner, repo, version, subpath)), errors: [], }
     }
   }
 }
@@ -346,10 +346,10 @@ pub fn resolve_action_uses(text : String) -> ActionResolutionResult {
   match parsed.action {
     Some(action) =>
       if parsed.errors.length() > 0 {
-        { action: None, errors: parsed.errors }
+        { action: None, errors: parsed.errors, }
       } else {
         resolve_action_ref(action)
       }
-    None => { action: None, errors: parsed.errors }
+    None => { action: None, errors: parsed.errors, }
   }
 }

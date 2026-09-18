@@ -11,7 +11,7 @@ pub(open) trait Fs {
 ///|
 /// Parse KEY=VALUE entries from a file (GITHUB_OUTPUT / GITHUB_ENV format).
 pub fn parse_key_values(fs : &Fs, path : String) -> Map[String, String] {
-  let result : Map[String, String] = {}
+  let result : Map[String, String] = Map([])
   let content = match fs.read(path) {
     Some(s) => s
     None => return result

@@ -1,6 +1,6 @@
 ///|
 fn wasi_runner_test_repo_root() -> String {
-  @xsys.get_env_var("PWD").unwrap_or(".")
+  @env.get_env_var("PWD").unwrap_or(".")
 }
 
 ///|

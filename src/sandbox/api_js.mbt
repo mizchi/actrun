@@ -27,7 +27,7 @@ fn extract_string_map(
   m : Map[String, Json],
   key : String,
 ) -> Map[String, String] {
-  let result : Map[String, String] = {}
+  let result : Map[String, String] = Map([])
   match m.get(key) {
     Some(Object(e)) =>
       for k, v in e {

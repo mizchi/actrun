@@ -27,7 +27,7 @@ pub fn new_action_resolution(
   exists? : Bool = false,
   error? : String = "",
 ) -> ActionResolution {
-  { uses, sha, exists, error }
+  { uses, sha, exists, error, }
 }
 
 ///|
@@ -131,7 +131,7 @@ pub fn check_version_consistency(
 ) -> Array[LintDiagnostic] {
   let diagnostics : Array[LintDiagnostic] = []
   // Build map: "owner/repo" -> Array[(file_path, ref_str, uses)]
-  let action_map : Map[String, Array[(String, String, String)]] = {}
+  let action_map : Map[String, Array[(String, String, String)]] = Map([])
   for pair in file_refs {
     let file_path = pair.0
     let refs = pair.1
@@ -145,7 +145,7 @@ pub fn check_version_consistency(
   }
   // For each action, check if there are multiple distinct ref_str values
   for key, entries in action_map {
-    let unique_refs : Map[String, String] = {} // ref_str -> first file_path
+    let unique_refs : Map[String, String] = Map([]) // ref_str -> first file_path
     for entry in entries {
       let ref_str = entry.1
       let file_path = entry.0

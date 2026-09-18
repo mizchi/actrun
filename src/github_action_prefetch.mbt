@@ -44,7 +44,7 @@ fn prefetch_trim_output(text : String) -> String {
 fn github_action_git_bin(git_bin : String?) -> String {
   match git_bin {
     Some(value) => value
-    None => @xsys.get_env_var("ACTRUN_GIT_BIN").unwrap_or("git")
+    None => @env.get_env_var("ACTRUN_GIT_BIN").unwrap_or("git")
   }
 }
 
@@ -53,9 +53,7 @@ fn github_action_base_url(github_base_url : String?) -> String {
   let base = match github_base_url {
     Some(value) => value
     None =>
-      @xsys.get_env_var("ACTRUN_GITHUB_BASE_URL").unwrap_or(
-        "https://github.com",
-      )
+      @env.get_env_var("ACTRUN_GITHUB_BASE_URL").unwrap_or("https://github.com")
   }
   let trimmed = base.trim(chars=" \t\n\r").to_owned()
   if trimmed.has_suffix("/") {
@@ -119,10 +117,10 @@ async fn prefetch_ensure_cached_github_repo_root(
   github_base_url : String?,
 ) -> GitHubRepoEnsureResult {
   match github_action_cache_layout(action_ref) {
-    None => { repo_root: None, did_fetch: false, errors: [] }
+    None => { repo_root: None, did_fetch: false, errors: [], }
     Some(layout) =>
       if @xfs.path_exists(layout.repo_root) {
-        { repo_root: Some(layout.repo_root), did_fetch: false, errors: [] }
+        { repo_root: Some(layout.repo_root), did_fetch: false, errors: [], }
       } else {
         let parent_dir = prefetch_parent_dir(layout.repo_root)
         guard prefetch_mkdir_p(parent_dir) else {
@@ -210,7 +208,7 @@ async fn prefetch_ensure_cached_github_repo_root(
             }
           }
         }
-        { repo_root: Some(layout.repo_root), did_fetch: true, errors: [] }
+        { repo_root: Some(layout.repo_root), did_fetch: true, errors: [], }
       }
   }
 }
@@ -225,7 +223,7 @@ async fn prefetch_ensure_cached_github_action_root(
     action_ref, git_bin, github_base_url,
   )
   match github_action_cache_layout(action_ref) {
-    None => { action_root: None, did_fetch: false, errors: [] }
+    None => { action_root: None, did_fetch: false, errors: [], }
     Some(layout) =>
       if repo_result.errors.length() > 0 {
         {
@@ -478,9 +476,9 @@ pub async fn prefetch_workflow_github_actions_native(
 ) -> GitHubActionPrefetchResult {
   let fetched : Array[String] = []
   let errors : Array[String] = []
-  let visited : Map[String, Bool] = {}
+  let visited : Map[String, Bool] = Map([])
   prefetch_workflow_dependencies(
     workflow, workspace_root, git_bin, github_base_url, visited, fetched, errors,
   )
-  { fetched, errors }
+  { fetched, errors, }
 }

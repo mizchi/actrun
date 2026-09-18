@@ -71,7 +71,7 @@ pub fn shell_stderr(env : ShellEnv) -> String {
 ///|
 #warnings("-deprecated")
 fn shell_parse_int(value : StringView) -> Int raise {
-  @strconv.parse_int(value)
+  @string.parse_int(value)
 }
 
 ///|
@@ -348,7 +348,7 @@ fn builtin_printf(env : ShellEnv, args : Array[String]) -> Int {
 
 ///|
 fn shell_printf_expand(fmt : String, args : Array[String]) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   let mut idx = 0
   let mut arg_idx = 0
   while idx < fmt.length() {
@@ -542,7 +542,7 @@ fn builtin_test(env : ShellEnv, args : Array[String]) -> Int {
 
 ///|
 fn expand_word(env : ShellEnv, word : @sh.Word) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   for part in word.parts {
     match part {
       @sh.Literal(s) => buf.write_string(s)

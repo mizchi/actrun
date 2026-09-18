@@ -38,3 +38,9 @@ async fn run_command_with_stdin(
 fn shell_quote(s : String) -> String {
   "'" + s.replace_all(old="'", new="'\"'\"'") + "'"
 }
+
+///|
+#cfg(target="native")
+fn normalize_cli_args(args : Array[String]) -> Array[String] {
+  args
+}

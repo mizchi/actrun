@@ -1,18 +1,17 @@
 import {
-  "mizchi/bit",
-  "mizchi/bit/diff" @bitdiff,
-  "mizchi/bit/lib" @bitlib,
-  "mizchi/bit/osfs" @bitosfs,
+  "mizchi/bit_core" @bit,
+  "mizchi/bit_diff" @bitdiff,
+  "mizchi/bit_lib" @bitlib,
+  "mizchi/bit_osfs" @bitosfs,
   "moonbitlang/core/env",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/json",
-  "moonbitlang/core/strconv",
+  "moonbitlang/core/string",
   "moonbitlang/async/process",
   "moonbitlang/core/bench",
   "moonbitlang/x/crypto",
   "mizchi/bitflow/workflow" @wf,
   "moonbitlang/x/fs" @xfs,
-  "moonbitlang/x/sys" @xsys,
   "moonbit-community/yaml",
   "mizchi/wite",
   "mizchi/actrun/sh",
@@ -28,6 +27,8 @@ import {
   "moonbitlang/async",
   "moonbitlang/core/debug",
 } for "wbtest"
+
+warnings = "-0029-0067"
 
 options(
   link: {

@@ -13,11 +13,11 @@ pub struct WasiContext {
 
 ///|
 pub fn WasiContext::new(
-  env? : Map[String, String] = {},
-  inputs? : Map[String, String] = {},
+  env? : Map[String, String] = Map([]),
+  inputs? : Map[String, String] = Map([]),
   workdir? : String = "/workspace",
 ) -> WasiContext {
-  let merged_env : Map[String, String] = {}
+  let merged_env : Map[String, String] = Map([])
   for k, v in env {
     merged_env[k] = v
   }
@@ -90,7 +90,7 @@ pub fn WasiContext::collect_result(self : WasiContext) -> WasiRunResult {
 
 ///|
 fn to_upper(s : String) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   for ch in s {
     if ch >= 'a' && ch <= 'z' {
       buf.write_char(Int::unsafe_to_char(ch.to_int() - 32))

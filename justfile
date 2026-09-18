@@ -90,6 +90,16 @@ gha-compat-compare workflow downloaded_dir:
 gha-compat-live workflow repo="mizchi/action_runner" ref="main":
     bash scripts/gha_compat_live.sh {{workflow}} {{repo}} {{ref}}
 
+# Build the npm-ready JS CLI (dist/actrun.js) and library (lib/actrun.js)
+build-js:
+    moon build --release src/cmd/actrun --target js
+    moon build --release src --target js
+    node scripts/bundle-js.js
+
+# Type check the JS target
+check-js:
+    moon check --deny-warn --target js
+
 # Build sandbox library (JS target)
 build-sandbox:
     moon build src/sandbox --target js
@@ -124,3 +134,4 @@ ci: fmt-check info-check check test
 # CI checks across the supported runtime target
 ci-all:
     just ci
+    just check-js

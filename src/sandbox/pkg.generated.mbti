@@ -44,4 +44,3 @@ pub(open) trait Fs {
   fn mkdir(Self, String) -> Bool
   fn remove(Self, String) -> Bool
 }
-

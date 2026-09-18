@@ -2,7 +2,7 @@
 
 ///|
 fn compat_docs_cache_store_root(workspace : String) -> String {
-  let cwd = @xsys.get_env_var("PWD").unwrap_or(".")
+  let cwd = @env.get_env_var("PWD").unwrap_or(".")
   let absolute_workspace = if workspace.has_prefix("/") {
     workspace
   } else if cwd.has_suffix("/") {
@@ -22,16 +22,16 @@ fn compat_docs_cache_store_root(workspace : String) -> String {
 
 ///|
 fn compat_docs_set_env_var(key : String, value : String) -> String? {
-  let previous = @xsys.get_env_var(key)
-  @xsys.set_env_var(key, value)
+  let previous = @env.get_env_var(key)
+  @env.set_env_var(key, value)
   previous
 }
 
 ///|
 fn compat_docs_restore_env_var(key : String, previous : String?) -> Unit {
   match previous {
-    Some(value) => @xsys.set_env_var(key, value)
-    None => @xsys.unset_env_var(key)
+    Some(value) => @env.set_env_var(key, value)
+    None => @env.unset_env_var(key)
   }
 }
 

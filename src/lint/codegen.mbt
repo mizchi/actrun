@@ -13,7 +13,7 @@ fn shell_var_ref(name : String) -> String {
 /// Convert a workflow to a shell script (experimental)
 pub fn workflow_to_shell(
   workflow : @ar.WorkflowSpec,
-  reusable_workflows? : Map[String, @ar.WorkflowSpec] = {},
+  reusable_workflows? : Map[String, @ar.WorkflowSpec] = Map([]),
   parallel? : Bool = false,
 ) -> String {
   let out : Array[String] = []
@@ -230,11 +230,11 @@ fn emit_job_function_parallel(job : @ar.JobSpec, out : Array[String]) -> Unit {
 
 ///|
 fn compute_layers(jobs : Array[@ar.JobSpec]) -> Array[Array[@ar.JobSpec]] {
-  let job_map : Map[String, @ar.JobSpec] = {}
+  let job_map : Map[String, @ar.JobSpec] = Map([])
   for job in jobs {
     job_map[job.id] = job
   }
-  let assigned : Map[String, Int] = {} // job_id → layer
+  let assigned : Map[String, Int] = Map([]) // job_id → layer
   let layers : Array[Array[@ar.JobSpec]] = []
   // Assign layers iteratively
   let mut changed = true
@@ -1049,7 +1049,7 @@ fn expr_node_to_dot_path(expr : Expr) -> String {
 
 ///|
 fn resolve_github_context(expr : String) -> String {
-  let known : Map[String, String] = {}
+  let known : Map[String, String] = Map([])
   known["github.ref"] = "$GITHUB_REF"
   known["github.ref_name"] = "$GITHUB_REF_NAME"
   known["github.sha"] = "$GITHUB_SHA"
@@ -1225,7 +1225,7 @@ fn get_with(values : Map[String, String], key : String) -> String {
 
 ///|
 fn to_shell_var(s : String) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   for ch in s {
     if (ch >= 'a' && ch <= 'z') ||
       (ch >= 'A' && ch <= 'Z') ||
@@ -1247,7 +1247,7 @@ fn to_shell_var(s : String) -> String {
 ///|
 fn split_by_dot(s : String) -> Array[String] {
   let parts : Array[String] = []
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   for ch in s {
     if ch == '.' {
       parts.push(buf.to_string())
@@ -1320,11 +1320,11 @@ fn shell_quote(s : String) -> String {
 
 ///|
 fn topo_sort_jobs(jobs : Array[@ar.JobSpec]) -> Array[@ar.JobSpec] {
-  let id_map : Map[String, @ar.JobSpec] = {}
+  let id_map : Map[String, @ar.JobSpec] = Map([])
   for job in jobs {
     id_map[job.id] = job
   }
-  let visited : Map[String, Bool] = {}
+  let visited : Map[String, Bool] = Map([])
   let result : Array[@ar.JobSpec] = []
   for job in jobs {
     topo_visit(job.id, id_map, visited, result)

@@ -30,16 +30,16 @@ fn remove_main_test_tree(path : String) -> Unit raise {
 
 ///|
 fn main_test_set_env_var(key : String, value : String) -> String? {
-  let previous = @xsys.get_env_var(key)
-  @xsys.set_env_var(key, value)
+  let previous = @env.get_env_var(key)
+  @env.set_env_var(key, value)
   previous
 }
 
 ///|
 fn main_test_restore_env_var(key : String, previous : String?) -> Unit {
   match previous {
-    Some(value) => @xsys.set_env_var(key, value)
-    None => @xsys.unset_env_var(key)
+    Some(value) => @env.set_env_var(key, value)
+    None => @env.unset_env_var(key)
   }
 }
 
@@ -48,9 +48,7 @@ fn main_test_absolute_path(path : String) -> String {
   if path.has_prefix("/") {
     return path
   }
-  let cwd = @env.current_dir().unwrap_or(
-    @xsys.get_env_var("PWD").unwrap_or("."),
-  )
+  let cwd = @env.current_dir().unwrap_or(@env.get_env_var("PWD").unwrap_or("."))
   if cwd.has_suffix("/") {
     cwd + path
   } else {
@@ -817,37 +815,37 @@ test "cli: root override flags are exported to runner env" {
   apply_cli_root_overrides(options)
 
   @debug.debug_inspect(
-    @xsys.get_env_var("ACTRUN_ARTIFACT_ROOT").unwrap_or(""),
+    @env.get_env_var("ACTRUN_ARTIFACT_ROOT").unwrap_or(""),
     content=(
       #|"/tmp/artifacts"
     ),
   )
   @debug.debug_inspect(
-    @xsys.get_env_var("ACTRUN_CACHE_ROOT").unwrap_or(""),
+    @env.get_env_var("ACTRUN_CACHE_ROOT").unwrap_or(""),
     content=(
       #|"/tmp/cache"
     ),
   )
   @debug.debug_inspect(
-    @xsys.get_env_var("ACTRUN_GITHUB_ACTION_CACHE_ROOT").unwrap_or(""),
+    @env.get_env_var("ACTRUN_GITHUB_ACTION_CACHE_ROOT").unwrap_or(""),
     content=(
       #|"/tmp/gha-cache"
     ),
   )
   @debug.debug_inspect(
-    @xsys.get_env_var("ACTRUN_ACTION_REGISTRY_ROOT").unwrap_or(""),
+    @env.get_env_var("ACTRUN_ACTION_REGISTRY_ROOT").unwrap_or(""),
     content=(
       #|"/tmp/registry"
     ),
   )
   @debug.debug_inspect(
-    @xsys.get_env_var("ACTRUN_WASM_ACTION_ROOT").unwrap_or(""),
+    @env.get_env_var("ACTRUN_WASM_ACTION_ROOT").unwrap_or(""),
     content=(
       #|"/tmp/wasm"
     ),
   )
   @debug.debug_inspect(
-    @xsys.get_env_var("ACTRUN_WASM_RUNNER").unwrap_or(""),
+    @env.get_env_var("ACTRUN_WASM_RUNNER").unwrap_or(""),
     content=(
       #|"v8"
     ),
@@ -4854,7 +4852,7 @@ test "config: affected patterns loaded" {
   let root = @toml.parse("[affected.\"ci.yml\"]\npatterns = [\"src/**\"]\n")
   guard root is @toml.TomlTable(table) else { fail("expected table") }
   let affected = toml_get_table(table, "affected")
-  let result : Map[String, Array[String]] = {}
+  let result : Map[String, Array[String]] = Map([])
   for wf_name, wf_value in affected {
     match wf_value {
       @toml.TomlTable(wf_tbl) => {
@@ -5197,7 +5195,7 @@ test "toml: affected patterns extraction" {
   )
   guard root is @toml.TomlTable(table) else { fail("expected table") }
   let affected = toml_get_table(table, "affected")
-  let result : Map[String, Array[String]] = {}
+  let result : Map[String, Array[String]] = Map([])
   for wf_name, wf_value in affected {
     match wf_value {
       @toml.TomlTable(wf_tbl) => {

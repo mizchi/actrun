@@ -122,7 +122,7 @@ test "substitute_matrix_text: empty value" {
 
 ///|
 test "substitute_matrix_text: missing key returns empty" {
-  let values : Map[String, String] = {}
+  let values : Map[String, String] = Map([])
   let result = substitute_matrix_text("echo ${{ matrix.missing }}", values)
   @debug.debug_inspect(
     result,

@@ -48,8 +48,8 @@ fn handle_run_request(body_json : String) -> String {
   let body : Json = @json.parse(body_json) catch {
     _ => return "{\"error\":\"invalid json\"}"
   }
-  let env : Map[String, String] = {}
-  let inputs : Map[String, String] = {}
+  let env : Map[String, String] = Map([])
+  let inputs : Map[String, String] = Map([])
   match body {
     Object(m) => {
       match m.get("env") {
@@ -89,7 +89,7 @@ fn handle_run_request(body_json : String) -> String {
     return "{\"error\":\"module_url required or fetch failed\"}"
   }
   // Build env with inputs
-  let merged_env : Map[String, String] = {}
+  let merged_env : Map[String, String] = Map([])
   for k, v in env {
     merged_env[k] = v
   }
@@ -113,10 +113,10 @@ fn start_server() -> Unit {
 
 ///|
 fn to_upper(s : String) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   for ch in s {
     if ch >= 'a' && ch <= 'z' {
-      buf.write_char(Char::from_int(ch.to_int() - 32))
+      buf.write_char((ch.to_int() - 32).unsafe_to_char())
     } else {
       buf.write_char(ch)
     }

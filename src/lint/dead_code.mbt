@@ -74,7 +74,7 @@ fn check_future_step_refs(
   diagnostics : Array[LintDiagnostic],
 ) -> Unit {
   // Build map of step id -> index
-  let step_indices : Map[String, Int] = {}
+  let step_indices : Map[String, Int] = Map([])
   for i, step in job.steps {
     if step.id.length() > 0 {
       step_indices[step.id] = i
@@ -241,13 +241,13 @@ fn check_dependency_cycles(
   diagnostics : Array[LintDiagnostic],
 ) -> Unit {
   // Build adjacency list
-  let needs_map : Map[String, Array[String]] = {}
+  let needs_map : Map[String, Array[String]] = Map([])
   for job in jobs {
     needs_map[job.id] = job.needs
   }
   // DFS cycle detection
-  let visited : Map[String, Bool] = {} // fully processed
-  let in_stack : Map[String, Bool] = {} // currently on recursion stack
+  let visited : Map[String, Bool] = Map([]) // fully processed
+  let in_stack : Map[String, Bool] = Map([]) // currently on recursion stack
   for job in jobs {
     if visited.get(job.id).unwrap_or(false) {
       continue
@@ -314,7 +314,7 @@ fn check_unused_job_outputs(
   diagnostics : Array[LintDiagnostic],
 ) -> Unit {
   // Collect all output references from all expressions in all jobs
-  let referenced_outputs : Map[String, Bool] = {} // "job_id.output_key"
+  let referenced_outputs : Map[String, Bool] = Map([]) // "job_id.output_key"
   for job in workflow.jobs {
     for step in job.steps {
       let exprs : Array[String] = []

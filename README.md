@@ -280,14 +280,15 @@ ignore_rules = ["unknown-property", "unused-outputs"]
 ```
 $ actrun viz .github/workflows/release.yml
 
-┌───────┐    ┌────────┐
-│ build │    │ docker │
-└───────┘    └────────┘
-    └┐
-     │
-┌─────────┐
-│ release │
-└─────────┘
+┌───────┐    ┌─────┐    ┌────────┐
+│ build │    │ npm │    │ docker │
+└───────┘    └─────┘    └────────┘
+    │
+    └────────────┐
+                 │
+            ┌─────────┐
+            │ release │
+            └─────────┘
 ```
 
 ### Artifact & Cache Commands
@@ -604,6 +605,7 @@ just check        # type check
 just test         # run tests
 just e2e          # run E2E scenarios
 just release-check  # fmt + info + check + test + e2e
+just build-js     # build the npm CLI bundle (dist/actrun.js) and library (lib/actrun.js)
 ```
 
 ### Live Compatibility Testing

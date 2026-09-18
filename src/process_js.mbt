@@ -2,7 +2,7 @@
 #cfg(target="js")
 extern "js" fn js_spawn_sync_ffi(
   cmd : String,
-  args : Array[String],
+  args : FixedArray[String],
   cwd : String,
 ) -> Int =
   #| function(cmd, args, cwd) {
@@ -27,7 +27,7 @@ extern "js" fn js_spawn_sync_ffi(
 #cfg(target="js")
 extern "js" fn js_spawn_sync_stdin_ffi(
   cmd : String,
-  args : Array[String],
+  args : FixedArray[String],
   stdin_text : String,
   cwd : String,
 ) -> Int =
@@ -67,7 +67,7 @@ async fn run_command(
   args : Array[String],
   cwd? : String = ".",
 ) -> (Int, String, String) {
-  let code = js_spawn_sync_ffi(cmd, args, cwd)
+  let code = js_spawn_sync_ffi(cmd, FixedArray::from_array(args[:]), cwd)
   let stdout = js_get_proc_stdout()
   let stderr = js_get_proc_stderr()
   (code, stdout, stderr)
@@ -81,8 +81,25 @@ async fn run_command_with_stdin(
   stdin_text : String,
   cwd? : String = ".",
 ) -> (Int, String, String) {
-  let code = js_spawn_sync_stdin_ffi(cmd, args, stdin_text, cwd)
+  let code = js_spawn_sync_stdin_ffi(
+    cmd,
+    FixedArray::from_array(args[:]),
+    stdin_text,
+    cwd,
+  )
   let stdout = js_get_proc_stdout()
   let stderr = js_get_proc_stderr()
   (code, stdout, stderr)
+}
+
+///|
+#cfg(target="js")
+fn normalize_cli_args(args : Array[String]) -> Array[String] {
+  // process.argv = [node, script, ...args]; drop the interpreter so that
+  // args[0] is the script (program) name like on native.
+  if args.length() >= 2 {
+    args[1:].to_owned()
+  } else {
+    args
+  }
 }

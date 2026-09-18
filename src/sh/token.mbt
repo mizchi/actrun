@@ -68,17 +68,17 @@ pub struct Token {
 
 ///|
 pub fn Token::new(kind : TokenKind, line : Int, col : Int) -> Token {
-  { kind, line, col }
+  { kind, line, col, }
 }
 
 ///|
 pub fn Token::word(s : String, line : Int, col : Int) -> Token {
-  { kind: Word(s), line, col }
+  { kind: Word(s), line, col, }
 }
 
 ///|
 pub fn Token::eof(line : Int, col : Int) -> Token {
-  { kind: Eof, line, col }
+  { kind: Eof, line, col, }
 }
 
 ///|

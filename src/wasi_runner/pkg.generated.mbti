@@ -49,4 +49,3 @@ pub struct WasiRunResult {
 // Type aliases
 
 // Traits
-

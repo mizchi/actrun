@@ -42,7 +42,7 @@ struct CliOptions {
 ///|
 #warnings("-deprecated")
 fn main_parse_int64(value : StringView) -> Int64 raise {
-  @strconv.parse_int64(value)
+  @string.parse_int64(value)
 }
 
 ///|
@@ -343,6 +343,12 @@ fn parent_dir(path : String) -> String {
 }
 
 ///|
+fn xfs_error_message(err : @xfs.IOError) -> String {
+  let @xfs.IOError(message) = err
+  message
+}
+
+///|
 fn join_path(base : String, child : String) -> String {
   if child.has_prefix("/") {
     return child
@@ -410,27 +416,27 @@ async fn effective_workspace_mode(options : CliOptions) -> String {
 ///|
 fn apply_cli_root_overrides(options : CliOptions) -> Unit {
   match options.artifact_root {
-    Some(path) => @xsys.set_env_var("ACTRUN_ARTIFACT_ROOT", path)
+    Some(path) => @env.set_env_var("ACTRUN_ARTIFACT_ROOT", path)
     None => ()
   }
   match options.cache_root {
-    Some(path) => @xsys.set_env_var("ACTRUN_CACHE_ROOT", path)
+    Some(path) => @env.set_env_var("ACTRUN_CACHE_ROOT", path)
     None => ()
   }
   match options.github_action_cache_root {
-    Some(path) => @xsys.set_env_var("ACTRUN_GITHUB_ACTION_CACHE_ROOT", path)
+    Some(path) => @env.set_env_var("ACTRUN_GITHUB_ACTION_CACHE_ROOT", path)
     None => ()
   }
   match options.registry_root {
-    Some(path) => @xsys.set_env_var("ACTRUN_ACTION_REGISTRY_ROOT", path)
+    Some(path) => @env.set_env_var("ACTRUN_ACTION_REGISTRY_ROOT", path)
     None => ()
   }
   match options.wasm_action_root {
-    Some(path) => @xsys.set_env_var("ACTRUN_WASM_ACTION_ROOT", path)
+    Some(path) => @env.set_env_var("ACTRUN_WASM_ACTION_ROOT", path)
     None => ()
   }
   if options.wasm_runner.length() > 0 {
-    @xsys.set_env_var("ACTRUN_WASM_RUNNER", options.wasm_runner)
+    @env.set_env_var("ACTRUN_WASM_RUNNER", options.wasm_runner)
   }
 }
 
@@ -496,7 +502,7 @@ async fn setup_local_workspace(
 ) -> (LocalWorkspace?, Array[String]) {
   if workspace_mode == "local" {
     return (
-      Some({ execution_root: source_root, cleanup_mode: "none", source_root }),
+      Some({ execution_root: source_root, cleanup_mode: "none", source_root, }),
       [],
     )
   }
@@ -745,7 +751,7 @@ struct LocalContextConfig {
 
 ///|
 fn default_local_context_config() -> LocalContextConfig {
-  { repository: "", ref_name: "", before_rev: "", after_rev: "", actor: "" }
+  { repository: "", ref_name: "", before_rev: "", after_rev: "", actor: "", }
 }
 
 ///|
@@ -816,8 +822,8 @@ async fn git_actor_name(repo_root : String) -> String {
   match git_trimmed_stdout(repo_root, ["config", "user.name"]) {
     Some(actor) => actor
     None =>
-      @xsys.get_env_var("USER").unwrap_or(
-        @xsys.get_env_var("LOGNAME").unwrap_or(""),
+      @env.get_env_var("USER").unwrap_or(
+        @env.get_env_var("LOGNAME").unwrap_or(""),
       )
   }
 }
@@ -1031,7 +1037,7 @@ fn push_unique_string(values : Array[String], value : String) -> Unit {
 fn flow_cache_task_map(
   tasks : Array[@wf.FlowTask],
 ) -> Map[String, @wf.FlowTask] {
-  let result : Map[String, @wf.FlowTask] = {}
+  let result : Map[String, @wf.FlowTask] = Map([])
   for task in tasks {
     result[task.id] = task
   }
@@ -1071,7 +1077,7 @@ fn flatten_flow_cache_task_ids(
   task_ids : Array[String],
 ) -> Array[String] {
   let result : Array[String] = []
-  let seen : Map[String, Bool] = {}
+  let seen : Map[String, Bool] = Map([])
   for task_id in task_ids {
     for resolved in flow_cache_leaf_task_ids(task_map, task_id, seen) {
       push_unique_string(result, resolved)
@@ -1134,7 +1140,7 @@ fn resolve_flow_cache_signatures(
   lowered : @ar.LoweringResult,
   requested : Map[String, String],
 ) -> Map[String, String] {
-  let resolved : Map[String, String] = {}
+  let resolved : Map[String, String] = Map([])
   let cache_ir = lowered_flow_cache_ir(lowered)
   for node in cache_ir.nodes {
     match requested.get(node.id) {
@@ -1172,7 +1178,7 @@ fn flow_cache_signature_issues(
   cache_ir : @wf.FlowIr,
   signatures : Map[String, String],
 ) -> Array[String] {
-  let task_nodes : Map[String, Bool] = {}
+  let task_nodes : Map[String, Bool] = Map([])
   for task in cache_ir.tasks {
     task_nodes[task.node] = true
   }
@@ -1470,9 +1476,7 @@ fn absolute_run_store_path(path : String) -> String {
   if path.has_prefix("/") {
     return path
   }
-  let pwd = @env.current_dir().unwrap_or(
-    @xsys.get_env_var("PWD").unwrap_or("."),
-  )
+  let pwd = @env.current_dir().unwrap_or(@env.get_env_var("PWD").unwrap_or("."))
   join_path(pwd, path)
 }
 
@@ -1483,7 +1487,7 @@ fn run_store_workspace_key(workspace_root : String) -> String {
 
 ///|
 fn artifact_store_root_for_run(workspace_root : String) -> String {
-  let base = @xsys.get_env_var("ACTRUN_ARTIFACT_ROOT").unwrap_or(
+  let base = @env.get_env_var("ACTRUN_ARTIFACT_ROOT").unwrap_or(
     "_build/actrun/artifacts",
   )
   absolute_run_store_path(base + "/" + run_store_workspace_key(workspace_root))
@@ -1491,7 +1495,7 @@ fn artifact_store_root_for_run(workspace_root : String) -> String {
 
 ///|
 fn cache_store_root_for_run(workspace_root : String) -> String {
-  let base = @xsys.get_env_var("ACTRUN_CACHE_ROOT").unwrap_or(
+  let base = @env.get_env_var("ACTRUN_CACHE_ROOT").unwrap_or(
     "_build/actrun/cache",
   )
   absolute_run_store_path(base + "/" + run_store_workspace_key(workspace_root))
@@ -1502,7 +1506,7 @@ fn sorted_dir_entries(path : String) -> Array[String] {
   let entries = try @xfs.read_dir(path) catch {
     _ => []
   } noraise {
-    value => value
+    value => value.to_owned()
   }
   entries.sort_by(String::lexical_compare)
   entries
@@ -1540,7 +1544,7 @@ fn run_store_is_dir(path : String) -> Bool {
 fn collect_relative_files(
   root : String,
   current? : String = "",
-  ignored? : Map[String, Bool] = {},
+  ignored? : Map[String, Bool] = Map([]),
 ) -> Array[String] {
   let files : Array[String] = []
   let dir = if current.length() > 0 { join_path(root, current) } else { root }
@@ -1567,7 +1571,7 @@ fn collect_relative_files(
 
 ///|
 fn task_status_map(report : @ar.WorkflowRunReport) -> Map[String, String] {
-  let statuses : Map[String, String] = {}
+  let statuses : Map[String, String] = Map([])
   for task in report.task_reports {
     statuses[task.id] = task.status
   }
@@ -1576,7 +1580,7 @@ fn task_status_map(report : @ar.WorkflowRunReport) -> Map[String, String] {
 
 ///|
 fn task_duration_map(report : @ar.WorkflowRunReport) -> Map[String, UInt64] {
-  let durations : Map[String, UInt64] = {}
+  let durations : Map[String, UInt64] = Map([])
   for task in report.task_reports {
     durations[task.id] = task.duration_ms
   }
@@ -1629,8 +1633,8 @@ fn collect_run_jobs(
 ) -> Array[RunJobRecord] {
   let task_statuses = task_status_map(report)
   let task_durations = task_duration_map(report)
-  let task_names : Map[String, String] = {}
-  let by_job : Map[String, Array[String]] = {}
+  let task_names : Map[String, String] = Map([])
+  let by_job : Map[String, Array[String]] = Map([])
   let job_order : Array[String] = []
   for task in plan.tasks {
     task_names[task.id] = task.name
@@ -1677,7 +1681,7 @@ fn artifact_name_index(
   plan : @ar.ExecutionPlan,
   report : @ar.WorkflowRunReport,
 ) -> Map[String, String] {
-  let names : Map[String, String] = {}
+  let names : Map[String, String] = Map([])
   let statuses = task_status_map(report)
   for task in plan.tasks {
     guard statuses.get(task.id) is Some(status) else { continue }
@@ -1932,7 +1936,7 @@ fn collect_workflow_list_records(
         }
       None => workflow_name_from_path(relative_path)
     }
-    records.push({ name, path: relative_path })
+    records.push({ name, path: relative_path, })
   }
   records
 }
@@ -2118,7 +2122,7 @@ fn run_record_json(
   jobs? : Array[RunJobRecord] = [],
   artifacts? : Array[RunArtifactRecord] = [],
   caches? : Array[RunCacheRecord] = [],
-  task_files? : Map[String, RunTaskFiles] = {},
+  task_files? : Map[String, RunTaskFiles] = Map([]),
   flow_cache? : FlowCacheRecord? = None,
 ) -> String {
   let flow_cache_json = match flow_cache {
@@ -2283,7 +2287,7 @@ fn persist_task_files(
   run_dir : String,
   report : @ar.WorkflowRunReport,
 ) -> Map[String, RunTaskFiles] raise {
-  let files : Map[String, RunTaskFiles] = {}
+  let files : Map[String, RunTaskFiles] = Map([])
   let tasks_dir = join_path(run_dir, "tasks")
   ensure_dir(tasks_dir)
   if report.task_reports.length() == 0 {
@@ -2649,7 +2653,7 @@ fn load_actrun_config(dir : String) -> ActrunConfig {
     }
   }
   // Parse [affected."workflow"] sections
-  let affected_result : Map[String, Array[String]] = {}
+  let affected_result : Map[String, Array[String]] = Map([])
   let affected_table = toml_get_table(table, "affected")
   for wf_name, wf_value in affected_table {
     match wf_value {
@@ -2663,7 +2667,7 @@ fn load_actrun_config(dir : String) -> ActrunConfig {
     }
   }
   // Parse [override."action"] sections
-  let override_result : Map[String, String] = {}
+  let override_result : Map[String, String] = Map([])
   let override_table = toml_get_table(table, "override")
   for action_name, action_value in override_table {
     match action_value {
@@ -3092,16 +3096,16 @@ async fn apply_container_runtime(options : CliOptions) -> Unit {
     try @xfs.write_string_to_file(wrapper_path, script) catch {
       _ => {
         println("warning: failed to create container wrapper script")
-        @xsys.set_env_var("ACTRUN_CONTAINER_RUNTIME", bin)
+        @env.set_env_var("ACTRUN_CONTAINER_RUNTIME", bin)
         return
       }
     } noraise {
       _ => ()
     }
     ignore(run_command("chmod", ["+x", wrapper_path], cwd="."))
-    @xsys.set_env_var("ACTRUN_CONTAINER_RUNTIME", wrapper_path)
+    @env.set_env_var("ACTRUN_CONTAINER_RUNTIME", wrapper_path)
   } else {
-    @xsys.set_env_var("ACTRUN_CONTAINER_RUNTIME", bin)
+    @env.set_env_var("ACTRUN_CONTAINER_RUNTIME", bin)
   }
 }
 
@@ -3148,7 +3152,7 @@ async fn handle_serve_command(args : Array[String]) -> Int {
   )
   println("Press Ctrl+C to stop.\n")
   // Track processed run IDs to avoid re-running
-  let processed : Map[String, Bool] = {}
+  let processed : Map[String, Bool] = Map([])
   while true {
     // Poll for queued workflow runs
     let (code, stdout, _) = run_command("gh", [
@@ -3352,7 +3356,7 @@ fn collect_list_workflows(
   patterns : Array[String],
 ) -> Array[WorkflowListRecord] raise {
   let paths : Array[String] = []
-  let seen : Map[String, Bool] = {}
+  let seen : Map[String, Bool] = Map([])
   for pattern in patterns {
     // Simple glob expansion
     if pattern.contains("*") {
@@ -3424,7 +3428,7 @@ fn collect_list_workflows(
         }
       None => workflow_name_from_path(path)
     }
-    records.push({ name, path })
+    records.push({ name, path, })
   }
   records
 }
@@ -3537,10 +3541,8 @@ async fn handle_cron_command(args : Array[String]) -> Int {
     println("No schedule triggers found in workflows.")
     return 0
   }
-  let cwd = @env.current_dir().unwrap_or(
-    @xsys.get_env_var("PWD").unwrap_or("."),
-  )
-  let actrun_bin = @xsys.get_cli_args()[0]
+  let cwd = @env.current_dir().unwrap_or(@env.get_env_var("PWD").unwrap_or("."))
+  let actrun_bin = @ar.cli_args()[0]
   if action == "show" {
     println("# actrun cron entries")
     for entry in cron_entries {
@@ -3663,7 +3665,7 @@ struct DotenvParseResult {
 
 ///|
 fn parse_dotenv(content : String) -> DotenvParseResult {
-  let entries : Map[String, String] = {}
+  let entries : Map[String, String] = Map([])
   let errors : Array[String] = []
   let lines : Array[String] = []
   for part in content.split("\n") {
@@ -3724,7 +3726,7 @@ fn parse_dotenv(content : String) -> DotenvParseResult {
     entries[key] = dotenv_expand_vars(value, entries)
     i += 1
   }
-  { entries, errors }
+  { entries, errors, }
 }
 
 ///|
@@ -3797,7 +3799,7 @@ fn parse_dotenv_single_quoted(
 
 ///|
 fn dotenv_unescape_double(text : String) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   let mut i = 0
   while i < text.length() {
     if text.unsafe_get(i).to_int() == '\\'.to_int() && i + 1 < text.length() {
@@ -3849,7 +3851,7 @@ fn dotenv_strip_inline_comment(text : String) -> String {
 
 ///|
 fn dotenv_expand_vars(text : String, env : Map[String, String]) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   let mut i = 0
   while i < text.length() {
     if text.unsafe_get(i).to_int() == '$'.to_int() && i + 1 < text.length() {
@@ -3864,7 +3866,7 @@ fn dotenv_expand_vars(text : String, env : Map[String, String]) -> String {
             )
             let resolved = match env.get(var_name) {
               Some(v) => v
-              None => @xsys.get_env_var(var_name).unwrap_or("")
+              None => @env.get_env_var(var_name).unwrap_or("")
             }
             buf.write_string(resolved)
             i = close + 1
@@ -3897,7 +3899,7 @@ fn dotenv_expand_vars(text : String, env : Map[String, String]) -> String {
           )
           let resolved = match env.get(var_name) {
             Some(v) => v
-            None => @xsys.get_env_var(var_name).unwrap_or("")
+            None => @env.get_env_var(var_name).unwrap_or("")
           }
           buf.write_string(resolved)
           i = var_end
@@ -3953,7 +3955,7 @@ fn load_env_file(path : String) -> Array[String] {
   }
   let result = parse_dotenv(content)
   for key, value in result.entries {
-    @xsys.set_env_var(key, value)
+    @env.set_env_var(key, value)
   }
   result.errors
 }
@@ -4001,8 +4003,8 @@ fn parse_cli_args(args : Array[String]) -> CliParseResult {
   let mut after_sha = ""
   let changed_paths : Array[String] = []
   let skip_actions : Array[String] = []
-  let dispatch_inputs : Map[String, String] = {}
-  let flow_signatures : Map[String, String] = {}
+  let dispatch_inputs : Map[String, String] = Map([])
+  let flow_signatures : Map[String, String] = Map([])
   let mut dry_run = false
   let mut dump_context = false
   let mut trust_actions = false
@@ -4280,7 +4282,7 @@ fn parse_cli_args(args : Array[String]) -> CliParseResult {
     errors.push("--flow-signature requires --flow-cache-store")
   }
   if errors.length() > 0 {
-    return { options: None, errors }
+    return { options: None, errors, }
   }
   {
     options: Some({
@@ -4330,7 +4332,7 @@ fn parse_cli_args(args : Array[String]) -> CliParseResult {
 fn parse_run_read_args(args : Array[String]) -> RunReadParseResult {
   let errors : Array[String] = []
   if args.length() < 3 {
-    return { options: None, errors: ["run subcommand requires an action"] }
+    return { options: None, errors: ["run subcommand requires an action"], }
   }
   let action = args[2]
   if action == "rerun" {
@@ -4347,7 +4349,7 @@ fn parse_run_read_args(args : Array[String]) -> RunReadParseResult {
     action != "logs" &&
     action != "download" &&
     action != "delete" {
-    return { options: None, errors: ["unknown run subcommand: " + action] }
+    return { options: None, errors: ["unknown run subcommand: " + action], }
   }
   let mut run_id = ""
   let mut index = 3
@@ -4494,7 +4496,7 @@ fn parse_run_read_args(args : Array[String]) -> RunReadParseResult {
     errors.push("--dir is only supported for `run download`")
   }
   if errors.length() > 0 {
-    return { options: None, errors }
+    return { options: None, errors, }
   }
   {
     options: Some({
@@ -4533,7 +4535,10 @@ fn parse_artifact_read_args(args : Array[String]) -> ArtifactReadParseResult {
   }
   let action = args[2]
   if action != "list" && action != "download" {
-    return { options: None, errors: ["unknown artifact subcommand: " + action] }
+    return {
+      options: None,
+      errors: ["unknown artifact subcommand: " + action],
+    }
   }
   let run_id = args[3]
   if run_id.length() == 0 {
@@ -4604,7 +4609,7 @@ fn parse_artifact_read_args(args : Array[String]) -> ArtifactReadParseResult {
     errors.push("--name is required for `artifact download`")
   }
   if errors.length() > 0 {
-    return { options: None, errors }
+    return { options: None, errors, }
   }
   {
     options: Some({
@@ -4625,11 +4630,11 @@ fn parse_artifact_read_args(args : Array[String]) -> ArtifactReadParseResult {
 fn parse_cache_read_args(args : Array[String]) -> CacheReadParseResult {
   let errors : Array[String] = []
   if args.length() < 3 {
-    return { options: None, errors: ["cache subcommand requires an action"] }
+    return { options: None, errors: ["cache subcommand requires an action"], }
   }
   let action = args[2]
   if action != "list" && action != "prune" {
-    return { options: None, errors: ["unknown cache subcommand: " + action] }
+    return { options: None, errors: ["unknown cache subcommand: " + action], }
   }
   let mut cache_root : String? = None
   let mut key_filter = ""
@@ -4708,7 +4713,7 @@ fn parse_cache_read_args(args : Array[String]) -> CacheReadParseResult {
     errors.push("--key, --all, or --max-age is required for `cache prune`")
   }
   if errors.length() > 0 {
-    return { options: None, errors }
+    return { options: None, errors, }
   }
   {
     options: Some({
@@ -4730,11 +4735,17 @@ fn parse_cache_read_args(args : Array[String]) -> CacheReadParseResult {
 fn parse_workflow_read_args(args : Array[String]) -> WorkflowReadParseResult {
   let errors : Array[String] = []
   if args.length() < 3 {
-    return { options: None, errors: ["workflow subcommand requires an action"] }
+    return {
+      options: None,
+      errors: ["workflow subcommand requires an action"],
+    }
   }
   let action = args[2]
   if action != "list" {
-    return { options: None, errors: ["unknown workflow subcommand: " + action] }
+    return {
+      options: None,
+      errors: ["unknown workflow subcommand: " + action],
+    }
   }
   let mut repo_root : String? = None
   let mut json_output = false
@@ -4773,19 +4784,28 @@ fn parse_workflow_read_args(args : Array[String]) -> WorkflowReadParseResult {
     index += 1
   }
   if errors.length() > 0 {
-    return { options: None, errors }
+    return { options: None, errors, }
   }
-  { options: Some({ action, repo_root, json_output, json_fields }), errors: [] }
+  {
+    options: Some({ action, repo_root, json_output, json_fields, }),
+    errors: [],
+  }
 }
 
 ///|
 fn parse_workflow_run_args(args : Array[String]) -> CliParseResult {
   if args.length() < 3 {
-    return { options: None, errors: ["workflow subcommand requires an action"] }
+    return {
+      options: None,
+      errors: ["workflow subcommand requires an action"],
+    }
   }
   let action = args[2]
   if action != "run" {
-    return { options: None, errors: ["unknown workflow subcommand: " + action] }
+    return {
+      options: None,
+      errors: ["unknown workflow subcommand: " + action],
+    }
   }
   let normalized : Array[String] = ["actrun"]
   for i in 3..<args.length() {
@@ -4856,7 +4876,7 @@ fn handle_export_command(cli_args : Array[String]) -> Int {
     }
   } else {
     // Resolve reusable workflow callees
-    let reusable : Map[String, @ar.WorkflowSpec] = {}
+    let reusable : Map[String, @ar.WorkflowSpec] = Map([])
     let workflow_dir = path_dir(path)
     for job in workflow.jobs {
       match job.reusable_workflow {
@@ -5045,7 +5065,7 @@ async fn handle_lint_command(cli_args : Array[String]) -> Int {
       let entries = try @xfs.read_dir(".github/workflows") catch {
         _ => []
       } noraise {
-        value => value
+        value => value.to_owned()
       }
       for name in entries {
         if name.has_suffix(".yml") || name.has_suffix(".yaml") {
@@ -5103,7 +5123,10 @@ async fn handle_lint_command(cli_args : Array[String]) -> Int {
             try @xfs.write_string_to_file(path, new_text) catch {
               err =>
                 println(
-                  "error: failed to write " + path + ": " + err.to_string(),
+                  "error: failed to write " +
+                  path +
+                  ": " +
+                  xfs_error_message(err),
                 )
             } noraise {
               _ => println("updated: " + path)
@@ -5247,7 +5270,7 @@ async fn resolve_action_refs(
 ) -> Array[@lint.ActionResolution] {
   let results : Array[@lint.ActionResolution] = []
   // Deduplicate by owner/repo@ref to minimize git ls-remote calls
-  let cache : Map[String, (String, Bool, String)] = {} // url@ref -> (sha, exists, error)
+  let cache : Map[String, (String, Bool, String)] = Map([]) // url@ref -> (sha, exists, error)
   for action_ref in refs {
     // SHA-pinned actions are already secure, skip resolution
     if action_ref.is_sha_pinned {
@@ -5337,15 +5360,15 @@ struct DoctorCheck {
 
 ///|
 fn doctor_wasm_runner_bin() -> String {
-  match @xsys.get_env_var("ACTRUN_WASM_BIN") {
+  match @env.get_env_var("ACTRUN_WASM_BIN") {
     Some(bin) => bin
     None =>
       match
         normalize_cli_wasm_runner_kind(
-          @xsys.get_env_var("ACTRUN_WASM_RUNNER").unwrap_or(""),
+          @env.get_env_var("ACTRUN_WASM_RUNNER").unwrap_or(""),
         ) {
         Some("deno") => "deno"
-        Some("v8") => @xsys.get_env_var("ACTRUN_NODE_BIN").unwrap_or("node")
+        Some("v8") => @env.get_env_var("ACTRUN_NODE_BIN").unwrap_or("node")
         _ => "wasmtime"
       }
   }
@@ -5395,7 +5418,7 @@ fn doctor_print_version_probe_failed(
 ///|
 async fn handle_doctor_command() -> Int {
   let checks : Array[DoctorCheck] = [
-    { name: "git", bin: "git", env_override: "ACTRUN_GIT_BIN", required: true },
+    { name: "git", bin: "git", env_override: "ACTRUN_GIT_BIN", required: true, },
     {
       name: "node",
       bin: "node",
@@ -5408,8 +5431,8 @@ async fn handle_doctor_command() -> Int {
       env_override: "ACTRUN_DOCKER_BIN",
       required: false,
     },
-    { name: "bash", bin: "bash", env_override: "", required: true },
-    { name: "sh", bin: "sh", env_override: "", required: true },
+    { name: "bash", bin: "bash", env_override: "", required: true, },
+    { name: "sh", bin: "sh", env_override: "", required: true, },
     {
       name: "wasm runner",
       bin: doctor_wasm_runner_bin(),
@@ -5422,14 +5445,14 @@ async fn handle_doctor_command() -> Int {
       env_override: "",
       required: false,
     },
-    { name: "podman", bin: "podman", env_override: "", required: false },
-    { name: "moonrun", bin: "moonrun", env_override: "", required: false },
-    { name: "nix", bin: "nix", env_override: "", required: false },
+    { name: "podman", bin: "podman", env_override: "", required: false, },
+    { name: "moonrun", bin: "moonrun", env_override: "", required: false, },
+    { name: "nix", bin: "nix", env_override: "", required: false, },
   ]
   let mut has_error = false
   for check in checks {
     let bin = if check.env_override.length() > 0 {
-      @xsys.get_env_var(check.env_override).unwrap_or(check.bin)
+      @env.get_env_var(check.env_override).unwrap_or(check.bin)
     } else {
       check.bin
     }
@@ -5468,7 +5491,7 @@ async fn handle_doctor_command() -> Int {
     let entries = try @xfs.read_dir(".github/workflows") catch {
       _ => []
     } noraise {
-      value => value
+      value => value.to_owned()
     }
     let mut yml_count = 0
     for entry in entries {
@@ -5621,15 +5644,13 @@ async fn handle_doctor_command() -> Int {
 
 ///|
 async fn run_in_docker_container(options : CliOptions) -> Int {
-  let docker_bin = @xsys.get_env_var("ACTRUN_CONTAINER_RUNTIME").unwrap_or(
-    @xsys.get_env_var("ACTRUN_DOCKER_BIN").unwrap_or("docker"),
+  let docker_bin = @env.get_env_var("ACTRUN_CONTAINER_RUNTIME").unwrap_or(
+    @env.get_env_var("ACTRUN_DOCKER_BIN").unwrap_or("docker"),
   )
-  let image = @xsys.get_env_var("ACTRUN_DOCKER_IMAGE").unwrap_or(
+  let image = @env.get_env_var("ACTRUN_DOCKER_IMAGE").unwrap_or(
     "ghcr.io/mizchi/actrun:latest",
   )
-  let cwd = @env.current_dir().unwrap_or(
-    @xsys.get_env_var("PWD").unwrap_or("."),
-  )
+  let cwd = @env.current_dir().unwrap_or(@env.get_env_var("PWD").unwrap_or("."))
   let args : Array[String] = [
     "run",
     "--rm",
@@ -5639,7 +5660,7 @@ async fn run_in_docker_container(options : CliOptions) -> Int {
     "/workspace",
   ]
   // Forward ACTRUN_SECRET_* and ACTRUN_VAR_* env vars
-  for key, value in @xsys.get_env_vars() {
+  for key, value in @env.get_env_vars() {
     if key.has_prefix("ACTRUN_SECRET_") || key.has_prefix("ACTRUN_VAR_") {
       args.push("-e")
       args.push(key + "=" + value)
@@ -5713,7 +5734,7 @@ fn collect_third_party_actions(
   workflow : @ar.WorkflowSpec,
   workspace_root? : String = ".",
 ) -> Array[String] {
-  let seen : Map[String, Bool] = {}
+  let seen : Map[String, Bool] = Map([])
   let result : Array[String] = []
   for job in workflow.jobs {
     // Scan reusable workflow files
@@ -5924,7 +5945,7 @@ fn render_dry_run_plan_json(
   lowered : @ar.LoweringResult,
   flow_cache? : FlowCacheRecord? = None,
 ) -> String {
-  let job_steps : Map[String, Array[String]] = {}
+  let job_steps : Map[String, Array[String]] = Map([])
   let job_order : Array[String] = []
   for task in lowered.plan.tasks {
     if task.kind == "barrier" {
@@ -6300,7 +6321,7 @@ fn cache_store_base_root_for_read(cache_root_override : String?) -> String {
     Some(base) => absolute_run_store_path(base)
     None =>
       absolute_run_store_path(
-        @xsys.get_env_var("ACTRUN_CACHE_ROOT").unwrap_or("_build/actrun/cache"),
+        @env.get_env_var("ACTRUN_CACHE_ROOT").unwrap_or("_build/actrun/cache"),
       )
   }
 }
@@ -6452,7 +6473,9 @@ fn prune_empty_workspace_cache_dirs(cache_root_base : String) -> Unit {
     }
     let entries = sorted_dir_entries(workspace_dir)
     if entries.length() == 0 {
-      ignore(try? @xfs.remove_dir(workspace_dir))
+      @xfs.remove_dir(workspace_dir) catch {
+        _ => ()
+      }
     }
   }
 }
@@ -6540,13 +6563,17 @@ async fn sync_dirty_changes(
   )
   if code == 0 && patch.trim(chars=" \t\r\n").length() > 0 {
     let patch_file = execution_root + "/.actrun-dirty.patch"
-    ignore(try? @xfs.write_string_to_file(patch_file, patch))
+    @xfs.write_string_to_file(patch_file, patch) catch {
+      _ => ()
+    }
     let (apply_code, _, stderr) = run_command(
       "git",
       ["apply", "--whitespace=nowarn", patch_file],
       cwd=execution_root,
     )
-    ignore(try? @xfs.remove_file(patch_file))
+    @xfs.remove_file(patch_file) catch {
+      _ => ()
+    }
     if apply_code != 0 {
       errors.push("git apply failed: " + stderr)
     }
@@ -7108,7 +7135,7 @@ fn filter_json_fields(json_text : String, fields : Array[String]) -> String? {
   }
   let payload = @json.parse(json_text) catch { _ => return None }
   guard payload is Object(obj) else { return None }
-  let filtered : Map[String, Json] = {}
+  let filtered : Map[String, Json] = Map([])
   for field in fields {
     match obj.get(field) {
       Some(value) => filtered[field] = value
@@ -7134,7 +7161,7 @@ fn filter_json_array_fields(
       filtered.push(item)
       continue
     }
-    let kept : Map[String, Json] = {}
+    let kept : Map[String, Json] = Map([])
     for field in fields {
       match obj.get(field) {
         Some(value) => kept[field] = value
@@ -8030,7 +8057,7 @@ async fn handle_workflow_run_command(raw_options : CliOptions) -> Int {
       filtered_workflow, execution_root,
     )
     let flow_cache = prepare_flow_cache_plan(lowered, options)
-    let cli_args = @xsys.get_cli_args()
+    let cli_args = @ar.cli_args()
     let json_mode = cli_args.contains("--json")
     if json_mode {
       print_dry_run_plan_json(
@@ -8057,7 +8084,7 @@ async fn handle_workflow_run_command(raw_options : CliOptions) -> Int {
   }
 
   // Check for third-party actions and prompt for confirmation
-  let trust_env = @xsys.get_env_var("ACTRUN_TRUST").unwrap_or("") == "true"
+  let trust_env = @env.get_env_var("ACTRUN_TRUST").unwrap_or("") == "true"
   if !options.trust_actions && !trust_env && !options.dry_run {
     let third_party = collect_third_party_actions(filtered_workflow)
     if third_party.length() > 0 {
@@ -8220,7 +8247,7 @@ async fn git_file_snapshot() -> String {
 
 ///|
 async fn main {
-  let cli_args = @xsys.get_cli_args()
+  let cli_args = @ar.cli_args()
   if cli_args.length() <= 1 ||
     (
       cli_args.length() > 1 &&

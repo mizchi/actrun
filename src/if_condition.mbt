@@ -24,18 +24,18 @@ priv struct IfConditionContext {
 
 ///|
 fn new_if_condition_context(
-  step_outputs? : Map[String, Map[String, String]] = {},
-  step_outcomes? : Map[String, String] = {},
-  step_conclusions? : Map[String, String] = {},
+  step_outputs? : Map[String, Map[String, String]] = Map([]),
+  step_outcomes? : Map[String, String] = Map([]),
+  step_conclusions? : Map[String, String] = Map([]),
   workspace_root? : String = "",
-  env_context? : Map[String, String] = {},
-  job_context? : Map[String, String] = {},
-  vars_context? : Map[String, String] = {},
-  secrets_context? : Map[String, String] = {},
-  github_context? : Map[String, String] = {},
-  runner_context? : Map[String, String] = {},
-  needs_outputs? : Map[String, Map[String, String]] = {},
-  needs_results? : Map[String, String] = {},
+  env_context? : Map[String, String] = Map([]),
+  job_context? : Map[String, String] = Map([]),
+  vars_context? : Map[String, String] = Map([]),
+  secrets_context? : Map[String, String] = Map([]),
+  github_context? : Map[String, String] = Map([]),
+  runner_context? : Map[String, String] = Map([]),
+  needs_outputs? : Map[String, Map[String, String]] = Map([]),
+  needs_results? : Map[String, String] = Map([]),
   success_value? : Bool = true,
   failure_value? : Bool = false,
   cancelled_value? : Bool = false,
@@ -1101,14 +1101,14 @@ fn evaluate_string_function_expression(
 ///|
 #warnings("-deprecated")
 fn try_parse_int64(s : String) -> Int64? {
-  let v = @strconv.parse_int64(s) catch { _ => return None }
+  let v = @string.parse_int64(s) catch { _ => return None }
   Some(v)
 }
 
 ///|
 #warnings("-deprecated")
 fn try_parse_double(s : String) -> Double? {
-  let v = @strconv.parse_double(s) catch { _ => return None }
+  let v = @string.parse_double(s) catch { _ => return None }
   Some(v)
 }
 

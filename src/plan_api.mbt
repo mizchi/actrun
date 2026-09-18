@@ -38,10 +38,10 @@ pub fn plan_workflow(
 ) -> PlanResult {
   let parsed = parse_workflow_yaml(yaml_text)
   guard parsed.workflow is Some(workflow) else {
-    return { workflow_name: "", errors: parsed.errors, jobs: [] }
+    return { workflow_name: "", errors: parsed.errors, jobs: [], }
   }
   let lowered = lower_push_workflow_in_workspace(workflow, workspace_root)
-  let job_steps : Map[String, Array[PlanStep]] = {}
+  let job_steps : Map[String, Array[PlanStep]] = Map([])
   let job_order : Array[String] = []
   for task in lowered.plan.tasks {
     if task.kind == "barrier" {
@@ -90,7 +90,7 @@ pub fn plan_workflow(
   for err in parsed.errors {
     errors.push(err)
   }
-  { workflow_name: workflow.name, errors, jobs }
+  { workflow_name: workflow.name, errors, jobs, }
 }
 
 ///|
@@ -162,7 +162,7 @@ pub fn plan_result_to_json(result : PlanResult) -> String {
 
 ///|
 fn json_escape_string(s : String) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   buf.write_char('"')
   for ch in s {
     if ch == '"' {

@@ -5,6 +5,8 @@ import {
   "moonbitlang/core/debug",
 } for "test"
 
+warnings = "-0067"
+
 options(
   targets: { "wasi_host_js.mbt": [ "js" ] },
 )

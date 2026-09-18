@@ -1,11 +1,11 @@
 ///|
 fn bit_workspace_error(message : String) -> BitWorkspaceResult {
-  { workspace: None, errors: [message] }
+  { workspace: None, errors: [message], }
 }
 
 ///|
 fn bit_changed_paths_error(message : String) -> BitChangedPathsResult {
-  { paths: [], base_sha: "", head_sha: "", errors: [message] }
+  { paths: [], base_sha: "", head_sha: "", errors: [message], }
 }
 
 ///|
@@ -189,11 +189,10 @@ pub fn compute_bit_changed_paths(
   }
   let old_tree = match base_commit_id {
     Some(id) => {
-      let old_tree_result = try? commit_tree_id(store, id)
-      match old_tree_result {
-        Ok(tree_id) => Some(tree_id)
-        Err(err) => return bit_changed_paths_error(err.to_string())
+      let tree_id = commit_tree_id(store, id) catch {
+        err => return bit_changed_paths_error(err.to_string())
       }
+      Some(tree_id)
     }
     None => None
   }
@@ -256,7 +255,7 @@ pub fn materialize_bit_push_workspace(
     err => return bit_workspace_error(err.to_string())
   }
   @bit.materialize_clone_to_fs(
-    store, commit_id, git_refname, resolved_remote_url, fs, workspace_root,
+    store, commit_id, git_refname, resolved_remote_url, fs, workspace_root, rfs,
   ) catch {
     err => return bit_workspace_error(err.to_string())
   }

@@ -16,7 +16,7 @@ just info      # generate type definition files
 
 ## Project Structure
 
-- `moon.mod.json` - Module definition
+- `moon.mod` - Module definition (a copy for the Nix build lives in `nix/moon.mod.json`)
 - `moon.pkg` - Package dependencies (per directory)
 - `*.mbt` - Source files
 - `*_test.mbt` - Blackbox test files
@@ -46,6 +46,18 @@ just info      # generate type definition files
 - `moon doc '<query>'` - discover APIs (more accurate than grep)
 - `moon ide peek-def <Symbol>` - show symbol definition
 - `moon ide find-references <Symbol>` - find all references
+
+## JavaScript / npm Build
+
+```bash
+just build-js       # moon build (js) for the CLI and the library, then bundle
+npm run build       # same, via npm scripts (used by `prepublishOnly`)
+node dist/actrun.js --help
+```
+
+- `dist/actrun.js` - bundled Node.js CLI (`bin` entry of `@mizchi/actrun`, git-ignored)
+- `lib/actrun.js` - ESM library build exposing `planWorkflow` / `planResultToJson`
+- `scripts/bundle-js.js` - adds a `require` shim for the ESM output and minifies the CLI
 
 ## Before Commit
 

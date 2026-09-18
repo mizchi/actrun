@@ -2,7 +2,7 @@
 #cfg(target="js")
 extern "js" fn js_cmd_spawn_sync_ffi(
   cmd : String,
-  args : Array[String],
+  args : FixedArray[String],
   cwd : String,
 ) -> Int =
   #| function(cmd, args, cwd) {
@@ -40,7 +40,7 @@ async fn run_command(
   args : Array[String],
   cwd? : String = ".",
 ) -> (Int, String, String) {
-  let code = js_cmd_spawn_sync_ffi(cmd, args, cwd)
+  let code = js_cmd_spawn_sync_ffi(cmd, FixedArray::from_array(args[:]), cwd)
   let stdout = js_cmd_get_stdout()
   let stderr = js_cmd_get_stderr()
   (code, stdout, stderr)

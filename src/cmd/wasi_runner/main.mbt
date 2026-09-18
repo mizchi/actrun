@@ -9,7 +9,7 @@
 ///|
 fn main {
   let args = @env.args()
-  let env : Map[String, String] = {}
+  let env : Map[String, String] = Map([])
   let mut module_path = ""
   let mut i = 0
   // Skip program name if present

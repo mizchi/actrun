@@ -17,7 +17,9 @@ fn setup_bit_repo(
   timestamp : Int64,
   allow_empty? : Bool = false,
 ) -> @bit.ObjectId raise @bit.GitError {
-  ignore(try? @bitlib.init_repo(fs, root))
+  @bitlib.init_repo(fs, root) catch {
+    _ => ()
+  }
   fs.write_string(root + "/" + file, content)
   @bitlib.add_paths(fs, rfs, root, [file])
   @bitlib.commit(

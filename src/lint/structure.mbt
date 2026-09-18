@@ -24,7 +24,7 @@ fn check_duplicate_step_ids(
   job : @ar.JobSpec,
   diagnostics : Array[LintDiagnostic],
 ) -> Unit {
-  let seen : Map[String, Int] = {}
+  let seen : Map[String, Int] = Map([])
   for i, step in job.steps {
     if step.id.length() > 0 {
       match seen.get(step.id) {

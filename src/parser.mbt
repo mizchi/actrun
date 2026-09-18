@@ -82,7 +82,7 @@ fn collect_yaml_lines(text : String, errors : Array[String]) -> Array[YamlLine] 
     } else {
       String::unsafe_substring(raw, start=indent, end=raw.length())
     }
-    lines.push({ indent, text: strip_yaml_comment(content), raw })
+    lines.push({ indent, text: strip_yaml_comment(content), raw, })
     line_no += 1
   }
   lines
@@ -91,7 +91,7 @@ fn collect_yaml_lines(text : String, errors : Array[String]) -> Array[YamlLine] 
 ///|
 fn yaml_parser_new(text : String) -> WorkflowYamlParser {
   let errors : Array[String] = []
-  { lines: collect_yaml_lines(text, errors), idx: 0, errors }
+  { lines: collect_yaml_lines(text, errors), idx: 0, errors, }
 }
 
 ///|
@@ -248,7 +248,7 @@ fn parse_inline_map(text : String) -> YamlValue {
           value: YamlValue::Str(unquote_yaml_string(value)),
         })
       Some((key, None)) =>
-        fields.push({ key: unquote_yaml_string(key), value: YamlValue::Null })
+        fields.push({ key: unquote_yaml_string(key), value: YamlValue::Null, })
       None => ()
     }
   }
@@ -378,7 +378,7 @@ fn WorkflowYamlParser::parse_mapping(
     }
     self.idx += 1
     match self.parse_mapping_entry(line.text, indent) {
-      Some((key, value)) => fields.push({ key, value })
+      Some((key, value)) => fields.push({ key, value, })
       None => ()
     }
   }
@@ -414,7 +414,7 @@ fn WorkflowYamlParser::parse_sequence(
     if split_key_value(item_text) is Some(_) {
       let fields : Array[YamlField] = []
       match self.parse_mapping_entry(item_text, indent + 2) {
-        Some((key, value)) => fields.push({ key, value })
+        Some((key, value)) => fields.push({ key, value, })
         None => ()
       }
       while true {
@@ -426,7 +426,7 @@ fn WorkflowYamlParser::parse_sequence(
         }
         self.idx += 1
         match self.parse_mapping_entry(next.text, indent + 2) {
-          Some((key, value)) => fields.push({ key, value })
+          Some((key, value)) => fields.push({ key, value, })
           None => ()
         }
       }
@@ -541,7 +541,7 @@ fn yaml_to_string_map(
   errors : Array[String],
   ctx : String,
 ) -> Map[String, String] {
-  let result : Map[String, String] = {}
+  let result : Map[String, String] = Map([])
   guard value is Some(actual) else { return result }
   match actual {
     Obj(fields) =>
@@ -587,7 +587,7 @@ fn yaml_as_optional_bool(
 ///|
 #warnings("-deprecated")
 fn parser_parse_int64(value : StringView) -> Int64 raise {
-  @strconv.parse_int64(value)
+  @string.parse_int64(value)
 }
 
 ///|
@@ -655,7 +655,7 @@ fn matrix_product_rows(
   rows : Array[Map[String, String]],
 ) -> Unit {
   if idx >= axes.length() {
-    let row : Map[String, String] = {}
+    let row : Map[String, String] = Map([])
     for key, value in current {
       row[key] = value
     }
@@ -664,7 +664,7 @@ fn matrix_product_rows(
   }
   let (key, values) = axes[idx]
   for value in values {
-    let next : Map[String, String] = {}
+    let next : Map[String, String] = Map([])
     for existing_key, existing_value in current {
       next[existing_key] = existing_value
     }
@@ -692,7 +692,7 @@ fn matrix_row_merge(
   base : Map[String, String],
   overlay : Map[String, String],
 ) -> Map[String, String] {
-  let merged : Map[String, String] = {}
+  let merged : Map[String, String] = Map([])
   for key, value in base {
     merged[key] = value
   }
@@ -816,7 +816,7 @@ fn parse_job_matrix(
   }
   let mut rows : Array[Map[String, String]] = []
   if axes.length() > 0 {
-    let current : Map[String, String] = {}
+    let current : Map[String, String] = Map([])
     matrix_product_rows(axes, 0, current, rows)
     rows = filter_matrix_excludes(rows, exclude_rows)
     rows = expand_matrix_includes(rows, include_rows)
@@ -944,7 +944,7 @@ fn parse_workflow_call_trigger(
     errors : Array[String],
     ctx : String,
   ) -> Map[String, WorkflowCallInputSpec] {
-    let inputs : Map[String, WorkflowCallInputSpec] = {}
+    let inputs : Map[String, WorkflowCallInputSpec] = Map([])
     guard value is Some(actual) else { return inputs }
     match actual {
       Obj(fields) =>
@@ -999,7 +999,7 @@ fn parse_workflow_call_trigger(
     errors : Array[String],
     ctx : String,
   ) -> Map[String, WorkflowCallOutputSpec] {
-    let outputs : Map[String, WorkflowCallOutputSpec] = {}
+    let outputs : Map[String, WorkflowCallOutputSpec] = Map([])
     guard value is Some(actual) else { return outputs }
     match actual {
       Obj(fields) =>
@@ -1036,7 +1036,7 @@ fn parse_workflow_call_trigger(
     errors : Array[String],
     ctx : String,
   ) -> Map[String, WorkflowCallSecretSpec] {
-    let secrets : Map[String, WorkflowCallSecretSpec] = {}
+    let secrets : Map[String, WorkflowCallSecretSpec] = Map([])
     guard value is Some(actual) else { return secrets }
     match actual {
       Obj(fields) =>
@@ -1459,7 +1459,7 @@ fn parse_services(
   errors : Array[String],
   ctx : String,
 ) -> Map[String, JobContainerSpec] {
-  let services : Map[String, JobContainerSpec] = {}
+  let services : Map[String, JobContainerSpec] = Map([])
   guard value is Some(actual) else { return services }
   match actual {
     Obj(fields) =>
@@ -1633,7 +1633,7 @@ fn parse_local_action_inputs(
   errors : Array[String],
   ctx : String,
 ) -> Map[String, String] {
-  let inputs : Map[String, String] = {}
+  let inputs : Map[String, String] = Map([])
   guard value is Some(actual) else { return inputs }
   match actual {
     Obj(fields) =>
@@ -1662,7 +1662,7 @@ fn parse_action_outputs(
   errors : Array[String],
   ctx : String,
 ) -> Map[String, String] {
-  let outputs : Map[String, String] = {}
+  let outputs : Map[String, String] = Map([])
   guard value is Some(actual) else { return outputs }
   match actual {
     Obj(fields) =>
@@ -1729,7 +1729,7 @@ fn yaml_to_internal(yaml : @yaml.Yaml) -> YamlValue {
     @yaml.Yaml::Map(entries) => {
       let fields : Array[YamlField] = []
       for key, value in entries {
-        fields.push({ key, value: yaml_to_internal(value) })
+        fields.push({ key, value: yaml_to_internal(value), })
       }
       YamlValue::Obj(fields)
     }
@@ -1749,14 +1749,22 @@ fn parse_action_manifest_yaml(text : String) -> ActionManifestParseResult {
       YamlValue::Null
     }
   } catch {
-    err => {
-      errors.push("YAML parse error: " + err.to_string())
-      return { action: None, errors }
+    @yaml.YamlError(mark~, info~) => {
+      errors.push(
+        "YAML parse error: " +
+        info +
+        " (line " +
+        (mark.line + 1).to_string() +
+        ", column " +
+        (mark.col + 1).to_string() +
+        ")",
+      )
+      return { action: None, errors, }
     }
   }
   guard yaml is Obj(root_fields) else {
     errors.push("local action root must be a mapping")
-    return { action: None, errors }
+    return { action: None, errors, }
   }
 
   let name = yaml_as_optional_string(
@@ -1866,7 +1874,7 @@ fn parse_action_manifest_yaml(text : String) -> ActionManifestParseResult {
     )
   }
   if errors.length() > 0 {
-    { action: None, errors }
+    { action: None, errors, }
   } else {
     {
       action: Some({
@@ -1895,7 +1903,7 @@ fn parse_action_manifest_yaml(text : String) -> ActionManifestParseResult {
 pub fn parse_local_action_yaml(text : String) -> LocalActionParseResult {
   let parsed = parse_action_manifest_yaml(text)
   guard parsed.action is Some(action) else {
-    return { action: None, errors: parsed.errors }
+    return { action: None, errors: parsed.errors, }
   }
   let errors : Array[String] = []
   for err in parsed.errors {
@@ -1905,7 +1913,7 @@ pub fn parse_local_action_yaml(text : String) -> LocalActionParseResult {
     errors.push("only composite local actions are supported in MVP")
   }
   if errors.length() > 0 {
-    { action: None, errors }
+    { action: None, errors, }
   } else {
     {
       action: Some(
@@ -1930,7 +1938,7 @@ pub fn parse_workflow_yaml(text : String) -> WorkflowParseResult {
   }
   guard yaml is Obj(root_fields) else {
     errors.push("workflow root must be a mapping")
-    return { workflow: None, errors }
+    return { workflow: None, errors, }
   }
 
   let jobs_value = yaml_obj_get(root_fields, "jobs")
@@ -1978,8 +1986,8 @@ pub fn parse_workflow_yaml(text : String) -> WorkflowParseResult {
   )
 
   if errors.length() > 0 {
-    { workflow: None, errors }
+    { workflow: None, errors, }
   } else {
-    { workflow: Some(workflow), errors }
+    { workflow: Some(workflow), errors, }
   }
 }

@@ -20,7 +20,7 @@ pub struct Word {
 
 ///|
 pub fn Word::literal(s : String) -> Word {
-  { parts: [Literal(s)] }
+  { parts: [Literal(s)], }
 }
 
 ///|
@@ -74,22 +74,22 @@ pub struct Redirect {
 
 ///|
 pub fn Redirect::input(target : Word) -> Redirect {
-  { kind: Input, fd: None, target }
+  { kind: Input, fd: None, target, }
 }
 
 ///|
 pub fn Redirect::output(target : Word) -> Redirect {
-  { kind: Output, fd: None, target }
+  { kind: Output, fd: None, target, }
 }
 
 ///|
 pub fn Redirect::append(target : Word) -> Redirect {
-  { kind: Append, fd: None, target }
+  { kind: Append, fd: None, target, }
 }
 
 ///|
 pub fn Redirect::with_fd(self : Redirect, fd : Int) -> Redirect {
-  { kind: self.kind, fd: Some(fd), target: self.target }
+  { kind: self.kind, fd: Some(fd), target: self.target, }
 }
 
 ///|
@@ -102,7 +102,7 @@ pub struct SimpleCommand {
 
 ///|
 pub fn SimpleCommand::new(words : Array[Word]) -> SimpleCommand {
-  { assigns: [], words, redirects: [] }
+  { assigns: [], words, redirects: [], }
 }
 
 ///|
@@ -110,7 +110,7 @@ pub fn SimpleCommand::with_assigns(
   self : SimpleCommand,
   assigns : Array[(String, Word)],
 ) -> SimpleCommand {
-  { assigns, words: self.words, redirects: self.redirects }
+  { assigns, words: self.words, redirects: self.redirects, }
 }
 
 ///|
@@ -118,7 +118,7 @@ pub fn SimpleCommand::with_redirects(
   self : SimpleCommand,
   redirects : Array[Redirect],
 ) -> SimpleCommand {
-  { assigns: self.assigns, words: self.words, redirects }
+  { assigns: self.assigns, words: self.words, redirects, }
 }
 
 ///|
@@ -130,12 +130,12 @@ pub struct Pipeline {
 
 ///|
 pub fn Pipeline::new(commands : Array[Command]) -> Pipeline {
-  { commands, bang: false }
+  { commands, bang: false, }
 }
 
 ///|
 pub fn Pipeline::with_bang(self : Pipeline) -> Pipeline {
-  { commands: self.commands, bang: true }
+  { commands: self.commands, bang: true, }
 }
 
 ///|
@@ -156,7 +156,7 @@ pub struct CommandList {
 
 ///|
 pub fn CommandList::single(pipeline : Pipeline) -> CommandList {
-  { first: pipeline, rest: [] }
+  { first: pipeline, rest: [], }
 }
 
 ///|
@@ -164,7 +164,7 @@ pub fn CommandList::new(
   first : Pipeline,
   rest : Array[(ListOp, Pipeline)],
 ) -> CommandList {
-  { first, rest }
+  { first, rest, }
 }
 
 ///|
@@ -181,7 +181,7 @@ pub fn IfClause::new(
   condition : CommandList,
   then_body : CommandList,
 ) -> IfClause {
-  { condition, then_body, elif_parts: [], else_body: None }
+  { condition, then_body, elif_parts: [], else_body: None, }
 }
 
 ///|
@@ -197,7 +197,7 @@ pub fn WhileClause::while_(
   condition : CommandList,
   body : CommandList,
 ) -> WhileClause {
-  { condition, body, is_until: false }
+  { condition, body, is_until: false, }
 }
 
 ///|
@@ -205,7 +205,7 @@ pub fn WhileClause::until_(
   condition : CommandList,
   body : CommandList,
 ) -> WhileClause {
-  { condition, body, is_until: true }
+  { condition, body, is_until: true, }
 }
 
 ///|
@@ -222,7 +222,7 @@ pub fn ForClause::new(
   words : Array[Word]?,
   body : CommandList,
 ) -> ForClause {
-  { varname, words, body }
+  { varname, words, body, }
 }
 
 ///|
@@ -240,7 +240,7 @@ pub struct CaseClause {
 
 ///|
 pub fn CaseClause::new(word : Word, items : Array[CaseItem]) -> CaseClause {
-  { word, items }
+  { word, items, }
 }
 
 ///|
@@ -252,7 +252,7 @@ pub struct FunctionDef {
 
 ///|
 pub fn FunctionDef::new(name : String, body : Command) -> FunctionDef {
-  { name, body }
+  { name, body, }
 }
 
 ///|

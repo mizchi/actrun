@@ -47,7 +47,7 @@ priv struct Tokenizer {
 
 ///|
 fn Tokenizer::new(source : String) -> Tokenizer {
-  { source, pos: 0, tokens: [], errors: [] }
+  { source, pos: 0, tokens: [], errors: [], }
 }
 
 ///|
@@ -76,7 +76,7 @@ fn Tokenizer::next_ch(self : Tokenizer) -> UInt16 {
 
 ///|
 fn Tokenizer::emit(self : Tokenizer, kind : TokenKind, start : Int) -> Unit {
-  self.tokens.push({ kind, offset: start, length: self.pos - start })
+  self.tokens.push({ kind, offset: start, length: self.pos - start, })
 }
 
 ///|

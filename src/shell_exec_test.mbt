@@ -161,7 +161,7 @@ test "shell_exec: export sets variable" {
 
 ///|
 test "shell_exec: redirect to file" {
-  let files : Map[String, String] = {}
+  let files : Map[String, String] = Map([])
   let env = new_shell_env({}, write_file=fn(path, content, append) {
     if append {
       files[path] = files.get(path).unwrap_or("") + content
@@ -181,7 +181,7 @@ test "shell_exec: redirect to file" {
 
 ///|
 test "shell_exec: append redirect" {
-  let files : Map[String, String] = {}
+  let files : Map[String, String] = Map([])
   let env = new_shell_env({}, write_file=fn(path, content, append) {
     if append {
       files[path] = files.get(path).unwrap_or("") + content
@@ -221,7 +221,7 @@ test "shell_exec: cat reads file" {
 
 ///|
 test "shell_exec: github output pattern" {
-  let files : Map[String, String] = {}
+  let files : Map[String, String] = Map([])
   let env = new_shell_env({ "GITHUB_OUTPUT": "/tmp/output" }, write_file=fn(
     path,
     content,

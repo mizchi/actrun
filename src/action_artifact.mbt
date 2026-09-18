@@ -44,7 +44,7 @@ fn parse_artifact_if_no_files_found(value : String) -> String? {
 
 ///|
 fn artifact_store_root(workspace_root : String) -> String {
-  let configured = @xsys.get_env_var("ACTRUN_ARTIFACT_ROOT").unwrap_or(
+  let configured = @env.get_env_var("ACTRUN_ARTIFACT_ROOT").unwrap_or(
     "_build/actrun/artifacts",
   )
   ignore(ensure_exec_dir_recursive(configured))
@@ -226,7 +226,7 @@ fn artifact_collect_relative_files(
   let entries = try @xfs.read_dir(current_abs) catch {
     _ => []
   } noraise {
-    value => value
+    value => value.to_owned()
   }
   entries.sort_by(String::lexical_compare)
   for entry in entries {
@@ -260,7 +260,7 @@ fn artifact_collect_absolute_files(
   let entries = try @xfs.read_dir(current_abs) catch {
     _ => []
   } noraise {
-    value => value
+    value => value.to_owned()
   }
   entries.sort_by(String::lexical_compare)
   for entry in entries {
@@ -346,7 +346,7 @@ fn artifact_select_upload_files(
   include_hidden? : Bool = false,
 ) -> ArtifactUploadSelection {
   let included_roots : Array[String] = []
-  let included_files : Map[String, Bool] = {}
+  let included_files : Map[String, Bool] = Map([])
   let excluded_patterns : Array[String] = []
   let workspace_files = artifact_workspace_relative_files(
     workspace_root,
@@ -415,7 +415,7 @@ fn artifact_select_upload_files(
     }
   }
   selected_files.sort_by(String::lexical_compare)
-  { root_paths: included_roots, file_paths: selected_files }
+  { root_paths: included_roots, file_paths: selected_files, }
 }
 
 ///|
@@ -543,7 +543,7 @@ fn execute_download_artifact_native(
     let artifact_entries = try @xfs.read_dir(store_root) catch {
       _ => []
     } noraise {
-      value => value
+      value => value.to_owned()
     }
     artifact_entries.sort_by(String::lexical_compare)
     let mut copied_any = false
@@ -589,7 +589,7 @@ fn execute_download_artifact_native(
   let entries = try @xfs.read_dir(artifact_root) catch {
     _ => []
   } noraise {
-    value => value
+    value => value.to_owned()
   }
   entries.sort_by(String::lexical_compare)
   for entry in entries {

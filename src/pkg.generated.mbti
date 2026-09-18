@@ -2,7 +2,7 @@
 package "mizchi/actrun"
 
 import {
-  "mizchi/bit/types",
+  "mizchi/bit_types",
   "mizchi/bitflow/workflow",
   "moonbitlang/core/debug",
   "moonbitlang/core/json",
@@ -19,9 +19,11 @@ pub fn cleanup_run_temp_files(String) -> Unit
 
 pub fn cleanup_wasm_sandbox(WasmSandbox) -> Unit
 
+pub fn cli_args() -> Array[String]
+
 pub fn collect_secret_values() -> Array[String]
 
-pub fn compute_bit_changed_paths(&@types.RepoFileSystem, String, PushEvent) -> BitChangedPathsResult
+pub fn compute_bit_changed_paths(&@bit_types.RepoFileSystem, String, PushEvent) -> BitChangedPathsResult
 
 pub fn compute_bit_changed_paths_native(String, PushEvent) -> BitChangedPathsResult
 
@@ -57,7 +59,7 @@ pub fn mask_secrets(String, Array[String]) -> String
 
 pub fn matches_push_trigger(PushTrigger, PushEvent) -> Bool
 
-pub fn materialize_bit_push_workspace(&@types.FileSystem, &@types.RepoFileSystem, String, PushEvent, String, remote_url? : String) -> BitWorkspaceResult
+pub fn materialize_bit_push_workspace(&@bit_types.FileSystem, &@bit_types.RepoFileSystem, String, PushEvent, String, remote_url? : String) -> BitWorkspaceResult
 
 pub fn materialize_bit_push_workspace_native(String, PushEvent, String, remote_url? : String) -> BitWorkspaceResult
 
@@ -554,4 +556,3 @@ pub struct WorkflowStepReport {
 // Type aliases
 
 // Traits
-

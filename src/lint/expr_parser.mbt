@@ -7,7 +7,7 @@ priv struct Parser {
 
 ///|
 fn Parser::new(tokens : Array[Token]) -> Parser {
-  { tokens, pos: 0, errors: [] }
+  { tokens, pos: 0, errors: [], }
 }
 
 ///|

@@ -14,7 +14,7 @@ fn ExprChecker::new(
   step_index : Int,
   field : String,
 ) -> ExprChecker {
-  { ctx, diagnostics: [], job_id, step_index, field }
+  { ctx, diagnostics: [], job_id, step_index, field, }
 }
 
 ///|

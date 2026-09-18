@@ -216,7 +216,7 @@ pub async fn run_wasi_module_js(
   inputs : Map[String, String],
   workdir? : String = "/workspace",
 ) -> String {
-  let merged_env : Map[String, String] = {}
+  let merged_env : Map[String, String] = Map([])
   for k, v in env {
     merged_env[k] = v
   }

@@ -41,7 +41,7 @@ async fn detect_nix_config(
   nix_mode : String,
   nix_packages : Array[String],
 ) -> NixMode {
-  let env_nix = @xsys.get_env_var("ACTRUN_NIX").unwrap_or("")
+  let env_nix = @env.get_env_var("ACTRUN_NIX").unwrap_or("")
   if nix_mode == "off" || env_nix == "false" || env_nix == "0" {
     return NixNone
   }
@@ -127,7 +127,7 @@ fn lowered_issues(lowered : LoweringResult) -> Array[String] {
 
 ///|
 fn task_id_map(tasks : Array[@wf.FlowTask]) -> Map[String, @wf.FlowTask] {
-  let result : Map[String, @wf.FlowTask] = {}
+  let result : Map[String, @wf.FlowTask] = Map([])
   for task in tasks {
     result[task.id] = task
   }
@@ -136,7 +136,7 @@ fn task_id_map(tasks : Array[@wf.FlowTask]) -> Map[String, @wf.FlowTask] {
 
 ///|
 fn selected_task_set(ir : @wf.FlowIr) -> Map[String, Bool] {
-  let selected : Map[String, Bool] = {}
+  let selected : Map[String, Bool] = Map([])
   if ir.entry_targets.length() == 0 {
     for task in ir.tasks {
       selected[task.id] = true
@@ -252,7 +252,7 @@ fn merge_runner_env(
   base : Map[String, String],
   overlay : Map[String, String],
 ) -> Map[String, String] {
-  let merged : Map[String, String] = {}
+  let merged : Map[String, String] = Map([])
   for key, value in base {
     merged[key] = value
   }
@@ -304,11 +304,11 @@ fn apply_composite_output_mappings(
     return state
   }
   // Propagate outcome/conclusion from inner step to outer composite step
-  let updated_outcomes : Map[String, String] = {}
+  let updated_outcomes : Map[String, String] = Map([])
   for key, value in state.step_outcomes {
     updated_outcomes[key] = value
   }
-  let updated_conclusions : Map[String, String] = {}
+  let updated_conclusions : Map[String, String] = Map([])
   for key, value in state.step_conclusions {
     updated_conclusions[key] = value
   }
@@ -334,7 +334,7 @@ fn apply_composite_output_mappings(
     None => ()
   }
   // Resolve composite output mappings if this outer step has them
-  let updated_outputs : Map[String, Map[String, String]] = {}
+  let updated_outputs : Map[String, Map[String, String]] = Map([])
   for key, value in state.step_outputs {
     updated_outputs[key] = value
   }
@@ -397,15 +397,15 @@ fn apply_job_runtime_updates(
 ) -> JobRuntimeState {
   let updated_paths = append_paths(path_entries, state.path_entries)
   let merged_env = merge_runner_env(state.env_updates, env_updates)
-  let updated_outputs : Map[String, Map[String, String]] = {}
+  let updated_outputs : Map[String, Map[String, String]] = Map([])
   for key, value in state.step_outputs {
     updated_outputs[key] = value
   }
-  let updated_outcomes : Map[String, String] = {}
+  let updated_outcomes : Map[String, String] = Map([])
   for key, value in state.step_outcomes {
     updated_outcomes[key] = value
   }
-  let updated_conclusions : Map[String, String] = {}
+  let updated_conclusions : Map[String, String] = Map([])
   for key, value in state.step_conclusions {
     updated_conclusions[key] = value
   }
@@ -423,7 +423,7 @@ fn apply_job_runtime_updates(
   let updated_env = if updated_paths.length() > 0 {
     let base_path = merged_env
       .get("PATH")
-      .unwrap_or(@xsys.get_env_var("PATH").unwrap_or(""))
+      .unwrap_or(@env.get_env_var("PATH").unwrap_or(""))
     let prefix = updated_paths.join(":")
     merge_runner_env(merged_env, {
       "PATH": if base_path.length() == 0 {
@@ -435,11 +435,11 @@ fn apply_job_runtime_updates(
   } else {
     merged_env
   }
-  let updated_action_states : Map[String, Map[String, String]] = {}
+  let updated_action_states : Map[String, Map[String, String]] = Map([])
   for key, value in state.action_states {
     updated_action_states[key] = value
   }
-  let updated_started_action_scopes : Map[String, Bool] = {}
+  let updated_started_action_scopes : Map[String, Bool] = Map([])
   for key, value in state.started_action_scopes {
     updated_started_action_scopes[key] = value
   }
@@ -519,9 +519,7 @@ fn absolute_exec_path(path : String) -> String {
   if path.has_prefix("/") {
     return path
   }
-  let cwd = @env.current_dir().unwrap_or(
-    @xsys.get_env_var("PWD").unwrap_or("."),
-  )
+  let cwd = @env.current_dir().unwrap_or(@env.get_env_var("PWD").unwrap_or("."))
   if cwd.has_suffix("/") {
     cwd + path
   } else {
@@ -551,10 +549,10 @@ async fn exec_capture_stdout(cmd : String, args : Array[String]) -> String? {
 
 ///|
 async fn runner_os_name() -> String {
-  match @xsys.get_env_var("RUNNER_OS") {
+  match @env.get_env_var("RUNNER_OS") {
     Some(value) => value
     None =>
-      match @xsys.get_env_var("OS") {
+      match @env.get_env_var("OS") {
         Some(value) =>
           if value == "Windows_NT" {
             "Windows"
@@ -597,7 +595,7 @@ async fn runner_os_name() -> String {
 
 ///|
 async fn runner_arch_name() -> String {
-  match @xsys.get_env_var("RUNNER_ARCH") {
+  match @env.get_env_var("RUNNER_ARCH") {
     Some(value) => value
     None =>
       match exec_capture_stdout("uname", ["-m"]) {
@@ -626,7 +624,7 @@ async fn runner_arch_name() -> String {
 
 ///|
 fn runner_environment_name() -> String {
-  @xsys.get_env_var("RUNNER_ENVIRONMENT").unwrap_or("self-hosted")
+  @env.get_env_var("RUNNER_ENVIRONMENT").unwrap_or("self-hosted")
 }
 
 ///|
@@ -720,7 +718,7 @@ fn trim_cr(text : String) -> String {
 
 ///|
 fn parse_env_updates(path : String) -> Map[String, String] {
-  let updates : Map[String, String] = {}
+  let updates : Map[String, String] = Map([])
   guard read_exec_text(path) is Some(content) else { return updates }
   let lines = content.split("\n").collect()
   let mut idx = 0
@@ -1023,7 +1021,7 @@ fn action_scope_env(
   state : JobRuntimeState,
   action_scope : String?,
 ) -> Map[String, String] {
-  let env : Map[String, String] = {}
+  let env : Map[String, String] = Map([])
   for key, value in action_scope_state(state, action_scope) {
     env["STATE_" + key] = value
   }
@@ -1221,8 +1219,8 @@ fn github_context(
     "action_path": github_action_path_value(plan),
     "action_repository": github_action_repository(plan),
     "action_ref": github_action_ref_value(plan),
-    "token": @xsys.get_env_var("ACTRUN_SECRET_GITHUB_TOKEN").unwrap_or(""),
-    "server_url": @xsys.get_env_var("ACTRUN_GITHUB_BASE_URL").unwrap_or(
+    "token": @env.get_env_var("ACTRUN_SECRET_GITHUB_TOKEN").unwrap_or(""),
+    "server_url": @env.get_env_var("ACTRUN_GITHUB_BASE_URL").unwrap_or(
       "https://github.com",
     ),
     "api_url": "https://api.github.com",
@@ -1247,9 +1245,9 @@ async fn runner_context(
 
 ///|
 fn runner_vars_context() -> Map[String, String] {
-  let values : Map[String, String] = {}
+  let values : Map[String, String] = Map([])
   let prefix = "ACTRUN_VAR_"
-  for key, value in @xsys.get_env_vars() {
+  for key, value in @env.get_env_vars() {
     if key.has_prefix(prefix) && key.length() > prefix.length() {
       values[exec_text_slice(key, prefix.length(), key.length())] = value
     }
@@ -1259,9 +1257,9 @@ fn runner_vars_context() -> Map[String, String] {
 
 ///|
 fn runner_secrets_context() -> Map[String, String] {
-  let values : Map[String, String] = {}
+  let values : Map[String, String] = Map([])
   let prefix = "ACTRUN_SECRET_"
-  for key, value in @xsys.get_env_vars() {
+  for key, value in @env.get_env_vars() {
     if key.has_prefix(prefix) && key.length() > prefix.length() {
       values[exec_text_slice(key, prefix.length(), key.length())] = value
     }
@@ -1271,7 +1269,7 @@ fn runner_secrets_context() -> Map[String, String] {
 
 ///|
 fn json_string_map(values : Map[String, String]) -> Json {
-  let json_values : Map[String, Json] = {}
+  let json_values : Map[String, Json] = Map([])
   for key, value in values {
     json_values[key] = Json::string(value)
   }
@@ -1283,7 +1281,7 @@ fn mask_string_map(
   values : Map[String, String],
   secret_values : Array[String],
 ) -> Map[String, String] {
-  let masked : Map[String, String] = {}
+  let masked : Map[String, String] = Map([])
   for key, value in values {
     masked[key] = mask_secrets(value, secret_values)
   }
@@ -1305,7 +1303,7 @@ pub fn mask_secrets(text : String, secret_values : Array[String]) -> String {
 pub fn collect_secret_values() -> Array[String] {
   let values : Array[String] = []
   let prefix = "ACTRUN_SECRET_"
-  for key, value in @xsys.get_env_vars() {
+  for key, value in @env.get_env_vars() {
     if key.has_prefix(prefix) &&
       key.length() > prefix.length() &&
       value.length() > 0 {
@@ -1358,7 +1356,7 @@ fn service_host_port_value(port_spec : String) -> String {
 fn job_services_context(
   services : Map[String, JobContainerSpec],
 ) -> Map[String, String] {
-  let values : Map[String, String] = {}
+  let values : Map[String, String] = Map([])
   for service_id, service in services {
     for port in service.ports {
       let container_port = service_container_port_value(port)
@@ -1503,7 +1501,7 @@ fn substitute_runtime_text(
   runner_context : Map[String, String],
   needs_outputs : Map[String, Map[String, String]],
   needs_results : Map[String, String],
-  dispatch_inputs? : Map[String, String] = {},
+  dispatch_inputs? : Map[String, String] = Map([]),
 ) -> String {
   let vars_context = runner_vars_context()
   let secrets_context = runner_secrets_context()
@@ -1551,7 +1549,7 @@ fn substitute_runtime_optional(
   runner_context : Map[String, String],
   needs_outputs : Map[String, Map[String, String]],
   needs_results : Map[String, String],
-  dispatch_inputs? : Map[String, String] = {},
+  dispatch_inputs? : Map[String, String] = Map([]),
 ) -> String? {
   match value {
     Some(text) =>
@@ -1589,7 +1587,7 @@ fn resolve_plan_env(
   context = merge_runner_env(context, action_env)
   let mut pass = 0
   while pass < 8 {
-    let next : Map[String, String] = {}
+    let next : Map[String, String] = Map([])
     for key, value in plan.env {
       next[key] = substitute_runtime_text(
         value, state, workspace_root, context, job_context, github_context, runner_context,
@@ -1740,8 +1738,8 @@ fn resolve_job_container_spec(
   needs_outputs : Map[String, Map[String, String]],
   needs_results : Map[String, String],
 ) -> JobContainerSpec {
-  let empty_job_context : Map[String, String] = {}
-  let resolved_env : Map[String, String] = {}
+  let empty_job_context : Map[String, String] = Map([])
+  let resolved_env : Map[String, String] = Map([])
   for key, value in container.env {
     resolved_env[key] = substitute_runtime_text(
       value, state, workspace_root, resolved_plan_env, empty_job_context, github_ctx,
@@ -1830,7 +1828,7 @@ fn resolve_job_container_spec(
 async fn cleanup_job_services_native(
   started : Array[StartedJobService],
 ) -> Unit {
-  let service_networks : Map[String, (String, String)] = {}
+  let service_networks : Map[String, (String, String)] = Map([])
   for service in started {
     match service.network_name {
       Some(name) if name.length() > 0 =>
@@ -2030,7 +2028,7 @@ async fn start_job_services_native(
         cleanup_job_service_network_native(
           docker_bin, workspace_abs, network_name,
         )
-        return { started: [], error: Some("docker login failed: " + message) }
+        return { started: [], error: Some("docker login failed: " + message), }
       }
       None => ()
     }
@@ -2096,13 +2094,13 @@ async fn start_job_services_native(
           cleanup_job_service_network_native(
             docker_bin, workspace_abs, network_name,
           )
-          return { started: [], error: Some(message) }
+          return { started: [], error: Some(message), }
         }
         None => ()
       }
     }
   }
-  { started, error: None }
+  { started, error: None, }
 }
 
 ///|
@@ -2120,12 +2118,12 @@ fn job_needs_outputs(
   job_id : String,
   outputs : Map[String, Map[String, String]],
 ) -> Map[String, Map[String, String]] {
-  let values : Map[String, Map[String, String]] = {}
+  let values : Map[String, Map[String, String]] = Map([])
   for need in plan.job_needs.get(job_id).unwrap_or([]) {
     match outputs.get(need) {
       Some(direct) => values[need] = direct
       None => {
-        let merged : Map[String, String] = {}
+        let merged : Map[String, String] = Map([])
         let targets = plan.job_need_targets.get(job_id).unwrap_or({})
         for target in targets.get(need).unwrap_or([need]) {
           for key, value in outputs.get(target).unwrap_or({}) {
@@ -2147,7 +2145,7 @@ fn job_needs_results(
   job_id : String,
   results : Map[String, String],
 ) -> Map[String, String] {
-  let values : Map[String, String] = {}
+  let values : Map[String, String] = Map([])
   for need in plan.job_needs.get(job_id).unwrap_or([]) {
     match results.get(need) {
       Some(value) => {
@@ -2273,7 +2271,7 @@ fn task_conclusion_allows_dependents(conclusion : String) -> Bool {
 
 ///|
 fn matrix_group_members(plan : ExecutionPlan) -> Map[String, Array[String]] {
-  let groups : Map[String, Array[String]] = {}
+  let groups : Map[String, Array[String]] = Map([])
   for job_id, group in plan.job_matrix_groups {
     let jobs = groups.get(group).unwrap_or([])
     jobs.push(job_id)
@@ -2287,13 +2285,13 @@ fn evaluate_job_outputs(
   output_defs : Map[String, String],
   state : JobRuntimeState,
   workspace_root : String,
-  needs_outputs? : Map[String, Map[String, String]] = {},
-  needs_results? : Map[String, String] = {},
+  needs_outputs? : Map[String, Map[String, String]] = Map([]),
+  needs_results? : Map[String, String] = Map([]),
 ) -> Map[String, String] {
-  let values : Map[String, String] = {}
-  let empty_github : Map[String, String] = {}
-  let empty_job : Map[String, String] = {}
-  let empty_runner : Map[String, String] = {}
+  let values : Map[String, String] = Map([])
+  let empty_github : Map[String, String] = Map([])
+  let empty_job : Map[String, String] = Map([])
+  let empty_runner : Map[String, String] = Map([])
   for key, value in output_defs {
     values[key] = substitute_runtime_text(
       value,
@@ -2327,7 +2325,7 @@ fn evaluate_virtual_job_outputs(
   completed_job_results : Map[String, String],
   completed_job_order : Array[String],
 ) -> Map[String, String] {
-  let values : Map[String, String] = {}
+  let values : Map[String, String] = Map([])
   for output_name, targets in output_targets {
     let mut selected = ""
     let mut idx = completed_job_order.length()
@@ -2560,7 +2558,7 @@ fn exec_remove_tree(path : String) -> Bool {
     let entries = try @xfs.read_dir(path) catch {
       _ => []
     } noraise {
-      value => value
+      value => value.to_owned()
     }
     for entry in entries {
       if !exec_remove_tree(path + "/" + entry) {
@@ -2602,7 +2600,7 @@ fn exec_copy_tree(src : String, dst : String) -> Bool {
     let entries = try @xfs.read_dir(src) catch {
       _ => []
     } noraise {
-      value => value
+      value => value.to_owned()
     }
     for entry in entries {
       if !exec_copy_tree(src + "/" + entry, dst + "/" + entry) {
@@ -2630,7 +2628,7 @@ fn exec_clear_dir_contents(path : String) -> Bool {
   let entries = try @xfs.read_dir(path) catch {
     _ => []
   } noraise {
-    value => value
+    value => value.to_owned()
   }
   for entry in entries {
     // Never delete .git — it must be replaced explicitly, not cleared
@@ -2652,7 +2650,7 @@ fn exec_copy_dir_contents(src : String, dst : String) -> Bool {
   let entries = try @xfs.read_dir(src) catch {
     _ => []
   } noraise {
-    value => value
+    value => value.to_owned()
   }
   for entry in entries {
     if !exec_copy_tree(src + "/" + entry, dst + "/" + entry) {
@@ -2796,13 +2794,13 @@ fn configured_exec_bin(
 ) -> String {
   // ACTRUN_CONTAINER_RUNTIME overrides ACTRUN_DOCKER_BIN
   let effective_fallback = if env_name == "ACTRUN_DOCKER_BIN" {
-    @xsys.get_env_var("ACTRUN_CONTAINER_RUNTIME").unwrap_or(fallback)
+    @env.get_env_var("ACTRUN_CONTAINER_RUNTIME").unwrap_or(fallback)
   } else {
     fallback
   }
   let configured = resolved_plan_env
     .get(env_name)
-    .unwrap_or(@xsys.get_env_var(env_name).unwrap_or(effective_fallback))
+    .unwrap_or(@env.get_env_var(env_name).unwrap_or(effective_fallback))
   if configured.contains("/") {
     absolute_exec_path(configured)
   } else {
@@ -2816,7 +2814,7 @@ fn configured_wasm_runner_kind_env_value(
 ) -> String {
   resolved_plan_env
   .get("ACTRUN_WASM_RUNNER")
-  .unwrap_or(@xsys.get_env_var("ACTRUN_WASM_RUNNER").unwrap_or(""))
+  .unwrap_or(@env.get_env_var("ACTRUN_WASM_RUNNER").unwrap_or(""))
 }
 
 ///|
@@ -2907,7 +2905,7 @@ fn configured_path_root(
         resolve_task_cwd(workspace_root, configured)
       }
     None => {
-      let configured = @xsys.get_env_var(env_name).unwrap_or(fallback)
+      let configured = @env.get_env_var(env_name).unwrap_or(fallback)
       if configured.has_prefix("/") {
         configured
       } else {
@@ -3033,7 +3031,7 @@ async fn execute_wasm_action_native(
   let abs_module_path = absolute_exec_path(module_path)
   let skip_validate = resolved_plan_env
     .get("ACTRUN_WASM_SKIP_VALIDATE")
-    .unwrap_or(@xsys.get_env_var("ACTRUN_WASM_SKIP_VALIDATE").unwrap_or("")) ==
+    .unwrap_or(@env.get_env_var("ACTRUN_WASM_SKIP_VALIDATE").unwrap_or("")) ==
     "true"
   if !skip_validate {
     let wasm_bytes_opt : Bytes? = try
@@ -3762,7 +3760,7 @@ fn default_runner_env(
   let merged = merge_runner_env(resolved_plan_env, runner_env)
   // Resolve INPUT_* values that contain unresolved ${{ ... }} defaults
   let github_token = github_context.get("token").unwrap_or("")
-  let input_overrides : Map[String, String] = {}
+  let input_overrides : Map[String, String] = Map([])
   for key, value in merged {
     if key.has_prefix("INPUT_") && value.contains("${{") {
       if value.contains("github.token") && github_token.length() > 0 {
@@ -3898,7 +3896,7 @@ pub async fn dump_workflow_context_json(
   plan : ExecutionPlan,
   workspace_root : String,
   push_event : PushEvent,
-  dispatch_inputs? : Map[String, String] = {},
+  dispatch_inputs? : Map[String, String] = Map([]),
   event_name? : String = "push",
 ) -> String {
   let vars_ctx = runner_vars_context()
@@ -3906,7 +3904,7 @@ pub async fn dump_workflow_context_json(
   let secret_values = collect_secret_values()
   let jobs : Array[Json] = []
   let job_order : Array[String] = []
-  let job_tasks : Map[String, Array[TaskPlan]] = {}
+  let job_tasks : Map[String, Array[TaskPlan]] = Map([])
   for task in plan.tasks {
     if job_tasks.get(task.job_id) is None {
       job_tasks[task.job_id] = []
@@ -4156,7 +4154,7 @@ pub async fn execute_lowered_native(
   workspace_root? : String = ".",
   push_event? : PushEvent? = None,
   event_name? : String = "push",
-  dispatch_inputs? : Map[String, String] = {},
+  dispatch_inputs? : Map[String, String] = Map([]),
   nix_mode? : String = "",
   nix_packages? : Array[String] = [],
   sandbox_mode? : String = "",
@@ -4190,8 +4188,8 @@ pub async fn execute_lowered_native(
     }
   }
 
-  let remaining_deps : Map[String, Int] = {}
-  let dependents : Map[String, Array[String]] = {}
+  let remaining_deps : Map[String, Int] = Map([])
+  let dependents : Map[String, Array[String]] = Map([])
   for task in selected_tasks {
     remaining_deps[task.id] = 0
     dependents[task.id] = []
@@ -4219,19 +4217,19 @@ pub async fn execute_lowered_native(
   let mut ready_idx = 0
   let steps : Array[WorkflowStepReport] = []
   let order : Array[String] = []
-  let success : Map[String, Bool] = {}
+  let success : Map[String, Bool] = Map([])
   let reports : Array[TaskRunReport] = []
-  let job_states : Map[String, JobRuntimeState] = {}
-  let completed_job_outputs : Map[String, Map[String, String]] = {}
-  let completed_job_results : Map[String, String] = {}
+  let job_states : Map[String, JobRuntimeState] = Map([])
+  let completed_job_outputs : Map[String, Map[String, String]] = Map([])
+  let completed_job_results : Map[String, String] = Map([])
   let completed_job_order : Array[String] = []
   let matrix_groups = matrix_group_members(lowered.plan)
-  let cancelled_matrix_jobs : Map[String, Bool] = {}
-  let evaluated_job_conditions : Map[String, Bool] = {}
-  let started_job_tasks : Map[String, Bool] = {}
-  let started_jobs : Map[String, Bool] = {}
-  let started_job_services : Map[String, Array[StartedJobService]] = {}
-  let remaining_job_tasks : Map[String, Int] = {}
+  let cancelled_matrix_jobs : Map[String, Bool] = Map([])
+  let evaluated_job_conditions : Map[String, Bool] = Map([])
+  let started_job_tasks : Map[String, Bool] = Map([])
+  let started_jobs : Map[String, Bool] = Map([])
+  let started_job_services : Map[String, Array[StartedJobService]] = Map([])
+  let remaining_job_tasks : Map[String, Int] = Map([])
   let mut required_failed = false
 
   for task in selected_tasks {
@@ -4830,7 +4828,7 @@ fn cleanup_dir_entries_by_prefix(dir : String, prefix : String) -> Unit {
   let entries = try @xfs.read_dir(abs_dir) catch {
     _ => []
   } noraise {
-    value => value
+    value => value.to_owned()
   }
   for entry in entries {
     if entry.has_prefix(prefix) {

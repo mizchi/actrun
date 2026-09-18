@@ -78,7 +78,7 @@ fn matches_wildcard_pattern(path : String, pattern : String) -> Bool {
 /// Split a string by dots
 fn split_dot_path(s : String) -> Array[String] {
   let parts : Array[String] = []
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   for ch in s {
     if ch == '.' {
       parts.push(buf.to_string())

@@ -65,7 +65,7 @@ test "snapshot: ascii render simple pipeline" {
   @debug.debug_inspect(
     render_workflow_ascii(workflow),
     content=(
-      #|"┌───────┐\n│ build │\n└───────┘\n    └┐\n     │\n ┌──────┐\n │ test │\n └──────┘\n     │\n     │\n┌────────┐\n│ deploy │\n└────────┘"
+      #|" ┌───────┐\n │ build │\n └───────┘\n     │\n     │\n     │\n ┌──────┐\n │ test │\n └──────┘\n     │\n     │\n     │\n┌────────┐\n│ deploy │\n└────────┘"
     ),
   )
 }
@@ -83,7 +83,7 @@ test "snapshot: ascii render parallel jobs" {
   @debug.debug_inspect(
     render_workflow_ascii(workflow),
     content=(
-      #|"┌──────┐    ┌──────┐    ┌─────┐\n│ lint │    │ test │    │ e2e │\n└──────┘    └──────┘    └─────┘\n    └──────────┬┴──────────┘\n               │\n           ┌───────┐\n           │ merge │\n           └───────┘"
+      #|"┌──────┐    ┌──────┐    ┌─────┐\n│ lint │    │ test │    │ e2e │\n└──────┘    └──────┘    └─────┘\n    │           │          │\n    └──────────┬┴──────────┘\n               │\n           ┌───────┐\n           │ merge │\n           └───────┘"
     ),
   )
 }

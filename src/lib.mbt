@@ -59,7 +59,7 @@ pub struct WorkflowCallSpec {
 
 ///|
 pub fn new_permissions_spec(
-  values? : Map[String, String] = {},
+  values? : Map[String, String] = Map([]),
 ) -> PermissionsSpec {
   { values, }
 }
@@ -69,7 +69,7 @@ pub fn new_concurrency_spec(
   group : String,
   cancel_in_progress? : String? = None,
 ) -> ConcurrencySpec {
-  { group, cancel_in_progress }
+  { group, cancel_in_progress, }
 }
 
 ///|
@@ -79,7 +79,7 @@ pub fn new_workflow_call_input_spec(
   default_value? : String? = None,
   input_type? : String = "",
 ) -> WorkflowCallInputSpec {
-  { description, required, default_value, input_type }
+  { description, required, default_value, input_type, }
 }
 
 ///|
@@ -87,7 +87,7 @@ pub fn new_workflow_call_output_spec(
   description? : String = "",
   value? : String = "",
 ) -> WorkflowCallOutputSpec {
-  { description, value }
+  { description, value, }
 }
 
 ///|
@@ -102,28 +102,28 @@ pub fn new_job_container_credentials_spec(
   username : String,
   password : String,
 ) -> JobContainerCredentialsSpec {
-  { username, password }
+  { username, password, }
 }
 
 ///|
 pub fn new_job_container_spec(
   image : String,
   credentials? : JobContainerCredentialsSpec? = None,
-  env? : Map[String, String] = {},
+  env? : Map[String, String] = Map([]),
   ports? : Array[String] = [],
   volumes? : Array[String] = [],
   options? : String? = None,
 ) -> JobContainerSpec {
-  { image, credentials, env, ports, volumes, options }
+  { image, credentials, env, ports, volumes, options, }
 }
 
 ///|
 pub fn new_workflow_call_spec(
-  inputs? : Map[String, WorkflowCallInputSpec] = {},
-  outputs? : Map[String, WorkflowCallOutputSpec] = {},
-  secrets? : Map[String, WorkflowCallSecretSpec] = {},
+  inputs? : Map[String, WorkflowCallInputSpec] = Map([]),
+  outputs? : Map[String, WorkflowCallOutputSpec] = Map([]),
+  secrets? : Map[String, WorkflowCallSecretSpec] = Map([]),
 ) -> WorkflowCallSpec {
-  { inputs, outputs, secrets }
+  { inputs, outputs, secrets, }
 }
 
 ///|
@@ -131,7 +131,7 @@ pub fn new_run_defaults(
   shell? : String? = None,
   working_directory? : String? = None,
 ) -> RunDefaults {
-  { shell, working_directory }
+  { shell, working_directory, }
 }
 
 ///|
@@ -153,7 +153,7 @@ pub fn new_push_trigger(
   tags? : Array[String] = [],
   tags_ignore? : Array[String] = [],
 ) -> PushTrigger {
-  { branches, branches_ignore, paths, paths_ignore, tags, tags_ignore }
+  { branches, branches_ignore, paths, paths_ignore, tags, tags_ignore, }
 }
 
 ///|
@@ -175,7 +175,7 @@ pub fn new_push_event(
   repository? : String = "",
   actor? : String = "",
 ) -> PushEvent {
-  { ref_name, before_sha, after_sha, changed_paths, repository, actor }
+  { ref_name, before_sha, after_sha, changed_paths, repository, actor, }
 }
 
 ///|
@@ -200,9 +200,9 @@ pub fn new_run_step(
   name? : String = "",
   shell? : String? = None,
   working_directory? : String? = None,
-  env? : Map[String, String] = {},
+  env? : Map[String, String] = Map([]),
   if_condition? : String = "success()",
-  with_values? : Map[String, String] = {},
+  with_values? : Map[String, String] = Map([]),
   continue_on_error? : String = "false",
   timeout_minutes? : Int = 0,
 ) -> StepSpec {
@@ -226,9 +226,9 @@ pub fn new_uses_step(
   id : String,
   uses : String,
   name? : String = "",
-  env? : Map[String, String] = {},
+  env? : Map[String, String] = Map([]),
   if_condition? : String = "success()",
-  with_values? : Map[String, String] = {},
+  with_values? : Map[String, String] = Map([]),
   continue_on_error? : String = "false",
   timeout_minutes? : Int = 0,
 ) -> StepSpec {
@@ -285,7 +285,7 @@ pub fn new_job_matrix(
   fail_fast? : Bool = true,
   max_parallel? : Int? = None,
 ) -> JobMatrixSpec {
-  { rows, fail_fast, max_parallel }
+  { rows, fail_fast, max_parallel, }
 }
 
 ///|
@@ -295,20 +295,20 @@ pub fn new_job(
   name? : String = "",
   if_condition? : String = "success()",
   needs? : Array[String] = [],
-  outputs? : Map[String, String] = {},
+  outputs? : Map[String, String] = Map([]),
   permissions? : PermissionsSpec? = None,
   concurrency? : ConcurrencySpec? = None,
   runs_on? : Array[String] = ["ubuntu-latest"],
-  env? : Map[String, String] = {},
+  env? : Map[String, String] = Map([]),
   defaults? : RunDefaults = new_run_defaults(),
   matrix? : JobMatrixSpec? = None,
   reusable_workflow? : String? = None,
-  reusable_workflow_with? : Map[String, String] = {},
-  reusable_workflow_secrets? : Map[String, String] = {},
+  reusable_workflow_with? : Map[String, String] = Map([]),
+  reusable_workflow_secrets? : Map[String, String] = Map([]),
   reusable_workflow_inherit_secrets? : Bool = false,
   container? : JobContainerSpec? = None,
   container_image? : String? = None,
-  services? : Map[String, JobContainerSpec] = {},
+  services? : Map[String, JobContainerSpec] = Map([]),
   timeout_minutes? : Int = 0,
   environment? : String = "",
 ) -> JobSpec {
@@ -370,9 +370,9 @@ pub fn strip_unsupported_workflow_fields(
 ) -> WorkflowSpec {
   let stripped_jobs : Array[JobSpec] = []
   for job in workflow.jobs {
-    stripped_jobs.push({ ..job, permissions: None, concurrency: None })
+    stripped_jobs.push({ ..job, permissions: None, concurrency: None, })
   }
-  { ..workflow, permissions: None, concurrency: None, jobs: stripped_jobs }
+  { ..workflow, permissions: None, concurrency: None, jobs: stripped_jobs, }
 }
 
 ///|
@@ -411,9 +411,9 @@ pub fn filter_workflow_steps(
         filtered_steps.push(step)
       }
     }
-    filtered_jobs.push({ ..job, steps: filtered_steps })
+    filtered_jobs.push({ ..job, steps: filtered_steps, })
   }
-  { ..workflow, jobs: filtered_jobs }
+  { ..workflow, jobs: filtered_jobs, }
 }
 
 ///|
@@ -451,9 +451,9 @@ pub fn override_workflow_steps(
         None => result_steps.push(step)
       }
     }
-    result_jobs.push({ ..job, steps: result_steps })
+    result_jobs.push({ ..job, steps: result_steps, })
   }
-  { ..workflow, jobs: result_jobs }
+  { ..workflow, jobs: result_jobs, }
 }
 
 ///|
@@ -477,7 +477,7 @@ pub fn filter_workflow_jobs(
       filtered_jobs.push(job)
     }
   }
-  { ..workflow, jobs: filtered_jobs }
+  { ..workflow, jobs: filtered_jobs, }
 }
 
 ///|
@@ -494,7 +494,7 @@ pub fn select_workflow_job(
       filtered_jobs.push(job)
     }
   }
-  { ..workflow, jobs: filtered_jobs }
+  { ..workflow, jobs: filtered_jobs, }
 }
 
 ///|
@@ -518,10 +518,10 @@ pub fn select_workflow_step(
       }
     }
     if filtered_steps.length() > 0 {
-      filtered_jobs.push({ ..job, steps: filtered_steps })
+      filtered_jobs.push({ ..job, steps: filtered_steps, })
     }
   }
-  { ..workflow, jobs: filtered_jobs }
+  { ..workflow, jobs: filtered_jobs, }
 }
 
 ///|
@@ -535,7 +535,7 @@ pub fn new_workflow(
   workflow_call_spec? : WorkflowCallSpec? = None,
   permissions? : PermissionsSpec? = None,
   concurrency? : ConcurrencySpec? = None,
-  env? : Map[String, String] = {},
+  env? : Map[String, String] = Map([]),
   defaults? : RunDefaults = new_run_defaults(),
 ) -> WorkflowSpec {
   {
@@ -589,7 +589,7 @@ pub fn new_task_plan(
   if_condition : String,
   runs_on : Array[String],
   env : Map[String, String],
-  with_values? : Map[String, String] = {},
+  with_values? : Map[String, String] = Map([]),
   action? : ResolvedAction? = None,
   action_scope? : String? = None,
   requires_action_started? : Bool = false,
@@ -668,10 +668,10 @@ pub struct LocalActionSpec {
 pub fn new_local_action(
   steps : Array[StepSpec],
   name? : String = "",
-  inputs? : Map[String, String] = {},
-  outputs? : Map[String, String] = {},
+  inputs? : Map[String, String] = Map([]),
+  outputs? : Map[String, String] = Map([]),
 ) -> LocalActionSpec {
-  { name, inputs, outputs, steps }
+  { name, inputs, outputs, steps, }
 }
 
 ///|
@@ -831,7 +831,7 @@ pub fn mask_report_secrets(
         stderr: strip_add_mask_lines(task.stderr),
       })
     }
-    return { ..report, task_reports: stripped_tasks }
+    return { ..report, task_reports: stripped_tasks, }
   }
   let masked_tasks : Array[TaskRunReport] = []
   for task in report.task_reports {
@@ -850,7 +850,7 @@ pub fn mask_report_secrets(
       message: mask_secrets(step.message, all_secrets),
     })
   }
-  { ..report, task_reports: masked_tasks, steps: masked_steps }
+  { ..report, task_reports: masked_tasks, steps: masked_steps, }
 }
 
 ///|
@@ -877,4 +877,12 @@ pub fn find_task_run_report(
     }
   }
   None
+}
+
+///|
+/// Command-line arguments with the program name at index 0 on every target.
+/// On the JS target `process.argv` starts with the Node.js executable, which
+/// is dropped so that callers see the same shape as on native.
+pub fn cli_args() -> Array[String] {
+  normalize_cli_args(@env.args())
 }

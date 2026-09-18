@@ -1,20 +1,32 @@
 {
   "name": "@mizchi/actrun",
-  "version": "0.29.0",
+  "version": "0.31.0",
   "description": "A local GitHub Actions runner",
   "type": "module",
   "exports": {
     ".": {
+      "types": "./lib/actrun.d.ts",
       "default": "./lib/actrun.js"
     },
-    "./cli": "./dist/actrun.js"
+    "./cli": "./dist/actrun.js",
+    "./package.json": "./package.json"
   },
   "bin": {
     "actrun": "./dist/actrun.js"
   },
+  "files": [
+    "dist/actrun.js",
+    "lib/actrun.js",
+    "lib/actrun.d.ts",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
-    "build": "moon build --release src/cmd/actrun --target js && node scripts/bundle-js.js",
-    "prepublishOnly": "npm run build"
+    "build:cli": "moon build --release src/cmd/actrun --target js",
+    "build:lib": "moon build --release src --target js",
+    "build": "npm run build:cli && npm run build:lib && node scripts/bundle-js.js",
+    "prepublishOnly": "npm run build",
+    "test:smoke": "node dist/actrun.js --help >/dev/null && node dist/actrun.js viz examples/04-multi-job.yml"
   },
   "keywords": [
     "github-actions",
@@ -31,9 +43,7 @@
   "engines": {
     "node": ">=18"
   },
-  "files": [
-    "dist/actrun.js"
-  ],
+  "packageManager": "pnpm@10.33.0",
   "devDependencies": {
     "oxc-minify": "^0.120.0"
   }
