@@ -1,6 +1,6 @@
 name = "mizchi/actrun"
 
-version = "0.31.0"
+version = "0.32.0"
 
 import {
   "moonbitlang/async@0.22.1",
