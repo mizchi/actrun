@@ -51,3 +51,9 @@ pub fn execute_shell_step(
 pub fn step_result_to_json(result : StepResult) -> String {
   result.to_json().stringify()
 }
+
+///|
+pub extend StepResult with @debug.Debug::{to_repr}
+
+///|
+pub extend StepResult with ToJson::{to_json}

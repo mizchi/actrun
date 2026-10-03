@@ -28,12 +28,30 @@ pub struct StoreOutputEntry {
 } derive(ToJson, FromJson, Debug)
 
 ///|
+pub extend StoreOutputEntry with ToJson::{to_json}
+
+///|
+pub extend StoreOutputEntry with @json.FromJson::{from_json}
+
+///|
+pub extend StoreOutputEntry with @debug.Debug::{to_repr}
+
+///|
 /// Env update: maps to GITHUB_ENV (key=value or heredoc)
 /// HTTP: POST /runs/{run_id}/env  body: {"key": "...", "value": "..."}
 pub struct StoreEnvEntry {
   key : String
   value : String
 } derive(ToJson, FromJson, Debug)
+
+///|
+pub extend StoreEnvEntry with ToJson::{to_json}
+
+///|
+pub extend StoreEnvEntry with @json.FromJson::{from_json}
+
+///|
+pub extend StoreEnvEntry with @debug.Debug::{to_repr}
 
 ///|
 /// Path update: maps to GITHUB_PATH (one path per line)
@@ -43,11 +61,29 @@ pub struct StorePathEntry {
 } derive(ToJson, FromJson, Debug)
 
 ///|
+pub extend StorePathEntry with ToJson::{to_json}
+
+///|
+pub extend StorePathEntry with @json.FromJson::{from_json}
+
+///|
+pub extend StorePathEntry with @debug.Debug::{to_repr}
+
+///|
 /// Step summary: maps to GITHUB_STEP_SUMMARY (markdown text)
 /// HTTP: POST /steps/{step_id}/summary  body: {"content": "..."}
 pub struct StoreSummaryEntry {
   content : String
 } derive(ToJson, FromJson, Debug)
+
+///|
+pub extend StoreSummaryEntry with ToJson::{to_json}
+
+///|
+pub extend StoreSummaryEntry with @json.FromJson::{from_json}
+
+///|
+pub extend StoreSummaryEntry with @debug.Debug::{to_repr}
 
 ///|
 /// Collected results for a step execution.
@@ -59,6 +95,15 @@ pub struct StoreStepResult {
   path_entries : Array[String]
   summary : String
 } derive(ToJson, FromJson, Debug)
+
+///|
+pub extend StoreStepResult with ToJson::{to_json}
+
+///|
+pub extend StoreStepResult with @json.FromJson::{from_json}
+
+///|
+pub extend StoreStepResult with @debug.Debug::{to_repr}
 
 ///|
 pub fn empty_step_result() -> StoreStepResult {

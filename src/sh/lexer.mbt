@@ -412,6 +412,9 @@ pub suberror LexError {
 }
 
 ///|
+pub extend LexError with Show::{to_string, output}
+
+///|
 pub impl Show for LexError with fn output(self, logger) {
   match self {
     UnterminatedString(line, col) =>

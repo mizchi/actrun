@@ -53,3 +53,39 @@ pub impl Show for UnaryOp with fn output(self, logger) {
 pub impl Show for BinaryOp with fn output(self, logger) {
   logger.write_string(@debug.to_string(self))
 }
+
+///|
+pub extend BinaryOp with @debug.Debug::{to_repr}
+
+///|
+pub extend BinaryOp with Eq::{not_equal, equal}
+
+///|
+pub extend BinaryOp with Show::{to_string, output}
+
+///|
+pub extend Expr with @debug.Debug::{to_repr}
+
+///|
+pub extend Expr with Eq::{not_equal, equal}
+
+///|
+pub extend Expr with Show::{to_string, output}
+
+///|
+pub extend ExprLiteral with @debug.Debug::{to_repr}
+
+///|
+pub extend ExprLiteral with Eq::{not_equal, equal}
+
+///|
+pub extend ExprLiteral with Show::{to_string, output}
+
+///|
+pub extend UnaryOp with @debug.Debug::{to_repr}
+
+///|
+pub extend UnaryOp with Eq::{not_equal, equal}
+
+///|
+pub extend UnaryOp with Show::{to_string, output}

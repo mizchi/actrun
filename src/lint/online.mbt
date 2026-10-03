@@ -226,3 +226,9 @@ pub fn diagnostics_from_resolutions(
   }
   diagnostics
 }
+
+///|
+pub extend ActionRefToResolve with @debug.Debug::{to_repr}
+
+///|
+pub extend ActionResolution with @debug.Debug::{to_repr}

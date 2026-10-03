@@ -357,8 +357,8 @@ async test "compat docs: local reusable workflow executes callee jobs" {
   let prev_secret = compat_docs_set_env_var(
     "ACTRUN_SECRET_CALL_TOKEN", "s3cr3t",
   )
-  let lowered = lower_push_workflow_in_workspace(workflow, workspace)
-  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let lowered = @actrun.lower_push_workflow_in_workspace(workflow, workspace)
+  let report = @actrun.execute_lowered_native(lowered, workspace_root=workspace)
   compat_docs_restore_env_var("ACTRUN_SECRET_CALL_TOKEN", prev_secret)
 
   @debug.debug_inspect(
@@ -389,8 +389,8 @@ async test "compat docs: local reusable workflow uses typed input defaults" {
     "workflow-call-input-types",
     copy_fixture=true,
   )
-  let lowered = lower_push_workflow_in_workspace(workflow, workspace)
-  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let lowered = @actrun.lower_push_workflow_in_workspace(workflow, workspace)
+  let report = @actrun.execute_lowered_native(lowered, workspace_root=workspace)
 
   @debug.debug_inspect(
     fixture.id,
@@ -420,8 +420,8 @@ async test "compat docs: local reusable workflow caller matrix expands rows" {
     "workflow-call-local-matrix",
     copy_fixture=true,
   )
-  let lowered = lower_push_workflow_in_workspace(workflow, workspace)
-  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let lowered = @actrun.lower_push_workflow_in_workspace(workflow, workspace)
+  let report = @actrun.execute_lowered_native(lowered, workspace_root=workspace)
 
   @debug.debug_inspect(
     fixture.id,
@@ -451,8 +451,8 @@ async test "compat docs: local reusable workflow caller matrix aggregates output
     "workflow-call-local-matrix-output",
     copy_fixture=true,
   )
-  let lowered = lower_push_workflow_in_workspace(workflow, workspace)
-  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let lowered = @actrun.lower_push_workflow_in_workspace(workflow, workspace)
+  let report = @actrun.execute_lowered_native(lowered, workspace_root=workspace)
 
   @debug.debug_inspect(
     fixture.id,
@@ -485,8 +485,8 @@ async test "compat docs: nested local reusable workflow executes callee jobs" {
   let prev_secret = compat_docs_set_env_var(
     "ACTRUN_SECRET_CALL_TOKEN", "s3cr3t",
   )
-  let lowered = lower_push_workflow_in_workspace(workflow, workspace)
-  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let lowered = @actrun.lower_push_workflow_in_workspace(workflow, workspace)
+  let report = @actrun.execute_lowered_native(lowered, workspace_root=workspace)
   compat_docs_restore_env_var("ACTRUN_SECRET_CALL_TOKEN", prev_secret)
 
   @debug.debug_inspect(
@@ -518,8 +518,8 @@ async test "compat docs: local reusable workflow secrets inherit executes callee
     copy_fixture=true,
   )
   let prev_secret = compat_docs_set_env_var("ACTRUN_SECRET_TOKEN", "s3cr3t")
-  let lowered = lower_push_workflow_in_workspace(workflow, workspace)
-  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let lowered = @actrun.lower_push_workflow_in_workspace(workflow, workspace)
+  let report = @actrun.execute_lowered_native(lowered, workspace_root=workspace)
   compat_docs_restore_env_var("ACTRUN_SECRET_TOKEN", prev_secret)
 
   @debug.debug_inspect(
@@ -611,7 +611,7 @@ async test "compat docs: job container fixture executes run step via docker adap
   )
   let workflow_env = workflow.env
   workflow_env["ACTRUN_DOCKER_BIN"] = docker_bin
-  let runtime_workflow = new_workflow(
+  let runtime_workflow = @actrun.new_workflow(
     workflow.name,
     workflow.jobs,
     trigger=workflow.trigger,
@@ -625,7 +625,9 @@ async test "compat docs: job container fixture executes run step via docker adap
   if !@xfs.path_exists(workspace + "/nested") {
     @xfs.create_dir(workspace + "/nested")
   }
-  let lowered = lower_push_workflow_in_workspace(runtime_workflow, workspace)
+  let lowered = @actrun.lower_push_workflow_in_workspace(
+    runtime_workflow, workspace,
+  )
 
   @debug.debug_inspect(
     fixture.id,
@@ -635,7 +637,7 @@ async test "compat docs: job container fixture executes run step via docker adap
   )
   @debug.debug_inspect(lowered.errors, content="[]")
 
-  let report = execute_lowered_native(
+  let report = @actrun.execute_lowered_native(
     lowered,
     workspace_root=workspace,
     push_event=compat_push_event_fixture(fixture),
@@ -738,7 +740,7 @@ async test "compat docs: job services ports context is available in step script,
   )
   let workflow_env = workflow.env
   workflow_env["ACTRUN_DOCKER_BIN"] = docker_bin
-  let runtime_workflow = new_workflow(
+  let runtime_workflow = @actrun.new_workflow(
     workflow.name,
     workflow.jobs,
     trigger=workflow.trigger,
@@ -750,8 +752,8 @@ async test "compat docs: job services ports context is available in step script,
     defaults=workflow.defaults,
   )
 
-  let report = execute_lowered_native(
-    lower_push_workflow(runtime_workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(runtime_workflow),
     workspace_root=workspace,
     push_event=compat_push_event_fixture(fixture),
   )
@@ -809,7 +811,7 @@ async test "compat docs: job container shares docker network with services" {
   )
   let workflow_env = workflow.env
   workflow_env["ACTRUN_DOCKER_BIN"] = docker_bin
-  let runtime_workflow = new_workflow(
+  let runtime_workflow = @actrun.new_workflow(
     workflow.name,
     workflow.jobs,
     trigger=workflow.trigger,
@@ -821,8 +823,8 @@ async test "compat docs: job container shares docker network with services" {
     defaults=workflow.defaults,
   )
 
-  let report = execute_lowered_native(
-    lower_push_workflow(runtime_workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(runtime_workflow),
     workspace_root=workspace,
     push_event=compat_push_event_fixture(fixture),
   )
@@ -997,8 +999,8 @@ async test "compat docs: custom shell template runs via script placeholder" {
   let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
     "steps-shell-template",
   )
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
     push_event=compat_push_event_fixture(fixture),
   )
@@ -1128,8 +1130,8 @@ async test "compat docs: checkout default fetch-depth keeps shallow history" {
   let workspace = prepare_git_checkout_workspace(
     "compat-docs-checkout-fetch-depth",
   )
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
   )
   let task = compat_expect_task_report(report, "build/verify")
@@ -1164,8 +1166,8 @@ async test "compat docs: checkout fetch-depth zero keeps full history" {
   let workspace = prepare_git_checkout_workspace(
     "compat-docs-checkout-fetch-depth-zero",
   )
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
   )
   let task = compat_expect_task_report(report, "build/verify")
@@ -1198,8 +1200,8 @@ async test "compat docs: checkout ref selects the requested branch" {
   let workspace = prepare_git_checkout_workspace_with_feature_branch(
     "compat-docs-checkout-ref",
   )
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
   )
   let task = compat_expect_task_report(report, "build/verify")
@@ -1233,8 +1235,8 @@ async test "compat docs: checkout clean default preserves untracked files in loc
     "compat-docs-checkout-clean-default",
   )
   @xfs.write_string_to_file(workspace + "/scratch.txt", "keep?")
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
   )
   let task = compat_expect_task_report(report, "build/verify")
@@ -1269,8 +1271,8 @@ async test "compat docs: checkout clean false preserves untracked files" {
     "compat-docs-checkout-clean-false",
   )
   @xfs.write_string_to_file(workspace + "/scratch.txt", "keep")
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
   )
   let task = compat_expect_task_report(report, "build/verify")
@@ -1304,8 +1306,8 @@ async test "compat docs: checkout submodules true initializes direct submodules"
     "compat-docs-checkout-submodules",
     recursive=true,
   )
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
   )
   let task = compat_expect_task_report(report, "build/verify")
@@ -1341,8 +1343,8 @@ async test "compat docs: checkout submodules recursive initializes nested submod
     "compat-docs-checkout-submodules-recursive",
     recursive=true,
   )
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
   )
   let task = compat_expect_task_report(report, "build/verify")
@@ -1379,8 +1381,8 @@ async test "compat docs: setup-node configures node version and npm auth config"
       workspace, node_log_path, "24.9.0",
     ),
   )
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
   )
   let task = compat_expect_task_report(report, "build/verify")
@@ -1412,8 +1414,8 @@ async test "compat docs: artifact upload supports directory and wildcard paths" 
   let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
     "artifact-glob-directory",
   )
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
   )
   let task = compat_expect_task_report(report, "build/verify")
@@ -1445,8 +1447,8 @@ async test "compat docs: artifact if-no-files-found exposes expected status tran
   let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
     "artifact-if-no-files-found",
   )
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
   )
   let task = compat_expect_task_report(report, "build/verify")
@@ -1478,8 +1480,8 @@ async test "compat docs: artifact overwrite replaces existing content only with 
   let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
     "artifact-overwrite",
   )
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
   )
   let task = compat_expect_task_report(report, "build/verify")
@@ -1511,8 +1513,8 @@ async test "compat docs: download-artifact merge-multiple flattens download-all"
   let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
     "artifact-merge-multiple",
   )
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
   )
   let task = compat_expect_task_report(report, "build/verify")
@@ -1551,8 +1553,8 @@ async test "compat docs: setup-node cache npm restores after save job" {
   )
   @xfs.write_string_to_file(workspace + "/package-lock.json", "{\"lock\":1}\n")
   test_support_remove_tree(compat_docs_cache_store_root(workspace))
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
   )
   let task = compat_expect_task_report(report, "restore/verify")
@@ -1584,8 +1586,8 @@ async test "compat docs: cache restore-keys restores prefix hit and reports fals
   let (fixture, workflow) = compat_expect_docs_fixture("cache-restore-keys")
   let workspace = prepare_workspace("compat-docs-cache-restore-keys")
   test_support_remove_tree(compat_docs_cache_store_root(workspace))
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
   )
   let task = compat_expect_task_report(report, "restore/verify")
@@ -1617,8 +1619,8 @@ async test "compat docs: cache lookup-only reports hit without restoring files" 
   let (fixture, workflow) = compat_expect_docs_fixture("cache-lookup-only")
   let workspace = prepare_workspace("compat-docs-cache-lookup-only")
   test_support_remove_tree(compat_docs_cache_store_root(workspace))
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
   )
   let task = compat_expect_task_report(report, "restore/verify")
@@ -1652,8 +1654,8 @@ async test "compat docs: cache fail-on-cache-miss exposes failure outcome on mis
   )
   let workspace = prepare_workspace("compat-docs-cache-fail-on-cache-miss")
   test_support_remove_tree(compat_docs_cache_store_root(workspace))
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
   )
   let task = compat_expect_task_report(report, "restore/verify")
@@ -2335,8 +2337,8 @@ async test "compat docs: matrix fail-fast cancels later rows" {
   let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
     "strategy-matrix-fail-fast",
   )
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
     push_event=compat_push_event_fixture(fixture),
   )
@@ -2384,8 +2386,8 @@ async test "compat docs: matrix fail-fast false keeps later rows running" {
   let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
     "strategy-matrix-fail-fast-false",
   )
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
     push_event=compat_push_event_fixture(fixture),
   )
@@ -2435,8 +2437,8 @@ async test "compat docs: missing env property evaluates to empty string" {
   let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
     "context-missing-env",
   )
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
     push_event=compat_push_event_fixture(fixture),
   )
@@ -2469,8 +2471,8 @@ async test "compat docs: missing step output evaluates to empty string" {
   let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
     "context-missing-step-output",
   )
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
     push_event=compat_push_event_fixture(fixture),
   )
@@ -2503,8 +2505,8 @@ async test "compat docs: env context is available in step script" {
   let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
     "context-env-script",
   )
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
     push_event=compat_push_event_fixture(fixture),
   )
@@ -2537,8 +2539,8 @@ async test "compat docs: env context is available in step env" {
   let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
     "context-env-step-env",
   )
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
     push_event=compat_push_event_fixture(fixture),
   )
@@ -2571,8 +2573,8 @@ async test "compat docs: github context is available in step script" {
   let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
     "context-github-script",
   )
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
     push_event=compat_push_event_fixture(fixture),
   )
@@ -2605,8 +2607,8 @@ async test "compat docs: github context is available in step env" {
   let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
     "context-github-step-env",
   )
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
     push_event=compat_push_event_fixture(fixture),
   )
@@ -2639,8 +2641,8 @@ async test "compat docs: string functions are available in step script and env" 
   let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
     "context-string-functions",
   )
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
     push_event=compat_push_event_fixture(fixture),
   )
@@ -2673,8 +2675,8 @@ async test "compat docs: json functions are available in step script and env" {
   let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
     "context-json-functions",
   )
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
     push_event=compat_push_event_fixture(fixture),
   )
@@ -2709,8 +2711,8 @@ async test "compat docs: hashFiles is available in step script and env" {
     "context-hash-files",
     copy_fixture=true,
   )
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
     push_event=compat_push_event_fixture(fixture),
   )
@@ -2744,8 +2746,8 @@ async test "compat docs: vars context is available in step script and env" {
   let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
     "context-vars",
   )
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
     push_event=compat_push_event_fixture(fixture),
   )
@@ -2780,8 +2782,8 @@ async test "compat docs: secrets context is available in step script and env" {
   let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
     "context-secrets",
   )
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
     push_event=compat_push_event_fixture(fixture),
   )
@@ -2815,8 +2817,8 @@ async test "compat docs: github.action is available in step script and env" {
   let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
     "context-github-action",
   )
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
     push_event=compat_push_event_fixture(fixture),
   )
@@ -2849,8 +2851,8 @@ async test "compat docs: github ref context is available in push workflow" {
   let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
     "context-github-ref",
   )
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
     push_event=compat_push_event_fixture(fixture),
   )
@@ -2883,8 +2885,8 @@ async test "compat docs: github repository context is available in push workflow
   let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
     "context-github-repository",
   )
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
     push_event=compat_push_event_fixture(fixture),
   )
@@ -2917,8 +2919,8 @@ async test "compat docs: step if status functions work in push workflow" {
   let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
     "steps-if-status-functions",
   )
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
     push_event=compat_push_event_fixture(fixture),
   )
@@ -2974,8 +2976,8 @@ async test "compat docs: step if string functions work in push workflow" {
   let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
     "steps-if-string-functions",
   )
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
     push_event=compat_push_event_fixture(fixture),
   )
@@ -3026,8 +3028,8 @@ async test "compat docs: step if json functions work in push workflow" {
   let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
     "steps-if-json-functions",
   )
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
     push_event=compat_push_event_fixture(fixture),
   )
@@ -3074,8 +3076,8 @@ async test "compat docs: step if hashFiles works in push workflow" {
     "steps-if-hash-files",
     copy_fixture=true,
   )
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
     push_event=compat_push_event_fixture(fixture),
   )
@@ -3117,8 +3119,8 @@ async test "compat docs: step if vars works in push workflow" {
   let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
     "steps-if-vars",
   )
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
     push_event=compat_push_event_fixture(fixture),
   )
@@ -3158,8 +3160,8 @@ async test "compat docs: continue-on-error lets later steps run" {
   let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
     "steps-continue-on-error",
   )
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
     push_event=compat_push_event_fixture(fixture),
   )
@@ -3209,8 +3211,8 @@ async test "compat docs: job if can use github repository context" {
   let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
     "jobs-if-repository",
   )
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
     push_event=compat_push_event_fixture(fixture),
   )
@@ -3243,8 +3245,8 @@ async test "compat docs: github actor context is available in push workflow" {
   let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
     "context-github-actor",
   )
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
     push_event=compat_push_event_fixture(fixture),
   )
@@ -3277,8 +3279,8 @@ async test "compat docs: github repository owner context is available in push wo
   let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
     "context-github-repository-owner",
   )
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
     push_event=compat_push_event_fixture(fixture),
   )
@@ -3311,8 +3313,8 @@ async test "compat docs: needs outputs are available in dependent job" {
   let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
     "context-needs-output",
   )
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
     push_event=compat_push_event_fixture(fixture),
   )
@@ -3345,8 +3347,8 @@ async test "compat docs: needs result is available in dependent job" {
   let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
     "context-needs-result",
   )
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
     push_event=compat_push_event_fixture(fixture),
   )
@@ -3379,8 +3381,8 @@ async test "compat docs: matrix needs aggregate result and outputs" {
   let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
     "context-needs-matrix-output",
   )
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
     push_event=compat_push_event_fixture(fixture),
   )
@@ -3413,8 +3415,8 @@ async test "compat docs: runner context is available in step script" {
   let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
     "context-runner-script",
   )
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
     push_event=compat_push_event_fixture(fixture),
   )
@@ -3447,8 +3449,8 @@ async test "compat docs: runner context is available in step env" {
   let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
     "context-runner-step-env",
   )
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
     push_event=compat_push_event_fixture(fixture),
   )
@@ -3481,8 +3483,8 @@ async test "compat docs: step outputs are available to later steps" {
   let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
     "context-step-output",
   )
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
     push_event=compat_push_event_fixture(fixture),
   )
@@ -3515,8 +3517,8 @@ async test "compat docs: step outcome and conclusion are available to later step
   let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
     "context-step-status",
   )
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
     push_event=compat_push_event_fixture(fixture),
   )
@@ -3549,8 +3551,8 @@ async test "compat docs: env precedence uses the most specific value" {
   let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
     "context-env-precedence",
   )
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
     push_event=compat_push_event_fixture(fixture),
   )
@@ -3583,8 +3585,8 @@ async test "compat docs: step summary is collected from file command" {
   let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
     "workflow-command-step-summary",
   )
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
     push_event=compat_push_event_fixture(fixture),
   )
@@ -3617,8 +3619,8 @@ async test "compat docs: github state is currently unsupported" {
   let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
     "workflow-command-state",
   )
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
     push_event=compat_push_event_fixture(fixture),
   )
@@ -3657,8 +3659,8 @@ async test "compat docs: github env single-line applies to later steps" {
   let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
     "workflow-command-github-env-single",
   )
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
     push_event=compat_push_event_fixture(fixture),
   )
@@ -3691,8 +3693,8 @@ async test "compat docs: github env multiline applies to later steps" {
   let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
     "workflow-command-github-env-multiline",
   )
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
     push_event=compat_push_event_fixture(fixture),
   )
@@ -3725,8 +3727,8 @@ async test "compat docs: github output single-line applies to later steps" {
   let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
     "workflow-command-github-output-single",
   )
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
     push_event=compat_push_event_fixture(fixture),
   )
@@ -3759,8 +3761,8 @@ async test "compat docs: github output multiline applies to later steps" {
   let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
     "workflow-command-github-output-multiline",
   )
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
     push_event=compat_push_event_fixture(fixture),
   )
@@ -3793,8 +3795,8 @@ async test "compat docs: github path only affects later steps" {
   let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
     "workflow-command-github-path",
   )
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
     push_event=compat_push_event_fixture(fixture),
   )
@@ -3849,16 +3851,16 @@ test "compat docs: parse push branches fixture" {
     content="[\"main\", \"releases/*\"]",
   )
   @debug.debug_inspect(
-    matches_push_trigger(
+    @actrun.matches_push_trigger(
       workflow.trigger,
-      new_push_event("main", ["src/lib.mbt"]),
+      @actrun.new_push_event("main", ["src/lib.mbt"]),
     ),
     content="true",
   )
   @debug.debug_inspect(
-    matches_push_trigger(
+    @actrun.matches_push_trigger(
       workflow.trigger,
-      new_push_event("feature/example", ["src/lib.mbt"]),
+      @actrun.new_push_event("feature/example", ["src/lib.mbt"]),
     ),
     content="false",
   )
@@ -3879,16 +3881,16 @@ test "compat docs: parse push branches-ignore fixture" {
     content="[\"mona/octocat\", \"releases/*-alpha\"]",
   )
   @debug.debug_inspect(
-    matches_push_trigger(
+    @actrun.matches_push_trigger(
       workflow.trigger,
-      new_push_event("releases/10-alpha", ["src/lib.mbt"]),
+      @actrun.new_push_event("releases/10-alpha", ["src/lib.mbt"]),
     ),
     content="false",
   )
   @debug.debug_inspect(
-    matches_push_trigger(
+    @actrun.matches_push_trigger(
       workflow.trigger,
-      new_push_event("releases/10", ["src/lib.mbt"]),
+      @actrun.new_push_event("releases/10", ["src/lib.mbt"]),
     ),
     content="true",
   )
@@ -3909,16 +3911,16 @@ test "compat docs: parse push paths fixture" {
     content="[\"src/**\", \"package.json\"]",
   )
   @debug.debug_inspect(
-    matches_push_trigger(
+    @actrun.matches_push_trigger(
       workflow.trigger,
-      new_push_event("main", ["src/app.mbt"]),
+      @actrun.new_push_event("main", ["src/app.mbt"]),
     ),
     content="true",
   )
   @debug.debug_inspect(
-    matches_push_trigger(
+    @actrun.matches_push_trigger(
       workflow.trigger,
-      new_push_event("main", ["docs/spec.md"]),
+      @actrun.new_push_event("main", ["docs/spec.md"]),
     ),
     content="false",
   )
@@ -3939,16 +3941,16 @@ test "compat docs: parse push paths-ignore fixture" {
     content="[\"docs/**\", \"*.md\"]",
   )
   @debug.debug_inspect(
-    matches_push_trigger(
+    @actrun.matches_push_trigger(
       workflow.trigger,
-      new_push_event("main", ["docs/spec.txt", "README.md"]),
+      @actrun.new_push_event("main", ["docs/spec.txt", "README.md"]),
     ),
     content="false",
   )
   @debug.debug_inspect(
-    matches_push_trigger(
+    @actrun.matches_push_trigger(
       workflow.trigger,
-      new_push_event("main", ["docs/spec.txt", "src/lib.mbt"]),
+      @actrun.new_push_event("main", ["docs/spec.txt", "src/lib.mbt"]),
     ),
     content="true",
   )
@@ -3962,8 +3964,8 @@ async test "compat docs: composite action outputs propagated to steps context" {
     "composite-action-output",
     copy_fixture=true,
   )
-  let lowered = lower_push_workflow_in_workspace(workflow, workspace)
-  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let lowered = @actrun.lower_push_workflow_in_workspace(workflow, workspace)
+  let report = @actrun.execute_lowered_native(lowered, workspace_root=workspace)
   let task = compat_expect_task_report(report, "test/check")
 
   @debug.debug_inspect(
@@ -3996,8 +3998,8 @@ async test "compat docs: composite action multiple outputs from different inner 
     "composite-action-multi-output",
     copy_fixture=true,
   )
-  let lowered = lower_push_workflow_in_workspace(workflow, workspace)
-  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let lowered = @actrun.lower_push_workflow_in_workspace(workflow, workspace)
+  let report = @actrun.execute_lowered_native(lowered, workspace_root=workspace)
   let task = compat_expect_task_report(report, "test/check")
 
   @debug.debug_inspect(
@@ -4030,8 +4032,8 @@ async test "compat docs: composite action outcome and conclusion are accessible"
     "composite-action-outcome",
     copy_fixture=true,
   )
-  let lowered = lower_push_workflow_in_workspace(workflow, workspace)
-  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let lowered = @actrun.lower_push_workflow_in_workspace(workflow, workspace)
+  let report = @actrun.execute_lowered_native(lowered, workspace_root=workspace)
   let task = compat_expect_task_report(report, "test/check")
 
   @debug.debug_inspect(
@@ -4064,8 +4066,8 @@ async test "compat docs: composite action output used in downstream if condition
     "composite-action-if-output",
     copy_fixture=true,
   )
-  let lowered = lower_push_workflow_in_workspace(workflow, workspace)
-  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let lowered = @actrun.lower_push_workflow_in_workspace(workflow, workspace)
+  let report = @actrun.execute_lowered_native(lowered, workspace_root=workspace)
   let deploy = compat_expect_task_report(report, "test/deploy")
   let skip = compat_expect_task_report(report, "test/skip")
 
@@ -4105,8 +4107,8 @@ async test "compat docs: GITHUB_ENV set inside composite action is visible to su
     "composite-action-env",
     copy_fixture=true,
   )
-  let lowered = lower_push_workflow_in_workspace(workflow, workspace)
-  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let lowered = @actrun.lower_push_workflow_in_workspace(workflow, workspace)
+  let report = @actrun.execute_lowered_native(lowered, workspace_root=workspace)
   let task = compat_expect_task_report(report, "test/check")
 
   @debug.debug_inspect(
@@ -4137,8 +4139,8 @@ async test "compat docs: step outputs preserve special characters" {
   let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
     "output-special-chars",
   )
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
     push_event=compat_push_event_fixture(fixture),
   )
@@ -4188,8 +4190,8 @@ async test "compat docs: heredoc output preserves special characters" {
   let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
     "output-heredoc-special",
   )
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
     push_event=compat_push_event_fixture(fixture),
   )
@@ -4222,8 +4224,8 @@ async test "compat docs: GITHUB_ENV with special characters" {
   let (fixture, workflow, workspace) = compat_prepare_docs_fixture_auto(
     "env-special-chars",
   )
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
     push_event=compat_push_event_fixture(fixture),
   )

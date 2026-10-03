@@ -1,5 +1,7 @@
 ///|
-fn expect_parsed_push_event(result : PushEventJsonParseResult) -> PushEvent {
+fn expect_parsed_push_event(
+  result : @actrun.PushEventJsonParseResult,
+) -> @actrun.PushEvent {
   match result.event {
     Some(event) => event
     None => abort(result.errors.join("\n"))
@@ -28,7 +30,7 @@ test "push event json: parses minimal GitHub push payload" {
     #|    }
     #|  ]
     #|}
-  let result = parse_github_push_event_json(payload)
+  let result = @actrun.parse_github_push_event_json(payload)
   let event = expect_parsed_push_event(result)
 
   @debug.debug_inspect(result.errors, content="[]")
@@ -81,7 +83,7 @@ test "push event json: falls back to head_commit changed paths" {
     #|    "removed": ["old.txt"]
     #|  }
     #|}
-  let result = parse_github_push_event_json(payload)
+  let result = @actrun.parse_github_push_event_json(payload)
   let event = expect_parsed_push_event(result)
 
   @debug.debug_inspect(result.errors, content="[]")
@@ -93,7 +95,7 @@ test "push event json: falls back to head_commit changed paths" {
 
 ///|
 test "push event json: reports missing required fields" {
-  let result = parse_github_push_event_json("{\"repository\":{}}")
+  let result = @actrun.parse_github_push_event_json("{\"repository\":{}}")
 
   @debug.debug_inspect(
     result.errors,

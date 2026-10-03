@@ -54,3 +54,6 @@ pub impl Fs for MemFs with fn remove(self, path) {
   self.files.remove(path)
   had
 }
+
+///|
+pub extend MemFs with Fs::{read, mkdir, remove, is_dir, exists, write}

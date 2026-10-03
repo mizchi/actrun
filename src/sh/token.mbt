@@ -141,6 +141,9 @@ pub fn Token::is_redirect(self : Token) -> Bool {
 }
 
 ///|
+pub extend TokenKind with Show::{to_string, output}
+
+///|
 pub impl Show for TokenKind with fn output(self, logger) {
   match self {
     Word(s) => logger.write_string("Word(\{s})")

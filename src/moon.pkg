@@ -1,4 +1,5 @@
 import {
+  "moonbitlang/core/debug",
   "mizchi/bit_core" @bit,
   "mizchi/bit_diff" @bitdiff,
   "mizchi/bit_lib" @bitlib,

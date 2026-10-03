@@ -43,15 +43,17 @@ async test "executor: injects runner env variables" {
     #|  exit 1
     #|fi
 
-  let workflow = new_workflow("ci", [
-    new_job("build", [new_run_step("env", script, shell=Some("bash"))]),
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job("build", [
+      @actrun.new_run_step("env", script, shell=Some("bash")),
+    ]),
   ])
 
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
   )
-  let task = find_task_run_report(report, "build/env").unwrap()
+  let task = @actrun.find_task_run_report(report, "build/env").unwrap()
 
   @debug.debug_inspect(report.ok, content="true")
   @debug.debug_inspect(

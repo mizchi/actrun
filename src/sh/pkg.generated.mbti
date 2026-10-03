@@ -14,6 +14,8 @@ pub suberror LexError {
   UnexpectedChar(Char, Int, Int)
   InvalidEscape(Char, Int, Int)
 }
+pub fn LexError::output(Self, &Logger) -> Unit
+pub fn LexError::to_string(Self) -> String
 pub impl Show for LexError
 
 pub suberror ParseError {
@@ -22,6 +24,8 @@ pub suberror ParseError {
   ExpectedWord(Int, Int)
   UnexpectedEof
 }
+pub fn ParseError::output(Self, &Logger) -> Unit
+pub fn ParseError::to_string(Self) -> String
 pub impl Show for ParseError
 
 // Types and methods
@@ -200,6 +204,8 @@ pub enum TokenKind {
   Assignment(String, String)
   Eof
 }
+pub fn TokenKind::output(Self, &Logger) -> Unit
+pub fn TokenKind::to_string(Self) -> String
 pub impl Show for TokenKind
 
 pub struct WhileClause {

@@ -358,8 +358,11 @@ fn prepare_custom_registry_action_root_for_executor(
 }
 
 ///|
-fn expect_task_report(report : WorkflowRunReport, id : String) -> TaskRunReport {
-  match find_task_run_report(report, id) {
+fn expect_task_report(
+  report : @actrun.WorkflowRunReport,
+  id : String,
+) -> @actrun.TaskRunReport {
+  match @actrun.find_task_run_report(report, id) {
     Some(item) => item
     None => abort("missing task report: " + id)
   }
@@ -367,10 +370,10 @@ fn expect_task_report(report : WorkflowRunReport, id : String) -> TaskRunReport 
 
 ///|
 fn expect_step_report(
-  report : WorkflowRunReport,
+  report : @actrun.WorkflowRunReport,
   id : String,
-) -> WorkflowStepReport {
-  match find_workflow_step_report(report, id) {
+) -> @actrun.WorkflowStepReport {
+  match @actrun.find_workflow_step_report(report, id) {
     Some(item) => item
     None => abort("missing step report: " + id)
   }
@@ -383,25 +386,27 @@ async test "executor: run step in working directory with env" {
   ensure_dir(workspace + "/packages")
   ensure_dir(workspace + "/packages/app")
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "build",
       [
-        new_run_step("write", "printf '%s' \"$GREETING\" > result.txt", env={
-          "GREETING": "hello",
-        }),
+        @actrun.new_run_step(
+          "write",
+          "printf '%s' \"$GREETING\" > result.txt",
+          env={ "GREETING": "hello" },
+        ),
       ],
-      defaults=new_run_defaults(
+      defaults=@actrun.new_run_defaults(
         shell=Some("bash"),
         working_directory=Some("packages/app"),
       ),
     ),
   ])
 
-  let lowered = lower_push_workflow(workflow)
+  let lowered = @actrun.lower_push_workflow(workflow)
   @debug.debug_inspect(lowered.errors, content="[]")
 
-  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let report = @actrun.execute_lowered_native(lowered, workspace_root=workspace)
   @debug.debug_inspect(report.ok, content="true")
   @debug.debug_inspect(
     report.state,
@@ -441,16 +446,16 @@ async test "executor: run step in working directory with env" {
 async test "executor: default shell runs multiline script" {
   let workspace = prepare_workspace("executor-multiline")
 
-  let workflow = new_workflow("ci", [
-    new_job("build", [
-      new_run_step(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job("build", [
+      @actrun.new_run_step(
         "multi", "printf 'a\\n' > lines.txt\nprintf 'b\\n' >> lines.txt\ncat lines.txt",
       ),
     ]),
   ])
 
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
   )
 
@@ -481,16 +486,16 @@ async test "executor: default shell runs multiline script" {
 async test "executor: explicit sh shell runs script" {
   let workspace = prepare_workspace("executor-sh")
 
-  let workflow = new_workflow("ci", [
-    new_job("build", [
-      new_run_step("sh", "printf '%s' \"$MESSAGE\"", shell=Some("sh"), env={
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job("build", [
+      @actrun.new_run_step("sh", "printf '%s' \"$MESSAGE\"", shell=Some("sh"), env={
         "MESSAGE": "hello-sh",
       }),
     ]),
   ])
 
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
   )
 
@@ -515,9 +520,9 @@ async test "executor: explicit sh shell runs script" {
 async test "executor: custom shell template runs temp script file" {
   let workspace = prepare_workspace("executor-shell-template")
 
-  let workflow = new_workflow("ci", [
-    new_job("build", [
-      new_run_step(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job("build", [
+      @actrun.new_run_step(
         "custom",
         "printf '%s' custom-shell-ok",
         shell=Some("sh {0}"),
@@ -525,8 +530,8 @@ async test "executor: custom shell template runs temp script file" {
     ]),
   ])
 
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
   )
 
@@ -551,9 +556,9 @@ async test "executor: custom shell template runs temp script file" {
 async test "executor: injects basic github runner env" {
   let workspace = prepare_workspace("executor-github-env")
 
-  let workflow = new_workflow("ci", [
-    new_job("build", [
-      new_run_step(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job("build", [
+      @actrun.new_run_step(
         "env",
         "printf '%s|%s|%s|%s|%s' \"$GITHUB_WORKSPACE\" \"$GITHUB_WORKFLOW\" \"$GITHUB_JOB\" \"$CI\" \"$GITHUB_ACTIONS\"",
         shell=Some("bash"),
@@ -561,8 +566,8 @@ async test "executor: injects basic github runner env" {
     ]),
   ])
 
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
   )
 
@@ -587,11 +592,11 @@ async test "executor: injects basic github runner env" {
 async test "executor: env context is available in script expressions" {
   let workspace = prepare_workspace("executor-env-context-script")
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "build",
       [
-        new_run_step(
+        @actrun.new_run_step(
           "script_expr",
           "printf '%s|%s' \"${{ env.GREETING }}\" \"${{ env.STEP_ONLY }}\"",
           shell=Some("bash"),
@@ -602,8 +607,8 @@ async test "executor: env context is available in script expressions" {
     ),
   ])
 
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
   )
 
@@ -628,20 +633,23 @@ async test "executor: env context is available in script expressions" {
 async test "executor: env context is available in env expressions" {
   let workspace = prepare_workspace("executor-env-context-env")
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "build",
       [
-        new_run_step("read", "printf '%s' \"$MESSAGE\"", shell=Some("bash"), env={
-          "MESSAGE": "${{ env.GREETING }}",
-        }),
+        @actrun.new_run_step(
+          "read",
+          "printf '%s' \"$MESSAGE\"",
+          shell=Some("bash"),
+          env={ "MESSAGE": "${{ env.GREETING }}" },
+        ),
       ],
       env={ "GREETING": "from-job-env" },
     ),
   ])
 
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
   )
 
@@ -666,19 +674,23 @@ async test "executor: env context is available in env expressions" {
 async test "executor: GITHUB_ENV updates later steps in job" {
   let workspace = prepare_workspace("executor-github-env-file")
 
-  let workflow = new_workflow("ci", [
-    new_job("build", [
-      new_run_step(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job("build", [
+      @actrun.new_run_step(
         "export",
         "printf '%s=%s\\n' GREETING from-env-file >> \"$GITHUB_ENV\"",
         shell=Some("bash"),
       ),
-      new_run_step("read", "printf '%s' \"$GREETING\"", shell=Some("bash")),
+      @actrun.new_run_step(
+        "read",
+        "printf '%s' \"$GREETING\"",
+        shell=Some("bash"),
+      ),
     ]),
   ])
 
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
   )
 
@@ -703,14 +715,14 @@ async test "executor: GITHUB_ENV updates later steps in job" {
 async test "executor: env context sees GITHUB_ENV updates from prior steps" {
   let workspace = prepare_workspace("executor-env-context-github-env")
 
-  let workflow = new_workflow("ci", [
-    new_job("build", [
-      new_run_step(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job("build", [
+      @actrun.new_run_step(
         "export",
         "printf '%s=%s\\n' GREETING from-github-env >> \"$GITHUB_ENV\"",
         shell=Some("bash"),
       ),
-      new_run_step(
+      @actrun.new_run_step(
         "read",
         "printf '%s' \"${{ env.GREETING }}\"",
         shell=Some("bash"),
@@ -718,8 +730,8 @@ async test "executor: env context sees GITHUB_ENV updates from prior steps" {
     ]),
   ])
 
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
   )
 
@@ -751,15 +763,15 @@ async test "executor: GITHUB_ENV multiline updates later steps in job" {
     #|__ENV__
     #|EOF
 
-  let workflow = new_workflow("ci", [
-    new_job("build", [
-      new_run_step("export", export_script, shell=Some("bash")),
-      new_run_step("read", "printf '%s' \"$MULTI\"", shell=Some("bash")),
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job("build", [
+      @actrun.new_run_step("export", export_script, shell=Some("bash")),
+      @actrun.new_run_step("read", "printf '%s' \"$MULTI\"", shell=Some("bash")),
     ]),
   ])
 
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
   )
 
@@ -792,15 +804,15 @@ async test "executor: GITHUB_PATH updates later steps in job" {
     #|chmod +x tools/hello-tool
     #|printf '%s\n' "$(pwd)/tools" >> "$GITHUB_PATH"
 
-  let workflow = new_workflow("ci", [
-    new_job("build", [
-      new_run_step("export_path", export_script, shell=Some("bash")),
-      new_run_step("read_path", "hello-tool", shell=Some("bash")),
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job("build", [
+      @actrun.new_run_step("export_path", export_script, shell=Some("bash")),
+      @actrun.new_run_step("read_path", "hello-tool", shell=Some("bash")),
     ]),
   ])
 
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
   )
 
@@ -825,14 +837,14 @@ async test "executor: GITHUB_PATH updates later steps in job" {
 async test "executor: GITHUB_OUTPUT updates later steps in job" {
   let workspace = prepare_workspace("executor-github-output-file")
 
-  let workflow = new_workflow("ci", [
-    new_job("build", [
-      new_run_step(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job("build", [
+      @actrun.new_run_step(
         "produce",
         "printf '%s=%s\\n' greeting from-output >> \"$GITHUB_OUTPUT\"",
         shell=Some("bash"),
       ),
-      new_run_step(
+      @actrun.new_run_step(
         "consume",
         "printf '%s' \"${{ steps.produce.outputs.greeting }}\"",
         shell=Some("bash"),
@@ -840,8 +852,8 @@ async test "executor: GITHUB_OUTPUT updates later steps in job" {
     ]),
   ])
 
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
   )
 
@@ -873,10 +885,10 @@ async test "executor: GITHUB_OUTPUT multiline updates later steps in job" {
     #|__OUTPUT__
     #|EOF
 
-  let workflow = new_workflow("ci", [
-    new_job("build", [
-      new_run_step("produce", export_script, shell=Some("bash")),
-      new_run_step(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job("build", [
+      @actrun.new_run_step("produce", export_script, shell=Some("bash")),
+      @actrun.new_run_step(
         "consume",
         "printf '%s' \"${{ steps.produce.outputs.message }}\"",
         shell=Some("bash"),
@@ -884,8 +896,8 @@ async test "executor: GITHUB_OUTPUT multiline updates later steps in job" {
     ]),
   ])
 
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
   )
 
@@ -910,9 +922,9 @@ async test "executor: GITHUB_OUTPUT multiline updates later steps in job" {
 async test "executor: GITHUB_STEP_SUMMARY stores step summary content" {
   let workspace = prepare_workspace("executor-github-step-summary")
 
-  let workflow = new_workflow("ci", [
-    new_job("build", [
-      new_run_step(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job("build", [
+      @actrun.new_run_step(
         "summary",
         "printf 'hello summary' >> \"$GITHUB_STEP_SUMMARY\"",
         shell=Some("bash"),
@@ -920,8 +932,8 @@ async test "executor: GITHUB_STEP_SUMMARY stores step summary content" {
     ]),
   ])
 
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
   )
 
@@ -946,21 +958,24 @@ async test "executor: GITHUB_STEP_SUMMARY stores step summary content" {
 async test "executor: step outputs are available in env expressions" {
   let workspace = prepare_workspace("executor-github-output-env")
 
-  let workflow = new_workflow("ci", [
-    new_job("build", [
-      new_run_step(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job("build", [
+      @actrun.new_run_step(
         "produce",
         "printf '%s=%s\\n' message env-output >> \"$GITHUB_OUTPUT\"",
         shell=Some("bash"),
       ),
-      new_run_step("consume", "printf '%s' \"$MESSAGE\"", shell=Some("bash"), env={
-        "MESSAGE": "${{ steps.produce.outputs.message }}",
-      }),
+      @actrun.new_run_step(
+        "consume",
+        "printf '%s' \"$MESSAGE\"",
+        shell=Some("bash"),
+        env={ "MESSAGE": "${{ steps.produce.outputs.message }}" },
+      ),
     ]),
   ])
 
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
   )
 
@@ -986,21 +1001,21 @@ async test "executor: checkout step is a no-op success" {
   let workspace = prepare_workspace("executor-checkout")
   @xfs.write_string_to_file(workspace + "/tracked.txt", "from workspace")
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "build",
       [
-        new_uses_step("checkout", "actions/checkout@v4"),
-        new_run_step("verify", "cat tracked.txt"),
+        @actrun.new_uses_step("checkout", "actions/checkout@v4"),
+        @actrun.new_run_step("verify", "cat tracked.txt"),
       ],
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
   ])
 
-  let lowered = lower_push_workflow(workflow)
+  let lowered = @actrun.lower_push_workflow(workflow)
   @debug.debug_inspect(lowered.errors, content="[]")
 
-  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let report = @actrun.execute_lowered_native(lowered, workspace_root=workspace)
   @debug.debug_inspect(report.ok, content="true")
   @debug.debug_inspect(
     report.state,
@@ -1049,28 +1064,28 @@ async test "executor: checkout supports path and sparse-checkout" {
   @xfs.write_string_to_file(workspace + "/LICENSE", "license")
   @xfs.write_string_to_file(workspace + "/.github/workflows/ci.yml", "name: ci")
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "build",
       [
-        new_uses_step("checkout", "actions/checkout@v4", with_values={
+        @actrun.new_uses_step("checkout", "actions/checkout@v4", with_values={
           "path": "repo",
           "sparse-checkout": "README.md\n.github",
         }),
-        new_run_step(
+        @actrun.new_run_step(
           "verify",
           "printf '%s|%s|%s' \"$(test -f repo/README.md && echo yes || echo no)\" \"$(test -f repo/.github/workflows/ci.yml && echo yes || echo no)\" \"$(test -f repo/LICENSE && echo yes || echo no)\"",
           shell=Some("bash"),
         ),
       ],
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
   ])
 
-  let lowered = lower_push_workflow(workflow)
+  let lowered = @actrun.lower_push_workflow(workflow)
   @debug.debug_inspect(lowered.errors, content="[]")
 
-  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let report = @actrun.execute_lowered_native(lowered, workspace_root=workspace)
   @debug.debug_inspect(report.ok, content="true")
 
   let checkout = expect_task_report(report, "build/checkout")
@@ -1105,29 +1120,29 @@ async test "executor: checkout supports sparse-checkout cone mode false" {
   @xfs.write_string_to_file(workspace + "/LICENSE", "license")
   @xfs.write_string_to_file(workspace + "/.github/workflows/ci.yml", "name: ci")
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "build",
       [
-        new_uses_step("checkout", "actions/checkout@v4", with_values={
+        @actrun.new_uses_step("checkout", "actions/checkout@v4", with_values={
           "path": "repo",
           "sparse-checkout": "README.md\n.github",
           "sparse-checkout-cone-mode": "false",
         }),
-        new_run_step(
+        @actrun.new_run_step(
           "verify",
           "printf '%s|%s|%s' \"$(test -f repo/README.md && echo yes || echo no)\" \"$(test -f repo/.github/workflows/ci.yml && echo yes || echo no)\" \"$(test -f repo/LICENSE && echo yes || echo no)\"",
           shell=Some("bash"),
         ),
       ],
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
   ])
 
-  let lowered = lower_push_workflow(workflow)
+  let lowered = @actrun.lower_push_workflow(workflow)
   @debug.debug_inspect(lowered.errors, content="[]")
 
-  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let report = @actrun.execute_lowered_native(lowered, workspace_root=workspace)
   @debug.debug_inspect(report.ok, content="true")
 
   let checkout = expect_task_report(report, "build/checkout")
@@ -1159,25 +1174,25 @@ async test "executor: checkout default fetch-depth clones shallow history" {
     "executor-checkout-fetch-depth",
   )
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "build",
       [
-        new_uses_step("checkout", "actions/checkout@v4"),
-        new_run_step(
+        @actrun.new_uses_step("checkout", "actions/checkout@v4"),
+        @actrun.new_run_step(
           "verify",
           "printf '%s|%s' \"$(git rev-list --count HEAD)\" \"$(test -f .git/shallow && echo yes || echo no)\"",
           shell=Some("bash"),
         ),
       ],
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
   ])
 
-  let lowered = lower_push_workflow(workflow)
+  let lowered = @actrun.lower_push_workflow(workflow)
   @debug.debug_inspect(lowered.errors, content="[]")
 
-  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let report = @actrun.execute_lowered_native(lowered, workspace_root=workspace)
   @debug.debug_inspect(report.ok, content="true")
   @debug.debug_inspect(
     report.state,
@@ -1208,27 +1223,27 @@ async test "executor: checkout fetch-depth zero keeps full history" {
     "executor-checkout-fetch-depth-zero",
   )
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "build",
       [
-        new_uses_step("checkout", "actions/checkout@v4", with_values={
+        @actrun.new_uses_step("checkout", "actions/checkout@v4", with_values={
           "fetch-depth": "0",
         }),
-        new_run_step(
+        @actrun.new_run_step(
           "verify",
           "printf '%s|%s' \"$(git rev-list --count HEAD)\" \"$(test -f .git/shallow && echo yes || echo no)\"",
           shell=Some("bash"),
         ),
       ],
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
   ])
 
-  let lowered = lower_push_workflow(workflow)
+  let lowered = @actrun.lower_push_workflow(workflow)
   @debug.debug_inspect(lowered.errors, content="[]")
 
-  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let report = @actrun.execute_lowered_native(lowered, workspace_root=workspace)
   @debug.debug_inspect(report.ok, content="true")
   @debug.debug_inspect(
     report.state,
@@ -1259,28 +1274,28 @@ async test "executor: checkout ref selects requested branch" {
     "executor-checkout-ref",
   )
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "build",
       [
-        new_uses_step("checkout", "actions/checkout@v4", with_values={
+        @actrun.new_uses_step("checkout", "actions/checkout@v4", with_values={
           "path": "repo",
           "ref": "feature",
         }),
-        new_run_step(
+        @actrun.new_run_step(
           "verify",
           "printf '%s|%s|%s|%s' \"$(cat repo/tracked.txt)\" \"$(git -C repo branch --show-current)\" \"$(git -C repo rev-list --count HEAD)\" \"$(test -f repo/.git/shallow && echo yes || echo no)\"",
           shell=Some("bash"),
         ),
       ],
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
   ])
 
-  let lowered = lower_push_workflow(workflow)
+  let lowered = @actrun.lower_push_workflow(workflow)
   @debug.debug_inspect(lowered.errors, content="[]")
 
-  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let report = @actrun.execute_lowered_native(lowered, workspace_root=workspace)
   @debug.debug_inspect(report.ok, content="true")
   @debug.debug_inspect(
     report.state,
@@ -1312,26 +1327,26 @@ async test "executor: checkout clean default preserves untracked files in local 
   )
   @xfs.write_string_to_file(workspace + "/scratch.txt", "keep?")
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "build",
       [
-        new_uses_step("checkout", "actions/checkout@v4"),
-        new_run_step(
+        @actrun.new_uses_step("checkout", "actions/checkout@v4"),
+        @actrun.new_run_step(
           "verify",
           "printf '%s|%s' \"$(test -f scratch.txt && echo yes || echo no)\" \"$(test -f .git/shallow && echo yes || echo no)\"",
           shell=Some("bash"),
         ),
       ],
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
   ])
 
-  let lowered = lower_push_workflow(workflow)
+  let lowered = @actrun.lower_push_workflow(workflow)
   @debug.debug_inspect(lowered.errors, content="[]")
 
   // In local mode, untracked files are preserved to avoid data loss
-  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let report = @actrun.execute_lowered_native(lowered, workspace_root=workspace)
   @debug.debug_inspect(report.ok, content="true")
   @debug.debug_inspect(
     report.state,
@@ -1356,31 +1371,31 @@ async test "executor: local checkout does not delete files created between check
     "executor-checkout-no-delete-between",
   )
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "build",
       [
-        new_uses_step("checkout1", "actions/checkout@v4"),
-        new_run_step(
+        @actrun.new_uses_step("checkout1", "actions/checkout@v4"),
+        @actrun.new_run_step(
           "create",
           "echo precious > my-file.txt",
           shell=Some("bash"),
         ),
-        new_uses_step("checkout2", "actions/checkout@v4"),
-        new_run_step(
+        @actrun.new_uses_step("checkout2", "actions/checkout@v4"),
+        @actrun.new_run_step(
           "verify",
           "printf '%s' \"$(test -f my-file.txt && echo survived || echo deleted)\"",
           shell=Some("bash"),
         ),
       ],
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
   ])
 
-  let lowered = lower_push_workflow(workflow)
+  let lowered = @actrun.lower_push_workflow(workflow)
   @debug.debug_inspect(lowered.errors, content="[]")
 
-  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let report = @actrun.execute_lowered_native(lowered, workspace_root=workspace)
   @debug.debug_inspect(report.ok, content="true")
   @debug.debug_inspect(
     report.state,
@@ -1407,23 +1422,23 @@ async test "executor: local checkout preserves .git directory" {
   // Record original .git state
   let has_git_before = @xfs.path_exists(workspace + "/.git")
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "build",
       [
-        new_uses_step("checkout", "actions/checkout@v4"),
-        new_run_step(
+        @actrun.new_uses_step("checkout", "actions/checkout@v4"),
+        @actrun.new_run_step(
           "verify",
           "printf '%s' \"$(test -d .git && echo exists || echo missing)\"",
           shell=Some("bash"),
         ),
       ],
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
   ])
 
-  let lowered = lower_push_workflow(workflow)
-  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let lowered = @actrun.lower_push_workflow(workflow)
+  let report = @actrun.execute_lowered_native(lowered, workspace_root=workspace)
   @debug.debug_inspect(report.ok, content="true")
   @debug.debug_inspect(
     expect_task_report(report, "build/verify").stdout
@@ -1447,27 +1462,27 @@ async test "executor: checkout clean false preserves untracked files" {
   )
   @xfs.write_string_to_file(workspace + "/scratch.txt", "keep")
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "build",
       [
-        new_uses_step("checkout", "actions/checkout@v4", with_values={
+        @actrun.new_uses_step("checkout", "actions/checkout@v4", with_values={
           "clean": "false",
         }),
-        new_run_step(
+        @actrun.new_run_step(
           "verify",
           "printf '%s|%s|%s' \"$(cat tracked.txt)\" \"$(test -f scratch.txt && echo yes || echo no)\" \"$(test -f .git/shallow && echo yes || echo no)\"",
           shell=Some("bash"),
         ),
       ],
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
   ])
 
-  let lowered = lower_push_workflow(workflow)
+  let lowered = @actrun.lower_push_workflow(workflow)
   @debug.debug_inspect(lowered.errors, content="[]")
 
-  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let report = @actrun.execute_lowered_native(lowered, workspace_root=workspace)
   @debug.debug_inspect(report.ok, content="true")
   @debug.debug_inspect(
     report.state,
@@ -1492,33 +1507,33 @@ async test "executor: isolated checkout clean default deletes files created betw
     "executor-checkout-clean-default-isolated",
   )
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "build",
       [
-        new_uses_step("checkout1", "actions/checkout@v4", with_values={
+        @actrun.new_uses_step("checkout1", "actions/checkout@v4", with_values={
           "clean": "false",
         }),
-        new_run_step(
+        @actrun.new_run_step(
           "create",
           "printf '%s' 'remove-me' > scratch.txt",
           shell=Some("bash"),
         ),
-        new_uses_step("checkout2", "actions/checkout@v4"),
-        new_run_step(
+        @actrun.new_uses_step("checkout2", "actions/checkout@v4"),
+        @actrun.new_run_step(
           "verify",
           "printf '%s' \"$(test -f scratch.txt && echo survived || echo deleted)\"",
           shell=Some("bash"),
         ),
       ],
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
   ])
 
-  let lowered = lower_push_workflow(workflow)
+  let lowered = @actrun.lower_push_workflow(workflow)
   @debug.debug_inspect(lowered.errors, content="[]")
 
-  let report = execute_lowered_native(
+  let report = @actrun.execute_lowered_native(
     lowered,
     workspace_root=workspace,
     allow_destructive_checkout_clean=true,
@@ -1547,33 +1562,33 @@ async test "executor: isolated checkout clean false preserves files between chec
     "executor-checkout-clean-false-isolated",
   )
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "build",
       [
-        new_uses_step("checkout1", "actions/checkout@v4"),
-        new_run_step(
+        @actrun.new_uses_step("checkout1", "actions/checkout@v4"),
+        @actrun.new_run_step(
           "create",
           "printf '%s' 'keep-me' > scratch.txt",
           shell=Some("bash"),
         ),
-        new_uses_step("checkout2", "actions/checkout@v4", with_values={
+        @actrun.new_uses_step("checkout2", "actions/checkout@v4", with_values={
           "clean": "false",
         }),
-        new_run_step(
+        @actrun.new_run_step(
           "verify",
           "printf '%s' \"$(test -f scratch.txt && echo survived || echo deleted)\"",
           shell=Some("bash"),
         ),
       ],
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
   ])
 
-  let lowered = lower_push_workflow(workflow)
+  let lowered = @actrun.lower_push_workflow(workflow)
   @debug.debug_inspect(lowered.errors, content="[]")
 
-  let report = execute_lowered_native(
+  let report = @actrun.execute_lowered_native(
     lowered,
     workspace_root=workspace,
     allow_destructive_checkout_clean=true,
@@ -1607,27 +1622,27 @@ async test "executor: checkout materialized on host is visible to job container 
     tools_root, docker_log_path,
   )
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "build",
       [
-        new_uses_step("checkout", "actions/checkout@v4"),
-        new_run_step(
+        @actrun.new_uses_step("checkout", "actions/checkout@v4"),
+        @actrun.new_run_step(
           "verify",
           "printf '%s|%s' \"$(cat tracked.txt)\" \"$(test -f .git/shallow && echo yes || echo no)\"",
           shell=Some("bash"),
         ),
       ],
       env={ "ACTRUN_DOCKER_BIN": docker_bin },
-      container=Some(new_job_container_spec("node:20-bookworm")),
-      defaults=new_run_defaults(shell=Some("bash")),
+      container=Some(@actrun.new_job_container_spec("node:20-bookworm")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
   ])
 
-  let lowered = lower_push_workflow(workflow)
+  let lowered = @actrun.lower_push_workflow(workflow)
   @debug.debug_inspect(lowered.errors, content="[]")
 
-  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let report = @actrun.execute_lowered_native(lowered, workspace_root=workspace)
   @debug.debug_inspect(report.ok, content="true")
   @debug.debug_inspect(
     report.state,
@@ -1661,26 +1676,26 @@ async test "executor: checkout submodules true initializes direct submodules" {
     recursive=true,
   )
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "build",
       [
-        new_uses_step("checkout", "actions/checkout@v4", with_values={
+        @actrun.new_uses_step("checkout", "actions/checkout@v4", with_values={
           "path": "repo",
           "submodules": "true",
         }),
-        new_run_step(
+        @actrun.new_run_step(
           "verify",
           "printf '%s|%s' \"$(test -f repo/deps/child/child.txt && echo yes || echo no)\" \"$(test -f repo/deps/child/vendor/grand/grand.txt && echo yes || echo no)\"",
           shell=Some("bash"),
         ),
       ],
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
   ])
 
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
   )
   @debug.debug_inspect(report.ok, content="true")
@@ -1702,26 +1717,26 @@ async test "executor: checkout submodules recursive initializes nested submodule
     recursive=true,
   )
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "build",
       [
-        new_uses_step("checkout", "actions/checkout@v4", with_values={
+        @actrun.new_uses_step("checkout", "actions/checkout@v4", with_values={
           "path": "repo",
           "submodules": "recursive",
         }),
-        new_run_step(
+        @actrun.new_run_step(
           "verify",
           "printf '%s|%s' \"$(test -f repo/deps/child/child.txt && echo yes || echo no)\" \"$(test -f repo/deps/child/vendor/grand/grand.txt && echo yes || echo no)\"",
           shell=Some("bash"),
         ),
       ],
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
   ])
 
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
   )
   @debug.debug_inspect(report.ok, content="true")
@@ -1755,21 +1770,21 @@ async test "executor: cached github repo composite action runs inner steps" {
     #|      shell: bash
   @xfs.write_string_to_file(action_root + "/action.yml", action_src)
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "build",
       [
-        new_uses_step("remote", "mizchi-test/demo-action/composite@v1"),
-        new_run_step("verify", "cat remote.txt"),
+        @actrun.new_uses_step("remote", "mizchi-test/demo-action/composite@v1"),
+        @actrun.new_run_step("verify", "cat remote.txt"),
       ],
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
   ])
 
-  let lowered = lower_push_workflow_in_workspace(workflow, workspace)
+  let lowered = @actrun.lower_push_workflow_in_workspace(workflow, workspace)
   @debug.debug_inspect(lowered.errors, content="[]")
 
-  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let report = @actrun.execute_lowered_native(lowered, workspace_root=workspace)
   @debug.debug_inspect(report.ok, content="true")
   let write = expect_task_report(report, "build/remote__write")
   @debug.debug_inspect(
@@ -1814,27 +1829,27 @@ async test "executor: cached github repo node action runs main entrypoint" {
   let node_log_path = workspace + "/node.log"
   let node_bin = test_support_prepare_fake_node_bin(workspace, node_log_path)
 
-  let workflow = new_workflow(
+  let workflow = @actrun.new_workflow(
     "ci",
     [
-      new_job(
+      @actrun.new_job(
         "build",
         [
-          new_uses_step("remote", "mizchi-test/node-action/action@v1", with_values={
+          @actrun.new_uses_step("remote", "mizchi-test/node-action/action@v1", with_values={
             "message": "from-input",
           }),
-          new_run_step("verify", "cat node.txt"),
+          @actrun.new_run_step("verify", "cat node.txt"),
         ],
-        defaults=new_run_defaults(shell=Some("bash")),
+        defaults=@actrun.new_run_defaults(shell=Some("bash")),
       ),
     ],
     env={ "ACTRUN_NODE_BIN": node_bin },
   )
 
-  let lowered = lower_push_workflow_in_workspace(workflow, workspace)
+  let lowered = @actrun.lower_push_workflow_in_workspace(workflow, workspace)
   @debug.debug_inspect(lowered.errors, content="[]")
 
-  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let report = @actrun.execute_lowered_native(lowered, workspace_root=workspace)
   @debug.debug_inspect(report.ok, content="true")
   let remote = expect_task_report(report, "build/remote")
   @debug.debug_inspect(
@@ -1882,15 +1897,19 @@ async test "executor: job container runs github repo node action via docker adap
     workspace, docker_log_path,
   )
 
-  let workflow = new_workflow(
+  let workflow = @actrun.new_workflow(
     "ci",
     [
-      new_job(
+      @actrun.new_job(
         "build",
-        [new_uses_step("remote", "mizchi-test/node-action-container/action@v1")],
-        defaults=new_run_defaults(shell=Some("bash")),
+        [
+          @actrun.new_uses_step(
+            "remote", "mizchi-test/node-action-container/action@v1",
+          ),
+        ],
+        defaults=@actrun.new_run_defaults(shell=Some("bash")),
         container=Some(
-          new_job_container_spec("alpine:3.21", env={
+          @actrun.new_job_container_spec("alpine:3.21", env={
             "CONTAINER_FLAG": "from-container",
           }),
         ),
@@ -1899,10 +1918,10 @@ async test "executor: job container runs github repo node action via docker adap
     env={ "ACTRUN_DOCKER_BIN": docker_bin, "ACTRUN_NODE_BIN": node_bin },
   )
 
-  let lowered = lower_push_workflow_in_workspace(workflow, workspace)
+  let lowered = @actrun.lower_push_workflow_in_workspace(workflow, workspace)
   @debug.debug_inspect(lowered.errors, content="[]")
 
-  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let report = @actrun.execute_lowered_native(lowered, workspace_root=workspace)
   @debug.debug_inspect(report.ok, content="true")
   let remote = expect_task_report(report, "build/remote")
   @debug.debug_inspect(
@@ -1946,29 +1965,29 @@ async test "executor: github repo action cache miss fetches and runs inner steps
     workspace, action_src, log_path,
   )
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "build",
       [
-        new_uses_step("remote", action_uses),
-        new_run_step("verify", "cat remote.txt"),
+        @actrun.new_uses_step("remote", action_uses),
+        @actrun.new_run_step("verify", "cat remote.txt"),
       ],
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
   ])
 
-  let prefetch = prefetch_workflow_github_actions_native(
+  let prefetch = @actrun.prefetch_workflow_github_actions_native(
     workflow,
     workspace,
     git_bin=Some(git_path),
   )
-  let lowered = lower_push_workflow_in_workspace(workflow, workspace)
+  let lowered = @actrun.lower_push_workflow_in_workspace(workflow, workspace)
 
   @debug.debug_inspect(prefetch.errors, content="[]")
   @debug.debug_inspect(prefetch.fetched.length(), content="1")
   @debug.debug_inspect(lowered.errors, content="[]")
 
-  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let report = @actrun.execute_lowered_native(lowered, workspace_root=workspace)
   @debug.debug_inspect(report.ok, content="true")
   @debug.assert_eq(
     @xfs.path_exists(repo_cache_root + "/composite/action.yml"),
@@ -1994,19 +2013,19 @@ async test "executor: builtin checkout alias works" {
   let workspace = prepare_workspace("executor-builtin-checkout")
   @xfs.write_string_to_file(workspace + "/tracked.txt", "from builtin")
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "build",
       [
-        new_uses_step("checkout", "builtin://checkout"),
-        new_run_step("verify", "cat tracked.txt"),
+        @actrun.new_uses_step("checkout", "builtin://checkout"),
+        @actrun.new_run_step("verify", "cat tracked.txt"),
       ],
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
   ])
 
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
   )
 
@@ -2038,42 +2057,42 @@ async test "executor: builtin checkout alias works" {
 async test "executor: builtin artifact actions upload and download files" {
   let workspace = prepare_workspace("executor-builtin-artifacts")
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "build",
       [
-        new_run_step(
+        @actrun.new_run_step(
           "write",
           "mkdir -p dist\nprintf '%s' alpha > dist/alpha.txt\nprintf '%s' beta > dist/beta.txt",
           shell=Some("bash"),
         ),
-        new_uses_step("upload", "actions/upload-artifact@v4", with_values={
+        @actrun.new_uses_step("upload", "actions/upload-artifact@v4", with_values={
           "name": "bundle",
           "path": "dist/alpha.txt\ndist/beta.txt",
         }),
-        new_run_step(
+        @actrun.new_run_step(
           "remove",
           "rm -f dist/alpha.txt dist/beta.txt",
           shell=Some("bash"),
         ),
-        new_uses_step("download", "actions/download-artifact@v4", with_values={
+        @actrun.new_uses_step("download", "actions/download-artifact@v4", with_values={
           "name": "bundle",
           "path": "restored",
         }),
-        new_run_step(
+        @actrun.new_run_step(
           "verify",
           "printf '%s|%s' \"$(cat restored/alpha.txt)\" \"$(cat restored/beta.txt)\"",
           shell=Some("bash"),
         ),
       ],
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
   ])
 
-  let lowered = lower_push_workflow(workflow)
+  let lowered = @actrun.lower_push_workflow(workflow)
   @debug.debug_inspect(lowered.errors, content="[]")
 
-  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let report = @actrun.execute_lowered_native(lowered, workspace_root=workspace)
   @debug.debug_inspect(report.ok, content="true")
 
   let upload = expect_task_report(report, "build/upload")
@@ -2114,44 +2133,44 @@ async test "executor: builtin artifact actions roundtrip across job container ru
     workspace, docker_log_path,
   )
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "build",
       [
-        new_run_step(
+        @actrun.new_run_step(
           "write",
           "mkdir -p dist\nprintf '%s' alpha > dist/alpha.txt\nprintf '%s' beta > dist/beta.txt",
           shell=Some("bash"),
         ),
-        new_uses_step("upload", "actions/upload-artifact@v4", with_values={
+        @actrun.new_uses_step("upload", "actions/upload-artifact@v4", with_values={
           "name": "bundle",
           "path": "dist/alpha.txt\ndist/beta.txt",
         }),
-        new_run_step(
+        @actrun.new_run_step(
           "remove",
           "rm -f dist/alpha.txt dist/beta.txt",
           shell=Some("bash"),
         ),
-        new_uses_step("download", "actions/download-artifact@v4", with_values={
+        @actrun.new_uses_step("download", "actions/download-artifact@v4", with_values={
           "name": "bundle",
           "path": "restored",
         }),
-        new_run_step(
+        @actrun.new_run_step(
           "verify",
           "printf '%s|%s' \"$(cat restored/alpha.txt)\" \"$(cat restored/beta.txt)\"",
           shell=Some("bash"),
         ),
       ],
       env={ "ACTRUN_DOCKER_BIN": docker_bin },
-      container=Some(new_job_container_spec("node:20-bookworm")),
-      defaults=new_run_defaults(shell=Some("bash")),
+      container=Some(@actrun.new_job_container_spec("node:20-bookworm")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
   ])
 
-  let lowered = lower_push_workflow(workflow)
+  let lowered = @actrun.lower_push_workflow(workflow)
   @debug.debug_inspect(lowered.errors, content="[]")
 
-  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let report = @actrun.execute_lowered_native(lowered, workspace_root=workspace)
   @debug.debug_inspect(report.ok, content="true")
   @debug.debug_inspect(
     expect_task_report(report, "build/upload").status,
@@ -2182,11 +2201,11 @@ async test "executor: builtin artifact actions roundtrip across job container ru
 async test "executor: builtin artifact actions support directory, wildcard, and download-all" {
   let workspace = prepare_workspace("executor-builtin-artifacts-glob-dir")
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "build",
       [
-        new_run_step(
+        @actrun.new_run_step(
           "write",
           "mkdir -p pkg/nested logs/linux logs/macos\n" +
           "printf '%s' root > pkg/root.txt\n" +
@@ -2195,19 +2214,19 @@ async test "executor: builtin artifact actions support directory, wildcard, and 
           "printf '%s' macos > logs/macos/out.txt\n",
           shell=Some("bash"),
         ),
-        new_uses_step("upload_dir", "actions/upload-artifact@v4", with_values={
+        @actrun.new_uses_step("upload_dir", "actions/upload-artifact@v4", with_values={
           "name": "dir-bundle",
           "path": "pkg/",
         }),
-        new_uses_step("upload_glob", "actions/upload-artifact@v4", with_values={
+        @actrun.new_uses_step("upload_glob", "actions/upload-artifact@v4", with_values={
           "name": "log-bundle",
           "path": "logs/*/out.txt",
         }),
-        new_run_step("remove", "rm -rf pkg logs", shell=Some("bash")),
-        new_uses_step("download_all", "actions/download-artifact@v4", with_values={
+        @actrun.new_run_step("remove", "rm -rf pkg logs", shell=Some("bash")),
+        @actrun.new_uses_step("download_all", "actions/download-artifact@v4", with_values={
           "path": "restored",
         }),
-        new_run_step(
+        @actrun.new_run_step(
           "verify",
           "printf '%s|%s|%s|%s|%s|%s' " +
           "\"$(cat restored/dir-bundle/root.txt)\" " +
@@ -2219,14 +2238,14 @@ async test "executor: builtin artifact actions support directory, wildcard, and 
           shell=Some("bash"),
         ),
       ],
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
   ])
 
-  let lowered = lower_push_workflow(workflow)
+  let lowered = @actrun.lower_push_workflow(workflow)
   @debug.debug_inspect(lowered.errors, content="[]")
 
-  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let report = @actrun.execute_lowered_native(lowered, workspace_root=workspace)
   @debug.debug_inspect(report.ok, content="true")
 
   @debug.debug_inspect(
@@ -2267,20 +2286,20 @@ async test "executor: builtin artifact actions support directory, wildcard, and 
 async test "executor: upload-artifact if-no-files-found supports warn ignore and error" {
   let workspace = prepare_workspace("executor-builtin-artifacts-missing")
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "build",
       [
-        new_uses_step("upload_warn", "actions/upload-artifact@v4", with_values={
+        @actrun.new_uses_step("upload_warn", "actions/upload-artifact@v4", with_values={
           "name": "warn-bundle",
           "path": "missing/*.txt",
         }),
-        new_uses_step("upload_ignore", "actions/upload-artifact@v4", with_values={
+        @actrun.new_uses_step("upload_ignore", "actions/upload-artifact@v4", with_values={
           "name": "ignore-bundle",
           "path": "missing/*.txt",
           "if-no-files-found": "ignore",
         }),
-        new_uses_step(
+        @actrun.new_uses_step(
           "upload_error",
           "actions/upload-artifact@v4",
           with_values={
@@ -2290,7 +2309,7 @@ async test "executor: upload-artifact if-no-files-found supports warn ignore and
           },
           continue_on_error="true",
         ),
-        new_run_step(
+        @actrun.new_run_step(
           "verify",
           "printf '%s|%s|%s|%s|%s|%s' " +
           "\"${{ steps.upload_warn.outcome }}\" " +
@@ -2302,14 +2321,14 @@ async test "executor: upload-artifact if-no-files-found supports warn ignore and
           shell=Some("bash"),
         ),
       ],
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
   ])
 
-  let lowered = lower_push_workflow(workflow)
+  let lowered = @actrun.lower_push_workflow(workflow)
   @debug.debug_inspect(lowered.errors, content="[]")
 
-  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let report = @actrun.execute_lowered_native(lowered, workspace_root=workspace)
   @debug.debug_inspect(report.ok, content="true")
 
   let upload_warn = expect_task_report(report, "build/upload_warn")
@@ -2353,41 +2372,49 @@ async test "executor: upload-artifact if-no-files-found supports warn ignore and
 async test "executor: upload-artifact overwrite replaces existing artifact only when enabled" {
   let workspace = prepare_workspace("executor-builtin-artifacts-overwrite")
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "build",
       [
-        new_run_step(
+        @actrun.new_run_step(
           "write_first",
           "mkdir -p dist\nprintf '%s' alpha > dist/value.txt",
           shell=Some("bash"),
         ),
-        new_uses_step("upload_first", "actions/upload-artifact@v4", with_values={
+        @actrun.new_uses_step("upload_first", "actions/upload-artifact@v4", with_values={
           "name": "bundle",
           "path": "dist/value.txt",
         }),
-        new_run_step(
+        @actrun.new_run_step(
           "write_second",
           "printf '%s' beta > dist/value.txt",
           shell=Some("bash"),
         ),
-        new_uses_step(
+        @actrun.new_uses_step(
           "upload_again",
           "actions/upload-artifact@v4",
           with_values={ "name": "bundle", "path": "dist/value.txt" },
           continue_on_error="true",
         ),
-        new_uses_step("upload_overwrite", "actions/upload-artifact@v4", with_values={
-          "name": "bundle",
-          "path": "dist/value.txt",
-          "overwrite": "true",
-        }),
-        new_run_step("remove", "rm -f dist/value.txt", shell=Some("bash")),
-        new_uses_step("download", "actions/download-artifact@v4", with_values={
+        @actrun.new_uses_step(
+          "upload_overwrite",
+          "actions/upload-artifact@v4",
+          with_values={
+            "name": "bundle",
+            "path": "dist/value.txt",
+            "overwrite": "true",
+          },
+        ),
+        @actrun.new_run_step(
+          "remove",
+          "rm -f dist/value.txt",
+          shell=Some("bash"),
+        ),
+        @actrun.new_uses_step("download", "actions/download-artifact@v4", with_values={
           "name": "bundle",
           "path": "restored",
         }),
-        new_run_step(
+        @actrun.new_run_step(
           "verify",
           "printf '%s|%s|%s' " +
           "\"${{ steps.upload_again.outcome }}\" " +
@@ -2396,14 +2423,14 @@ async test "executor: upload-artifact overwrite replaces existing artifact only 
           shell=Some("bash"),
         ),
       ],
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
   ])
 
-  let lowered = lower_push_workflow(workflow)
+  let lowered = @actrun.lower_push_workflow(workflow)
   @debug.debug_inspect(lowered.errors, content="[]")
 
-  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let report = @actrun.execute_lowered_native(lowered, workspace_root=workspace)
   @debug.debug_inspect(report.ok, content="true")
 
   @debug.debug_inspect(
@@ -2444,11 +2471,11 @@ async test "executor: upload-artifact overwrite replaces existing artifact only 
 async test "executor: download-artifact merge-multiple flattens download-all into one directory" {
   let workspace = prepare_workspace("executor-builtin-artifacts-merge-multiple")
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "build",
       [
-        new_run_step(
+        @actrun.new_run_step(
           "write",
           "mkdir -p pkg/nested logs/linux logs/macos\n" +
           "printf '%s' root > pkg/root.txt\n" +
@@ -2457,20 +2484,20 @@ async test "executor: download-artifact merge-multiple flattens download-all int
           "printf '%s' macos > logs/macos/out.txt\n",
           shell=Some("bash"),
         ),
-        new_uses_step("upload_dir", "actions/upload-artifact@v4", with_values={
+        @actrun.new_uses_step("upload_dir", "actions/upload-artifact@v4", with_values={
           "name": "dir-bundle",
           "path": "pkg/",
         }),
-        new_uses_step("upload_glob", "actions/upload-artifact@v4", with_values={
+        @actrun.new_uses_step("upload_glob", "actions/upload-artifact@v4", with_values={
           "name": "log-bundle",
           "path": "logs/*/out.txt",
         }),
-        new_run_step("remove", "rm -rf pkg logs", shell=Some("bash")),
-        new_uses_step("download_all", "actions/download-artifact@v4", with_values={
+        @actrun.new_run_step("remove", "rm -rf pkg logs", shell=Some("bash")),
+        @actrun.new_uses_step("download_all", "actions/download-artifact@v4", with_values={
           "path": "restored",
           "merge-multiple": "true",
         }),
-        new_run_step(
+        @actrun.new_run_step(
           "verify",
           "printf '%s|%s|%s|%s|%s|%s' " +
           "\"$(cat restored/root.txt)\" " +
@@ -2482,14 +2509,14 @@ async test "executor: download-artifact merge-multiple flattens download-all int
           shell=Some("bash"),
         ),
       ],
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
   ])
 
-  let lowered = lower_push_workflow(workflow)
+  let lowered = @actrun.lower_push_workflow(workflow)
   @debug.debug_inspect(lowered.errors, content="[]")
 
-  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let report = @actrun.execute_lowered_native(lowered, workspace_root=workspace)
   @debug.debug_inspect(report.ok, content="true")
 
   @debug.debug_inspect(
@@ -2519,45 +2546,45 @@ async test "executor: builtin cache save and restore roundtrip across jobs" {
   let workspace = prepare_workspace("executor-builtin-cache")
   test_support_remove_tree(executor_test_cache_store_root(workspace))
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "save",
       [
-        new_run_step(
+        @actrun.new_run_step(
           "write",
           "mkdir -p cache-dir\nprintf '%s' ocean > cache-dir/value.txt",
           shell=Some("bash"),
         ),
-        new_uses_step("save", "actions/cache/save@v4", with_values={
+        @actrun.new_uses_step("save", "actions/cache/save@v4", with_values={
           "key": "compat-cache-v1",
           "path": "cache-dir",
         }),
       ],
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
-    new_job(
+    @actrun.new_job(
       "restore",
       [
-        new_run_step("clear", "rm -rf cache-dir", shell=Some("bash")),
-        new_uses_step("restore", "actions/cache/restore@v4", with_values={
+        @actrun.new_run_step("clear", "rm -rf cache-dir", shell=Some("bash")),
+        @actrun.new_uses_step("restore", "actions/cache/restore@v4", with_values={
           "key": "compat-cache-v1",
           "path": "cache-dir",
         }),
-        new_run_step(
+        @actrun.new_run_step(
           "verify",
           "printf '%s|%s' \"${{ steps.restore.outputs.cache-hit }}\" \"$(cat cache-dir/value.txt)\"",
           shell=Some("bash"),
         ),
       ],
       needs=["save"],
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
   ])
 
-  let lowered = lower_push_workflow(workflow)
+  let lowered = @actrun.lower_push_workflow(workflow)
   @debug.debug_inspect(lowered.errors, content="[]")
 
-  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let report = @actrun.execute_lowered_native(lowered, workspace_root=workspace)
   @debug.debug_inspect(report.ok, content="true")
 
   let save = expect_task_report(report, "save/save")
@@ -2595,50 +2622,50 @@ async test "executor: builtin cache action auto-saves on miss and restores on ne
   let workspace = prepare_workspace("executor-builtin-cache-main")
   test_support_remove_tree(executor_test_cache_store_root(workspace))
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "save",
       [
-        new_run_step(
+        @actrun.new_run_step(
           "write",
           "mkdir -p cache-dir\nprintf '%s' ocean > cache-dir/value.txt",
           shell=Some("bash"),
         ),
-        new_uses_step("cache", "actions/cache@v4", with_values={
+        @actrun.new_uses_step("cache", "actions/cache@v4", with_values={
           "key": "compat-cache-main-v1",
           "path": "cache-dir",
         }),
-        new_run_step(
+        @actrun.new_run_step(
           "check_miss",
           "if [ -n \"${{ steps.cache.outputs.cache-hit }}\" ]; then exit 1; fi",
           shell=Some("bash"),
         ),
       ],
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
-    new_job(
+    @actrun.new_job(
       "restore",
       [
-        new_run_step("clear", "rm -rf cache-dir", shell=Some("bash")),
-        new_uses_step("restore_cache", "actions/cache@v4", with_values={
+        @actrun.new_run_step("clear", "rm -rf cache-dir", shell=Some("bash")),
+        @actrun.new_uses_step("restore_cache", "actions/cache@v4", with_values={
           "key": "compat-cache-main-v1",
           "path": "cache-dir",
         }),
-        new_run_step(
+        @actrun.new_run_step(
           "verify",
           "printf '%s|%s' \"${{ steps.restore_cache.outputs.cache-hit }}\" \"$(cat cache-dir/value.txt)\"",
           shell=Some("bash"),
         ),
       ],
       needs=["save"],
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
   ])
 
-  let lowered = lower_push_workflow(workflow)
+  let lowered = @actrun.lower_push_workflow(workflow)
   @debug.debug_inspect(lowered.errors, content="[]")
 
-  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let report = @actrun.execute_lowered_native(lowered, workspace_root=workspace)
   @debug.debug_inspect(report.ok, content="true")
 
   let cache = expect_task_report(report, "save/cache")
@@ -2694,38 +2721,38 @@ async test "executor: builtin cache action auto-saves across job container jobs"
     workspace, docker_log_path,
   )
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "save",
       [
-        new_run_step(
+        @actrun.new_run_step(
           "write",
           "mkdir -p cache-dir\nprintf '%s' ocean > cache-dir/value.txt",
           shell=Some("bash"),
         ),
-        new_uses_step("cache", "actions/cache@v4", with_values={
+        @actrun.new_uses_step("cache", "actions/cache@v4", with_values={
           "key": "compat-cache-container-v1",
           "path": "cache-dir",
         }),
-        new_run_step(
+        @actrun.new_run_step(
           "check_miss",
           "if [ -n \"${{ steps.cache.outputs.cache-hit }}\" ]; then exit 1; fi",
           shell=Some("bash"),
         ),
       ],
       env={ "ACTRUN_DOCKER_BIN": docker_bin },
-      container=Some(new_job_container_spec("alpine:3.21")),
-      defaults=new_run_defaults(shell=Some("bash")),
+      container=Some(@actrun.new_job_container_spec("alpine:3.21")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
-    new_job(
+    @actrun.new_job(
       "restore",
       [
-        new_run_step("clear", "rm -rf cache-dir", shell=Some("bash")),
-        new_uses_step("cache", "actions/cache@v4", with_values={
+        @actrun.new_run_step("clear", "rm -rf cache-dir", shell=Some("bash")),
+        @actrun.new_uses_step("cache", "actions/cache@v4", with_values={
           "key": "compat-cache-container-v1",
           "path": "cache-dir",
         }),
-        new_run_step(
+        @actrun.new_run_step(
           "verify",
           "printf '%s|%s' \"${{ steps.cache.outputs.cache-hit }}\" \"$(cat cache-dir/value.txt)\"",
           shell=Some("bash"),
@@ -2733,15 +2760,15 @@ async test "executor: builtin cache action auto-saves across job container jobs"
       ],
       needs=["save"],
       env={ "ACTRUN_DOCKER_BIN": docker_bin },
-      container=Some(new_job_container_spec("alpine:3.21")),
-      defaults=new_run_defaults(shell=Some("bash")),
+      container=Some(@actrun.new_job_container_spec("alpine:3.21")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
   ])
 
-  let lowered = lower_push_workflow(workflow)
+  let lowered = @actrun.lower_push_workflow(workflow)
   @debug.debug_inspect(lowered.errors, content="[]")
 
-  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let report = @actrun.execute_lowered_native(lowered, workspace_root=workspace)
   @debug.debug_inspect(report.ok, content="true")
 
   @debug.debug_inspect(
@@ -2780,46 +2807,46 @@ async test "executor: builtin cache restore uses restore-keys fallback and repor
   let workspace = prepare_workspace("executor-builtin-cache-restore-keys")
   test_support_remove_tree(executor_test_cache_store_root(workspace))
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "save",
       [
-        new_run_step(
+        @actrun.new_run_step(
           "write",
           "mkdir -p cache-dir\nprintf '%s' ocean > cache-dir/value.txt",
           shell=Some("bash"),
         ),
-        new_uses_step("save", "actions/cache/save@v4", with_values={
+        @actrun.new_uses_step("save", "actions/cache/save@v4", with_values={
           "key": "compat-cache-restore-v1",
           "path": "cache-dir",
         }),
       ],
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
-    new_job(
+    @actrun.new_job(
       "restore",
       [
-        new_run_step("clear", "rm -rf cache-dir", shell=Some("bash")),
-        new_uses_step("restore", "actions/cache/restore@v4", with_values={
+        @actrun.new_run_step("clear", "rm -rf cache-dir", shell=Some("bash")),
+        @actrun.new_uses_step("restore", "actions/cache/restore@v4", with_values={
           "key": "compat-cache-restore-v2",
           "restore-keys": "compat-cache-restore-\n",
           "path": "cache-dir",
         }),
-        new_run_step(
+        @actrun.new_run_step(
           "verify",
           "printf '%s|%s' \"${{ steps.restore.outputs.cache-hit }}\" \"$(cat cache-dir/value.txt)\"",
           shell=Some("bash"),
         ),
       ],
       needs=["save"],
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
   ])
 
-  let lowered = lower_push_workflow(workflow)
+  let lowered = @actrun.lower_push_workflow(workflow)
   @debug.debug_inspect(lowered.errors, content="[]")
 
-  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let report = @actrun.execute_lowered_native(lowered, workspace_root=workspace)
   @debug.debug_inspect(report.ok, content="true")
 
   let restore = expect_task_report(report, "restore/restore")
@@ -2850,63 +2877,63 @@ async test "executor: builtin cache action saves new primary key after restore-k
   let workspace = prepare_workspace("executor-builtin-cache-restore-keys-main")
   test_support_remove_tree(executor_test_cache_store_root(workspace))
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "seed",
       [
-        new_run_step(
+        @actrun.new_run_step(
           "write",
           "mkdir -p cache-dir\nprintf '%s' ocean > cache-dir/value.txt",
           shell=Some("bash"),
         ),
-        new_uses_step("save", "actions/cache/save@v4", with_values={
+        @actrun.new_uses_step("save", "actions/cache/save@v4", with_values={
           "key": "compat-cache-main-restore-v1",
           "path": "cache-dir",
         }),
       ],
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
-    new_job(
+    @actrun.new_job(
       "restore",
       [
-        new_run_step("clear", "rm -rf cache-dir", shell=Some("bash")),
-        new_uses_step("cache", "actions/cache@v4", with_values={
+        @actrun.new_run_step("clear", "rm -rf cache-dir", shell=Some("bash")),
+        @actrun.new_uses_step("cache", "actions/cache@v4", with_values={
           "key": "compat-cache-main-restore-v2",
           "restore-keys": "compat-cache-main-restore-\n",
           "path": "cache-dir",
         }),
-        new_run_step(
+        @actrun.new_run_step(
           "mutate",
           "printf '%s' wave > cache-dir/value.txt",
           shell=Some("bash"),
         ),
       ],
       needs=["seed"],
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
-    new_job(
+    @actrun.new_job(
       "verify",
       [
-        new_run_step("clear", "rm -rf cache-dir", shell=Some("bash")),
-        new_uses_step("cache", "actions/cache@v4", with_values={
+        @actrun.new_run_step("clear", "rm -rf cache-dir", shell=Some("bash")),
+        @actrun.new_uses_step("cache", "actions/cache@v4", with_values={
           "key": "compat-cache-main-restore-v2",
           "path": "cache-dir",
         }),
-        new_run_step(
+        @actrun.new_run_step(
           "verify",
           "printf '%s|%s' \"${{ steps.cache.outputs.cache-hit }}\" \"$(cat cache-dir/value.txt)\"",
           shell=Some("bash"),
         ),
       ],
       needs=["restore"],
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
   ])
 
-  let lowered = lower_push_workflow(workflow)
+  let lowered = @actrun.lower_push_workflow(workflow)
   @debug.debug_inspect(lowered.errors, content="[]")
 
-  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let report = @actrun.execute_lowered_native(lowered, workspace_root=workspace)
   @debug.debug_inspect(report.ok, content="true")
 
   let cache = expect_task_report(report, "restore/cache")
@@ -2944,58 +2971,62 @@ async test "executor: builtin cache restore-keys prefers the most recent prefix 
   let workspace = prepare_workspace("executor-builtin-cache-restore-latest")
   test_support_remove_tree(executor_test_cache_store_root(workspace))
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "save_old",
       [
-        new_run_step(
+        @actrun.new_run_step(
           "write",
           "mkdir -p cache-dir\nprintf '%s' ocean > cache-dir/value.txt",
           shell=Some("bash"),
         ),
-        new_uses_step("save", "actions/cache/save@v4", with_values={
+        @actrun.new_uses_step("save", "actions/cache/save@v4", with_values={
           "key": "compat-cache-restore-latest-v1",
           "path": "cache-dir",
         }),
       ],
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
-    new_job(
+    @actrun.new_job(
       "save_new",
       [
-        new_run_step(
+        @actrun.new_run_step(
           "write",
           "mkdir -p cache-dir\nprintf '%s' wave > cache-dir/value.txt",
           shell=Some("bash"),
         ),
-        new_uses_step("save", "actions/cache/save@v4", with_values={
+        @actrun.new_uses_step("save", "actions/cache/save@v4", with_values={
           "key": "compat-cache-restore-latest-v2",
           "path": "cache-dir",
         }),
       ],
       needs=["save_old"],
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
-    new_job(
+    @actrun.new_job(
       "restore",
       [
-        new_run_step("clear", "rm -rf cache-dir", shell=Some("bash")),
-        new_uses_step("restore", "actions/cache/restore@v4", with_values={
+        @actrun.new_run_step("clear", "rm -rf cache-dir", shell=Some("bash")),
+        @actrun.new_uses_step("restore", "actions/cache/restore@v4", with_values={
           "key": "compat-cache-restore-latest-v3",
           "restore-keys": "compat-cache-restore-latest-\n",
           "path": "cache-dir",
         }),
-        new_run_step("verify", "cat cache-dir/value.txt", shell=Some("bash")),
+        @actrun.new_run_step(
+          "verify",
+          "cat cache-dir/value.txt",
+          shell=Some("bash"),
+        ),
       ],
       needs=["save_new"],
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
   ])
 
-  let lowered = lower_push_workflow(workflow)
+  let lowered = @actrun.lower_push_workflow(workflow)
   @debug.debug_inspect(lowered.errors, content="[]")
 
-  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let report = @actrun.execute_lowered_native(lowered, workspace_root=workspace)
   @debug.debug_inspect(report.ok, content="true")
 
   let verify = expect_task_report(report, "restore/verify")
@@ -3021,46 +3052,46 @@ async test "executor: builtin cache restore lookup-only reports exact hit withou
   )
   test_support_remove_tree(executor_test_cache_store_root(workspace))
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "save",
       [
-        new_run_step(
+        @actrun.new_run_step(
           "write",
           "mkdir -p cache-dir\nprintf '%s' ocean > cache-dir/value.txt",
           shell=Some("bash"),
         ),
-        new_uses_step("save", "actions/cache/save@v4", with_values={
+        @actrun.new_uses_step("save", "actions/cache/save@v4", with_values={
           "key": "compat-cache-lookup-only-v1",
           "path": "cache-dir",
         }),
       ],
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
-    new_job(
+    @actrun.new_job(
       "restore",
       [
-        new_run_step("clear", "rm -rf cache-dir", shell=Some("bash")),
-        new_uses_step("restore", "actions/cache/restore@v4", with_values={
+        @actrun.new_run_step("clear", "rm -rf cache-dir", shell=Some("bash")),
+        @actrun.new_uses_step("restore", "actions/cache/restore@v4", with_values={
           "key": "compat-cache-lookup-only-v1",
           "path": "cache-dir",
           "lookup-only": "true",
         }),
-        new_run_step(
+        @actrun.new_run_step(
           "verify",
           "printf '%s|%s' \"${{ steps.restore.outputs.cache-hit }}\" \"$(if [ -f cache-dir/value.txt ]; then printf yes; else printf no; fi)\"",
           shell=Some("bash"),
         ),
       ],
       needs=["save"],
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
   ])
 
-  let lowered = lower_push_workflow(workflow)
+  let lowered = @actrun.lower_push_workflow(workflow)
   @debug.debug_inspect(lowered.errors, content="[]")
 
-  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let report = @actrun.execute_lowered_native(lowered, workspace_root=workspace)
   @debug.debug_inspect(report.ok, content="true")
 
   let restore = expect_task_report(report, "restore/restore")
@@ -3091,68 +3122,68 @@ async test "executor: builtin cache lookup-only skips restore but still saves pr
   let workspace = prepare_workspace("executor-builtin-cache-lookup-only-main")
   test_support_remove_tree(executor_test_cache_store_root(workspace))
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "seed",
       [
-        new_run_step(
+        @actrun.new_run_step(
           "write",
           "mkdir -p cache-dir\nprintf '%s' ocean > cache-dir/value.txt",
           shell=Some("bash"),
         ),
-        new_uses_step("save", "actions/cache/save@v4", with_values={
+        @actrun.new_uses_step("save", "actions/cache/save@v4", with_values={
           "key": "compat-cache-lookup-main-v1",
           "path": "cache-dir",
         }),
       ],
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
-    new_job(
+    @actrun.new_job(
       "promote",
       [
-        new_run_step(
+        @actrun.new_run_step(
           "write",
           "mkdir -p cache-dir\nprintf '%s' wave > cache-dir/value.txt",
           shell=Some("bash"),
         ),
-        new_uses_step("cache", "actions/cache@v4", with_values={
+        @actrun.new_uses_step("cache", "actions/cache@v4", with_values={
           "key": "compat-cache-lookup-main-v2",
           "restore-keys": "compat-cache-lookup-main-\n",
           "path": "cache-dir",
           "lookup-only": "true",
         }),
-        new_run_step(
+        @actrun.new_run_step(
           "verify_lookup",
           "printf '%s|%s' \"${{ steps.cache.outputs.cache-hit }}\" \"$(cat cache-dir/value.txt)\"",
           shell=Some("bash"),
         ),
       ],
       needs=["seed"],
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
-    new_job(
+    @actrun.new_job(
       "verify",
       [
-        new_run_step("clear", "rm -rf cache-dir", shell=Some("bash")),
-        new_uses_step("cache", "actions/cache@v4", with_values={
+        @actrun.new_run_step("clear", "rm -rf cache-dir", shell=Some("bash")),
+        @actrun.new_uses_step("cache", "actions/cache@v4", with_values={
           "key": "compat-cache-lookup-main-v2",
           "path": "cache-dir",
         }),
-        new_run_step(
+        @actrun.new_run_step(
           "verify",
           "printf '%s|%s' \"${{ steps.cache.outputs.cache-hit }}\" \"$(cat cache-dir/value.txt)\"",
           shell=Some("bash"),
         ),
       ],
       needs=["promote"],
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
   ])
 
-  let lowered = lower_push_workflow(workflow)
+  let lowered = @actrun.lower_push_workflow(workflow)
   @debug.debug_inspect(lowered.errors, content="[]")
 
-  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let report = @actrun.execute_lowered_native(lowered, workspace_root=workspace)
   @debug.debug_inspect(report.ok, content="true")
 
   let verify_lookup = expect_task_report(report, "promote/verify_lookup")
@@ -3198,11 +3229,11 @@ async test "executor: builtin cache restore fail-on-cache-miss fails exact miss"
   )
   test_support_remove_tree(executor_test_cache_store_root(workspace))
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "restore",
       [
-        new_uses_step(
+        @actrun.new_uses_step(
           "restore",
           "actions/cache/restore@v4",
           with_values={
@@ -3212,20 +3243,20 @@ async test "executor: builtin cache restore fail-on-cache-miss fails exact miss"
           },
           continue_on_error="true",
         ),
-        new_run_step(
+        @actrun.new_run_step(
           "verify",
           "printf '%s|%s|%s' \"${{ steps.restore.outcome }}\" \"${{ steps.restore.conclusion }}\" \"$(if [ -f cache-dir/value.txt ]; then printf yes; else printf no; fi)\"",
           shell=Some("bash"),
         ),
       ],
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
   ])
 
-  let lowered = lower_push_workflow(workflow)
+  let lowered = @actrun.lower_push_workflow(workflow)
   @debug.debug_inspect(lowered.errors, content="[]")
 
-  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let report = @actrun.execute_lowered_native(lowered, workspace_root=workspace)
   @debug.debug_inspect(report.ok, content="true")
 
   let restore = expect_task_report(report, "restore/restore")
@@ -3256,11 +3287,11 @@ async test "executor: builtin cache action fail-on-cache-miss fails exact miss" 
   let workspace = prepare_workspace("executor-builtin-cache-fail-on-miss-main")
   test_support_remove_tree(executor_test_cache_store_root(workspace))
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "restore",
       [
-        new_uses_step(
+        @actrun.new_uses_step(
           "cache",
           "actions/cache@v4",
           with_values={
@@ -3270,20 +3301,20 @@ async test "executor: builtin cache action fail-on-cache-miss fails exact miss" 
           },
           continue_on_error="true",
         ),
-        new_run_step(
+        @actrun.new_run_step(
           "verify",
           "printf '%s|%s' \"${{ steps.cache.outcome }}\" \"${{ steps.cache.conclusion }}\"",
           shell=Some("bash"),
         ),
       ],
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
   ])
 
-  let lowered = lower_push_workflow(workflow)
+  let lowered = @actrun.lower_push_workflow(workflow)
   @debug.debug_inspect(lowered.errors, content="[]")
 
-  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let report = @actrun.execute_lowered_native(lowered, workspace_root=workspace)
   @debug.debug_inspect(report.ok, content="true")
 
   let cache = expect_task_report(report, "restore/cache")
@@ -3317,28 +3348,28 @@ async test "executor: builtin setup-node exposes requested node version output a
     workspace, node_log_path, "24.9.0",
   )
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "build",
       [
-        new_uses_step("setup", "actions/setup-node@v4", with_values={
+        @actrun.new_uses_step("setup", "actions/setup-node@v4", with_values={
           "node-version": "20",
         }),
-        new_run_step(
+        @actrun.new_run_step(
           "verify",
           "printf '%s|%s' \"${{ steps.setup.outputs.node-version }}\" \"$(node --version)\"",
           shell=Some("bash"),
         ),
       ],
       env={ "ACTRUN_SETUP_NODE_BIN": fake_node },
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
   ])
 
-  let lowered = lower_push_workflow(workflow)
+  let lowered = @actrun.lower_push_workflow(workflow)
   @debug.debug_inspect(lowered.errors, content="[]")
 
-  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let report = @actrun.execute_lowered_native(lowered, workspace_root=workspace)
   @debug.debug_inspect(report.ok, content="true")
 
   let setup = expect_task_report(report, "build/setup")
@@ -3376,14 +3407,14 @@ async test "executor: builtin setup-node works in job container run step" {
     workspace, docker_log_path,
   )
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "build",
       [
-        new_uses_step("setup", "actions/setup-node@v4", with_values={
+        @actrun.new_uses_step("setup", "actions/setup-node@v4", with_values={
           "node-version": "20",
         }),
-        new_run_step(
+        @actrun.new_run_step(
           "verify",
           "printf '%s|%s' \"${{ steps.setup.outputs.node-version }}\" \"$(node --version)\"",
           shell=Some("bash"),
@@ -3393,15 +3424,15 @@ async test "executor: builtin setup-node works in job container run step" {
         "ACTRUN_SETUP_NODE_BIN": fake_node,
         "ACTRUN_DOCKER_BIN": docker_bin,
       },
-      container=Some(new_job_container_spec("node:20-bookworm")),
-      defaults=new_run_defaults(shell=Some("bash")),
+      container=Some(@actrun.new_job_container_spec("node:20-bookworm")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
   ])
 
-  let lowered = lower_push_workflow(workflow)
+  let lowered = @actrun.lower_push_workflow(workflow)
   @debug.debug_inspect(lowered.errors, content="[]")
 
-  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let report = @actrun.execute_lowered_native(lowered, workspace_root=workspace)
   @debug.debug_inspect(report.ok, content="true")
 
   let setup = expect_task_report(report, "build/setup")
@@ -3435,27 +3466,27 @@ async test "executor: builtin setup-node works in job container run step" {
 async test "executor: builtin setup-node registry-url exports npm auth config" {
   let workspace = prepare_workspace("executor-builtin-setup-node-registry")
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "build",
       [
-        new_uses_step("setup", "actions/setup-node@v4", with_values={
+        @actrun.new_uses_step("setup", "actions/setup-node@v4", with_values={
           "registry-url": "https://registry.npmjs.org",
         }),
-        new_run_step(
+        @actrun.new_run_step(
           "verify",
           "printf '%s|%s|%s' \"$NODE_AUTH_TOKEN\" \"$(test -f \"$NPM_CONFIG_USERCONFIG\" && echo yes || echo no)\" \"$(tr '\\n' ';' < \"$NPM_CONFIG_USERCONFIG\")\"",
           shell=Some("bash"),
         ),
       ],
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
   ])
 
-  let lowered = lower_push_workflow(workflow)
+  let lowered = @actrun.lower_push_workflow(workflow)
   @debug.debug_inspect(lowered.errors, content="[]")
 
-  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let report = @actrun.execute_lowered_native(lowered, workspace_root=workspace)
   @debug.debug_inspect(report.ok, content="true")
 
   let setup = expect_task_report(report, "build/setup")
@@ -3491,31 +3522,31 @@ async test "executor: builtin setup-node cache npm restores after deferred post 
   @xfs.write_string_to_file(workspace + "/package-lock.json", "{\"lock\":1}\n")
   test_support_remove_tree(executor_test_cache_store_root(workspace))
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "save",
       [
-        new_uses_step("setup", "actions/setup-node@v4", with_values={
+        @actrun.new_uses_step("setup", "actions/setup-node@v4", with_values={
           "node-version": "20",
           "cache": "npm",
         }),
-        new_run_step(
+        @actrun.new_run_step(
           "fill_cache",
           "mkdir -p \"$NPM_CONFIG_CACHE\"\nprintf '%s' ocean > \"$NPM_CONFIG_CACHE/value.txt\"\nprintf '%s' \"${{ steps.setup.outputs.cache-hit }}\" > miss.txt",
           shell=Some("bash"),
         ),
       ],
       env={ "ACTRUN_SETUP_NODE_BIN": fake_node },
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
-    new_job(
+    @actrun.new_job(
       "restore",
       [
-        new_uses_step("setup", "actions/setup-node@v4", with_values={
+        @actrun.new_uses_step("setup", "actions/setup-node@v4", with_values={
           "node-version": "20",
           "cache": "npm",
         }),
-        new_run_step(
+        @actrun.new_run_step(
           "verify",
           "printf '%s|%s|%s|%s' \"${{ steps.setup.outputs.cache-hit }}\" \"$(cat \"$NPM_CONFIG_CACHE/value.txt\")\" \"$(cat miss.txt)\" \"$(node --version)\"",
           shell=Some("bash"),
@@ -3523,14 +3554,14 @@ async test "executor: builtin setup-node cache npm restores after deferred post 
       ],
       needs=["save"],
       env={ "ACTRUN_SETUP_NODE_BIN": fake_node },
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
   ])
 
-  let lowered = lower_push_workflow(workflow)
+  let lowered = @actrun.lower_push_workflow(workflow)
   @debug.debug_inspect(lowered.errors, content="[]")
 
-  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let report = @actrun.execute_lowered_native(lowered, workspace_root=workspace)
   @debug.debug_inspect(report.ok, content="true")
 
   let setup = expect_task_report(report, "save/setup")
@@ -3596,23 +3627,23 @@ async test "executor: local composite action runs inner steps" {
     action_src,
   )
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "build",
       [
-        new_uses_step("setup", "./.github/actions/setup", with_values={
+        @actrun.new_uses_step("setup", "./.github/actions/setup", with_values={
           "message": "from-local-action",
         }),
-        new_run_step("verify", "cat local.txt"),
+        @actrun.new_run_step("verify", "cat local.txt"),
       ],
-      defaults=new_run_defaults(shell=Some("sh")),
+      defaults=@actrun.new_run_defaults(shell=Some("sh")),
     ),
   ])
 
-  let lowered = lower_push_workflow_in_workspace(workflow, workspace)
+  let lowered = @actrun.lower_push_workflow_in_workspace(workflow, workspace)
   @debug.debug_inspect(lowered.errors, content="[]")
 
-  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let report = @actrun.execute_lowered_native(lowered, workspace_root=workspace)
 
   @debug.debug_inspect(report.ok, content="true")
   @debug.debug_inspect(
@@ -3688,21 +3719,21 @@ async test "executor: local composite action supports nested uses" {
     action_src,
   )
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "build",
       [
-        new_uses_step("setup", "./.github/actions/setup"),
-        new_run_step("verify", "printf '%s' \"$(cat nested.txt)\""),
+        @actrun.new_uses_step("setup", "./.github/actions/setup"),
+        @actrun.new_run_step("verify", "printf '%s' \"$(cat nested.txt)\""),
       ],
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
   ])
 
-  let lowered = lower_push_workflow_in_workspace(workflow, workspace)
+  let lowered = @actrun.lower_push_workflow_in_workspace(workflow, workspace)
   @debug.debug_inspect(lowered.errors, content="[]")
 
-  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let report = @actrun.execute_lowered_native(lowered, workspace_root=workspace)
 
   @debug.debug_inspect(report.ok, content="true")
   let checkout = expect_task_report(report, "build/setup__checkout")
@@ -3776,14 +3807,14 @@ async test "executor: local composite action can build and run nested wasm actio
     action_src,
   )
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "build",
       [
-        new_uses_step("setup", "./.github/actions/setup", with_values={
+        @actrun.new_uses_step("setup", "./.github/actions/setup", with_values={
           "message": "from-composite",
         }),
-        new_run_step(
+        @actrun.new_run_step(
           "verify",
           "printf '%s' '${{ steps.setup.outputs.result }}'",
           shell=Some("bash"),
@@ -3794,14 +3825,14 @@ async test "executor: local composite action can build and run nested wasm actio
         "ACTRUN_WASM_ACTION_ROOT": wasm_root,
         "ACTRUN_WASM_SKIP_VALIDATE": "true",
       },
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
   ])
 
-  let lowered = lower_push_workflow_in_workspace(workflow, workspace)
+  let lowered = @actrun.lower_push_workflow_in_workspace(workflow, workspace)
   @debug.debug_inspect(lowered.errors, content="[]")
 
-  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let report = @actrun.execute_lowered_native(lowered, workspace_root=workspace)
 
   @debug.debug_inspect(report.ok, content="true")
   @debug.debug_inspect(
@@ -3852,18 +3883,18 @@ async test "executor: github action_path context is available in local composite
     action_src,
   )
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "build",
-      [new_uses_step("setup", "./.github/actions/setup")],
-      defaults=new_run_defaults(shell=Some("sh")),
+      [@actrun.new_uses_step("setup", "./.github/actions/setup")],
+      defaults=@actrun.new_run_defaults(shell=Some("sh")),
     ),
   ])
 
-  let lowered = lower_push_workflow_in_workspace(workflow, workspace)
+  let lowered = @actrun.lower_push_workflow_in_workspace(workflow, workspace)
   @debug.debug_inspect(lowered.errors, content="[]")
 
-  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let report = @actrun.execute_lowered_native(lowered, workspace_root=workspace)
 
   @debug.debug_inspect(report.ok, content="true")
   let prepare = expect_task_report(report, "build/setup__prepare")
@@ -3931,14 +3962,14 @@ async test "executor: local node action prefers sibling wasm module" {
     wasm_src,
   )
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "build",
       [
-        new_uses_step("runtime", "./.github/actions/wasi", with_values={
+        @actrun.new_uses_step("runtime", "./.github/actions/wasi", with_values={
           "message": "hello",
         }),
-        new_run_step(
+        @actrun.new_run_step(
           "verify",
           "printf '%s' '${{ steps.runtime.outputs.result }}'",
           shell=Some("bash"),
@@ -3949,14 +3980,14 @@ async test "executor: local node action prefers sibling wasm module" {
         "ACTRUN_WASM_BIN": wasm_bin,
         "ACTRUN_WASM_SKIP_VALIDATE": "true",
       },
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
   ])
 
-  let lowered = lower_push_workflow_in_workspace(workflow, workspace)
+  let lowered = @actrun.lower_push_workflow_in_workspace(workflow, workspace)
   @debug.debug_inspect(lowered.errors, content="[]")
 
-  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let report = @actrun.execute_lowered_native(lowered, workspace_root=workspace)
 
   @debug.debug_inspect(report.ok, content="true")
   let runtime = expect_task_report(report, "build/runtime")
@@ -4035,14 +4066,14 @@ async test "executor: local node action falls back to node when wasm runner is u
     wasm_src,
   )
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "build",
       [
-        new_uses_step("runtime", "./.github/actions/wasi", with_values={
+        @actrun.new_uses_step("runtime", "./.github/actions/wasi", with_values={
           "message": "hello",
         }),
-        new_run_step(
+        @actrun.new_run_step(
           "verify",
           "printf '%s' '${{ steps.runtime.outputs.result }}'",
           shell=Some("bash"),
@@ -4053,14 +4084,14 @@ async test "executor: local node action falls back to node when wasm runner is u
         "ACTRUN_WASM_BIN": missing_wasm_bin,
         "ACTRUN_WASM_SKIP_VALIDATE": "true",
       },
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
   ])
 
-  let lowered = lower_push_workflow_in_workspace(workflow, workspace)
+  let lowered = @actrun.lower_push_workflow_in_workspace(workflow, workspace)
   @debug.debug_inspect(lowered.errors, content="[]")
 
-  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let report = @actrun.execute_lowered_native(lowered, workspace_root=workspace)
 
   @debug.debug_inspect(report.ok, content="true")
   let runtime = expect_task_report(report, "build/runtime")
@@ -4109,25 +4140,25 @@ async test "executor: GITHUB_STATE is scoped to local composite action inner ste
     action_src,
   )
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "build",
       [
-        new_uses_step("setup", "./.github/actions/setup"),
-        new_run_step(
+        @actrun.new_uses_step("setup", "./.github/actions/setup"),
+        @actrun.new_run_step(
           "verify",
           "printf '%s' \"${STATE_token:-outside}\" > outer.txt",
           shell=Some("bash"),
         ),
       ],
-      defaults=new_run_defaults(shell=Some("sh")),
+      defaults=@actrun.new_run_defaults(shell=Some("sh")),
     ),
   ])
 
-  let lowered = lower_push_workflow_in_workspace(workflow, workspace)
+  let lowered = @actrun.lower_push_workflow_in_workspace(workflow, workspace)
   @debug.debug_inspect(lowered.errors, content="[]")
 
-  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let report = @actrun.execute_lowered_native(lowered, workspace_root=workspace)
 
   @debug.debug_inspect(report.ok, content="true")
   @debug.debug_inspect(
@@ -4161,22 +4192,22 @@ async test "executor: GITHUB_STATE is scoped to local composite action inner ste
 async test "executor: failed dependency skips downstream job by default" {
   let workspace = prepare_workspace("executor-blocked")
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "build",
-      [new_run_step("fail", "echo boom 1>&2; exit 5")],
-      defaults=new_run_defaults(shell=Some("bash")),
+      [@actrun.new_run_step("fail", "echo boom 1>&2; exit 5")],
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
-    new_job(
+    @actrun.new_job(
       "lint",
-      [new_run_step("lint", "echo lint")],
+      [@actrun.new_run_step("lint", "echo lint")],
       needs=["build"],
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
   ])
 
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
   )
 
@@ -4232,17 +4263,17 @@ async test "executor: failed dependency skips downstream job by default" {
 async test "executor: job if false skips entire job" {
   let workspace = prepare_workspace("executor-job-if-false")
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "skip",
-      [new_run_step("nope", "printf '%s' should-not-run")],
-      defaults=new_run_defaults(shell=Some("bash")),
+      [@actrun.new_run_step("nope", "printf '%s' should-not-run")],
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
       if_condition="false",
     ),
   ])
 
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
   )
 
@@ -4275,23 +4306,23 @@ async test "executor: job if false skips entire job" {
 async test "executor: job if always runs despite failed needs" {
   let workspace = prepare_workspace("executor-job-if-always")
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "build",
-      [new_run_step("fail", "echo boom 1>&2; exit 7")],
-      defaults=new_run_defaults(shell=Some("bash")),
+      [@actrun.new_run_step("fail", "echo boom 1>&2; exit 7")],
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
-    new_job(
+    @actrun.new_job(
       "cleanup",
-      [new_run_step("finalize", "printf '%s' cleanup-ran")],
+      [@actrun.new_run_step("finalize", "printf '%s' cleanup-ran")],
       needs=["build"],
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
       if_condition="always()",
     ),
   ])
 
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
   )
 
@@ -4330,34 +4361,34 @@ async test "executor: job if always runs despite failed needs" {
 async test "executor: step if status functions respect prior step results" {
   let workspace = prepare_workspace("executor-step-if-status")
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "build",
       [
-        new_run_step("fail", "echo boom 1>&2; exit 9"),
-        new_run_step("default_skip", "printf '%s' should-not-run"),
-        new_run_step(
+        @actrun.new_run_step("fail", "echo boom 1>&2; exit 9"),
+        @actrun.new_run_step("default_skip", "printf '%s' should-not-run"),
+        @actrun.new_run_step(
           "on_failure",
           "printf '%s' failure-ran",
           if_condition="failure()",
         ),
-        new_run_step(
+        @actrun.new_run_step(
           "always_step",
           "printf '%s' always-ran",
           if_condition="always()",
         ),
-        new_run_step(
+        @actrun.new_run_step(
           "on_cancelled",
           "printf '%s' cancelled-ran",
           if_condition="cancelled()",
         ),
       ],
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
   ])
 
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
   )
 
@@ -4417,23 +4448,23 @@ async test "executor: step if status functions respect prior step results" {
 async test "executor: continue-on-error keeps workflow green and runs later steps" {
   let workspace = prepare_workspace("executor-continue-on-error")
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "build",
       [
-        new_run_step(
+        @actrun.new_run_step(
           "fail_soft",
           "echo boom 1>&2; exit 4",
           continue_on_error="true",
         ),
-        new_run_step("after", "printf '%s' after-ran"),
+        @actrun.new_run_step("after", "printf '%s' after-ran"),
       ],
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
   ])
 
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
   )
 
@@ -4475,24 +4506,24 @@ async test "executor: continue-on-error keeps workflow green and runs later step
 async test "executor: fromJSON can drive continue-on-error expression" {
   let workspace = prepare_workspace("executor-continue-on-error-fromjson")
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "build",
       [
-        new_run_step(
+        @actrun.new_run_step(
           "fail_soft",
           "echo boom 1>&2; exit 4",
           continue_on_error="${{ fromJSON(env.SOFT_FAIL) }}",
         ),
-        new_run_step("after", "printf '%s' after-ran"),
+        @actrun.new_run_step("after", "printf '%s' after-ran"),
       ],
       env={ "SOFT_FAIL": "true" },
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
   ])
 
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
   )
 
@@ -4543,26 +4574,26 @@ async test "executor: hashFiles returns a stable hex digest and empty string on 
     #|  "$(test "$LOCK_HASH" = "${{ hashFiles('**/*.lock', '!vendor/**') }}" && echo yes || echo no)" \
     #|  "$(test -z "$MISSING_HASH" && echo yes || echo no)"
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "build",
       [
-        new_run_step("show", script, env={
+        @actrun.new_run_step("show", script, env={
           "LOCK_HASH": "${{ hashFiles('**/*.lock', '!vendor/**') }}",
           "MISSING_HASH": "${{ hashFiles('**/*.missing') }}",
         }),
-        new_run_step(
+        @actrun.new_run_step(
           "gate",
           "printf '%s' hash-ran",
           if_condition="hashFiles('**/*.lock', '!vendor/**') != ''",
         ),
       ],
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
   ])
 
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
   )
 
@@ -4596,11 +4627,11 @@ async test "executor: vars context resolves from ACTRUN_VAR prefix and missing v
     "ACTRUN_VAR_FEATURE_ENABLED", "true",
   )
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "build",
       [
-        new_run_step(
+        @actrun.new_run_step(
           "show",
           "printf '%s|%s|%s|%s' '${{ vars.COLOR }}' \"$COLOR_FROM_ENV\" \"$(test -z \"$MISSING_FROM_ENV\" && echo yes || echo no)\" '${{ vars.color }}'",
           env={
@@ -4608,23 +4639,23 @@ async test "executor: vars context resolves from ACTRUN_VAR prefix and missing v
             "MISSING_FROM_ENV": "${{ vars.MISSING }}",
           },
         ),
-        new_run_step(
+        @actrun.new_run_step(
           "gate",
           "printf '%s' vars-ran",
           if_condition="vars.FEATURE_ENABLED == 'true'",
         ),
-        new_run_step(
+        @actrun.new_run_step(
           "skip_missing",
           "printf '%s' no",
           if_condition="vars.MISSING != ''",
         ),
       ],
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
   ])
 
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
   )
 
@@ -4666,11 +4697,11 @@ async test "executor: secrets context resolves from ACTRUN_SECRET prefix and mis
     "ACTRUN_SECRET_TOKEN", "s3cr3t",
   )
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "build",
       [
-        new_run_step(
+        @actrun.new_run_step(
           "show",
           "printf '%s|%s|%s|%s' '${{ secrets.TOKEN }}' \"$TOKEN_FROM_ENV\" \"$(test -z \"$MISSING_FROM_ENV\" && echo yes || echo no)\" '${{ secrets.token }}'",
           env={
@@ -4679,12 +4710,12 @@ async test "executor: secrets context resolves from ACTRUN_SECRET prefix and mis
           },
         ),
       ],
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
   ])
 
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
   )
 
@@ -4704,13 +4735,13 @@ async test "executor: secrets context resolves from ACTRUN_SECRET prefix and mis
 async test "executor: steps outcome and conclusion are available to later steps and if" {
   let workspace = prepare_workspace("executor-step-status-context")
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "build",
       [
-        new_run_step("first", "exit 0"),
-        new_run_step("second", "exit 1", continue_on_error="true"),
-        new_run_step(
+        @actrun.new_run_step("first", "exit 0"),
+        @actrun.new_run_step("second", "exit 1", continue_on_error="true"),
+        @actrun.new_run_step(
           "show",
           "printf '%s|%s|%s|%s|%s|%s' '${{ steps.first.outcome }}' '${{ steps.first.conclusion }}' '${{ steps.second.outcome }}' '${{ steps.second.conclusion }}' \"$FIRST_OUTCOME\" \"$SECOND_CONCLUSION\"",
           env={
@@ -4718,18 +4749,18 @@ async test "executor: steps outcome and conclusion are available to later steps 
             "SECOND_CONCLUSION": "${{ steps.second.conclusion }}",
           },
         ),
-        new_run_step(
+        @actrun.new_run_step(
           "gate",
           "printf '%s' gate-ran",
           if_condition="steps.second.outcome == 'failure' && steps.second.conclusion == 'success'",
         ),
       ],
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
   ])
 
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
   )
 
@@ -4765,11 +4796,11 @@ async test "executor: steps outcome and conclusion are available to later steps 
 async test "executor: matrix fail-fast cancels later siblings" {
   let workspace = prepare_workspace("executor-matrix-fail-fast")
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "build",
       [
-        new_run_step(
+        @actrun.new_run_step(
           "emit",
           "mkdir -p artifacts\n" +
           "printf '%s' '${{ matrix.variant }}' > artifacts/${{ matrix.variant }}.txt\n" +
@@ -4780,9 +4811,9 @@ async test "executor: matrix fail-fast cancels later siblings" {
           shell=Some("bash"),
         ),
       ],
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
       matrix=Some(
-        new_job_matrix(
+        @actrun.new_job_matrix(
           [{ "variant": "ok" }, { "variant": "fail" }, { "variant": "late" }],
           fail_fast=true,
         ),
@@ -4790,8 +4821,8 @@ async test "executor: matrix fail-fast cancels later siblings" {
     ),
   ])
 
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
   )
 
@@ -4849,11 +4880,11 @@ async test "executor: matrix fail-fast cancels later siblings" {
 async test "executor: matrix fail-fast false keeps later siblings running" {
   let workspace = prepare_workspace("executor-matrix-no-fail-fast")
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "build",
       [
-        new_run_step(
+        @actrun.new_run_step(
           "emit",
           "mkdir -p artifacts\n" +
           "printf '%s' '${{ matrix.variant }}' > artifacts/${{ matrix.variant }}.txt\n" +
@@ -4864,9 +4895,9 @@ async test "executor: matrix fail-fast false keeps later siblings running" {
           shell=Some("bash"),
         ),
       ],
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
       matrix=Some(
-        new_job_matrix(
+        @actrun.new_job_matrix(
           [{ "variant": "ok" }, { "variant": "fail" }, { "variant": "late" }],
           fail_fast=false,
         ),
@@ -4874,8 +4905,8 @@ async test "executor: matrix fail-fast false keeps later siblings running" {
     ),
   ])
 
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
   )
 
@@ -4923,27 +4954,29 @@ async test "executor: matrix fail-fast false keeps later siblings running" {
 async test "executor: matrix needs aggregate result and outputs for downstream job" {
   let workspace = prepare_workspace("executor-matrix-needs-output")
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "build",
       [
-        new_run_step(
+        @actrun.new_run_step(
           "produce",
           "printf '%s=%s\\n' '${{ matrix.target }}' '${{ matrix.target }}' >> \"$GITHUB_OUTPUT\"",
           shell=Some("bash"),
         ),
       ],
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
       outputs={
         "native": "${{ steps.produce.outputs.native }}",
         "js": "${{ steps.produce.outputs.js }}",
       },
-      matrix=Some(new_job_matrix([{ "target": "native" }, { "target": "js" }])),
+      matrix=Some(
+        @actrun.new_job_matrix([{ "target": "native" }, { "target": "js" }]),
+      ),
     ),
-    new_job(
+    @actrun.new_job(
       "consume",
       [
-        new_run_step(
+        @actrun.new_run_step(
           "read",
           "printf '%s|%s|%s' " +
           "\"${{ needs.build.result }}\" " +
@@ -4953,12 +4986,12 @@ async test "executor: matrix needs aggregate result and outputs for downstream j
         ),
       ],
       needs=["build"],
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
   ])
 
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
   )
 
@@ -4990,20 +5023,20 @@ async test "executor: docker actions run via docker adapter" {
   let log_path = workspace + "/docker.log"
   let docker_bin = test_support_prepare_fake_docker_bin(workspace, log_path)
 
-  let docker_image_workflow = new_workflow(
+  let docker_image_workflow = @actrun.new_workflow(
     "ci",
     [
-      new_job(
+      @actrun.new_job(
         "build",
-        [new_uses_step("image", "docker://alpine:3.21")],
-        defaults=new_run_defaults(shell=Some("bash")),
+        [@actrun.new_uses_step("image", "docker://alpine:3.21")],
+        defaults=@actrun.new_run_defaults(shell=Some("bash")),
       ),
     ],
     env={ "ACTRUN_DOCKER_BIN": docker_bin },
   )
 
-  let docker_image_report = execute_lowered_native(
-    lower_push_workflow(docker_image_workflow),
+  let docker_image_report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(docker_image_workflow),
     workspace_root=workspace,
   )
 
@@ -5062,29 +5095,31 @@ async test "executor: docker actions run via docker adapter" {
   @xfs.write_string_to_file(action_root + "/action.yml", action_src)
   @xfs.write_string_to_file(action_root + "/Dockerfile", "FROM alpine:3.21\n")
 
-  let remote_workflow = new_workflow(
+  let remote_workflow = @actrun.new_workflow(
     "ci",
     [
-      new_job(
+      @actrun.new_job(
         "build",
         [
-          new_uses_step("remote", "mizchi-test/docker-action/action@v1", with_values={
-            "message": "from-input",
-          }),
-          new_run_step("verify", "cat docker.txt"),
+          @actrun.new_uses_step(
+            "remote",
+            "mizchi-test/docker-action/action@v1",
+            with_values={ "message": "from-input" },
+          ),
+          @actrun.new_run_step("verify", "cat docker.txt"),
         ],
-        defaults=new_run_defaults(shell=Some("bash")),
+        defaults=@actrun.new_run_defaults(shell=Some("bash")),
       ),
     ],
     env={ "ACTRUN_DOCKER_BIN": docker_bin },
   )
 
-  let lowered = lower_push_workflow_in_workspace(
+  let lowered = @actrun.lower_push_workflow_in_workspace(
     remote_workflow, remote_workspace,
   )
   @debug.debug_inspect(lowered.errors, content="[]")
 
-  let remote_report = execute_lowered_native(
+  let remote_report = @actrun.execute_lowered_native(
     lowered,
     workspace_root=remote_workspace,
   )
@@ -5132,14 +5167,14 @@ async test "executor: wasm actions run via configured wasm runner" {
     "printf '%s|%s' \"${INPUT_MESSAGE:-}\" \"$GITHUB_WORKSPACE\"\n" +
     "printf 'result=from-wasm\\n' > \"$GITHUB_OUTPUT\"\n",
   )
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "build",
       [
-        new_uses_step("module", "wasm://std/echo@v1", with_values={
+        @actrun.new_uses_step("module", "wasm://std/echo@v1", with_values={
           "message": "hello",
         }),
-        new_run_step(
+        @actrun.new_run_step(
           "verify",
           "printf '%s' '${{ steps.module.outputs.result }}'",
           shell=Some("bash"),
@@ -5150,12 +5185,12 @@ async test "executor: wasm actions run via configured wasm runner" {
         "ACTRUN_WASM_ACTION_ROOT": wasm_root,
         "ACTRUN_WASM_SKIP_VALIDATE": "true",
       },
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
   ])
 
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
   )
 
@@ -5203,20 +5238,20 @@ async test "executor: wasm actions fail when module is missing" {
   let tools_root = prepare_workspace("executor-wasm-action-missing-tools")
   let wasm_log_path = tools_root + "/wasm.log"
   let wasm_bin = test_support_prepare_fake_wasm_bin(tools_root, wasm_log_path)
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "build",
-      [new_uses_step("module", "wasm://std/echo@v1")],
+      [@actrun.new_uses_step("module", "wasm://std/echo@v1")],
       env={
         "ACTRUN_WASM_BIN": wasm_bin,
         "ACTRUN_WASM_ACTION_ROOT": workspace + "/missing-root",
       },
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
   ])
 
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
   )
 
@@ -5288,26 +5323,26 @@ async test "executor: custom registry node action runs via configured registry r
     "printf 'result=from-registry-node\\n' > \"$GITHUB_OUTPUT\"\n",
   )
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "build",
       [
-        new_uses_step("setup", "bit://std/cache@v1", with_values={
+        @actrun.new_uses_step("setup", "bit://std/cache@v1", with_values={
           "message": "from-registry",
         }),
-        new_run_step(
+        @actrun.new_run_step(
           "verify",
           "printf '%s|%s' '${{ steps.setup.outputs.result }}' \"$(cat registry-node.txt)\"",
           shell=Some("bash"),
         ),
       ],
       env={ "ACTRUN_NODE_BIN": node_bin },
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
   ])
 
-  let report = execute_lowered_native(
-    lower_push_workflow_in_workspace(workflow, workspace),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow_in_workspace(workflow, workspace),
     workspace_root=workspace,
   )
   executor_test_restore_env_var(
@@ -5349,33 +5384,33 @@ async test "executor: job container runs run steps via docker adapter" {
     workspace, docker_log_path,
   )
 
-  let workflow = new_workflow(
+  let workflow = @actrun.new_workflow(
     "ci",
     [
-      new_job(
+      @actrun.new_job(
         "build",
         [
-          new_run_step(
+          @actrun.new_run_step(
             "show",
             "printf '%s|%s|%s' \"$CONTAINER_FLAG\" \"$STEP_FLAG\" \"$PWD\"",
             env={ "STEP_FLAG": "from-step" },
           ),
         ],
         container=Some(
-          new_job_container_spec("alpine:3.21", env={
+          @actrun.new_job_container_spec("alpine:3.21", env={
             "CONTAINER_FLAG": "from-container",
           }),
         ),
-        defaults=new_run_defaults(working_directory=Some("nested")),
+        defaults=@actrun.new_run_defaults(working_directory=Some("nested")),
       ),
     ],
     env={ "ACTRUN_DOCKER_BIN": docker_bin },
   )
 
-  let lowered = lower_push_workflow(workflow)
+  let lowered = @actrun.lower_push_workflow(workflow)
   @debug.debug_inspect(lowered.errors, content="[]")
 
-  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let report = @actrun.execute_lowered_native(lowered, workspace_root=workspace)
   @debug.debug_inspect(report.ok, content="true")
   @debug.debug_inspect(
     report.state,
@@ -5412,30 +5447,30 @@ async test "executor: job container shares docker network with job services" {
     workspace, docker_log_path,
   )
 
-  let workflow = new_workflow(
+  let workflow = @actrun.new_workflow(
     "ci",
     [
-      new_job(
+      @actrun.new_job(
         "build",
-        [new_run_step("show", "printf '%s' hi", shell=Some("bash"))],
-        container=Some(new_job_container_spec("alpine:3.21")),
+        [@actrun.new_run_step("show", "printf '%s' hi", shell=Some("bash"))],
+        container=Some(@actrun.new_job_container_spec("alpine:3.21")),
         services={
-          "postgres": new_job_container_spec(
+          "postgres": @actrun.new_job_container_spec(
             "postgres:16",
             ports=["5432:5432"],
             options=Some("--health-cmd pg_isready"),
           ),
         },
-        defaults=new_run_defaults(shell=Some("bash")),
+        defaults=@actrun.new_run_defaults(shell=Some("bash")),
       ),
     ],
     env={ "ACTRUN_DOCKER_BIN": docker_bin },
   )
 
-  let lowered = lower_push_workflow(workflow)
+  let lowered = @actrun.lower_push_workflow(workflow)
   @debug.debug_inspect(lowered.errors, content="[]")
 
-  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let report = @actrun.execute_lowered_native(lowered, workspace_root=workspace)
   @debug.debug_inspect(report.ok, content="true")
   @debug.debug_inspect(
     report.state,
@@ -5474,19 +5509,19 @@ async test "executor: job services start before steps, expose ports context, and
     workspace, docker_log_path,
   )
 
-  let workflow = new_workflow(
+  let workflow = @actrun.new_workflow(
     "ci",
     [
-      new_job(
+      @actrun.new_job(
         "build",
         [
-          new_run_step(
+          @actrun.new_run_step(
             "show",
             "printf '%s|%s' \"${{ job.services.postgres.ports[5432] }}\" \"$PORT_FROM_ENV\" > out.txt",
             shell=Some("bash"),
             env={ "PORT_FROM_ENV": "${{ job.services.postgres.ports[5432] }}" },
           ),
-          new_run_step(
+          @actrun.new_run_step(
             "verify",
             "printf '|%s' yes >> out.txt",
             shell=Some("bash"),
@@ -5494,7 +5529,7 @@ async test "executor: job services start before steps, expose ports context, and
           ),
         ],
         services={
-          "postgres": new_job_container_spec(
+          "postgres": @actrun.new_job_container_spec(
             "postgres:16",
             env={ "POSTGRES_DB": "app" },
             ports=["5432:5432"],
@@ -5502,16 +5537,16 @@ async test "executor: job services start before steps, expose ports context, and
             options=Some("--health-cmd pg_isready"),
           ),
         },
-        defaults=new_run_defaults(shell=Some("bash")),
+        defaults=@actrun.new_run_defaults(shell=Some("bash")),
       ),
     ],
     env={ "ACTRUN_DOCKER_BIN": docker_bin },
   )
 
-  let lowered = lower_push_workflow(workflow)
+  let lowered = @actrun.lower_push_workflow(workflow)
   @debug.debug_inspect(lowered.errors, content="[]")
 
-  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let report = @actrun.execute_lowered_native(lowered, workspace_root=workspace)
   @debug.debug_inspect(report.ok, content="true")
   @debug.debug_inspect(
     report.state,
@@ -5569,29 +5604,29 @@ async test "executor: job services fail when health check becomes unhealthy" {
     inspect_sequence="starting,unhealthy",
   )
 
-  let workflow = new_workflow(
+  let workflow = @actrun.new_workflow(
     "ci",
     [
-      new_job(
+      @actrun.new_job(
         "build",
-        [new_run_step("show", "printf '%s' never", shell=Some("bash"))],
+        [@actrun.new_run_step("show", "printf '%s' never", shell=Some("bash"))],
         services={
-          "postgres": new_job_container_spec(
+          "postgres": @actrun.new_job_container_spec(
             "postgres:16",
             ports=["5432:5432"],
             options=Some("--health-cmd pg_isready"),
           ),
         },
-        defaults=new_run_defaults(shell=Some("bash")),
+        defaults=@actrun.new_run_defaults(shell=Some("bash")),
       ),
     ],
     env={ "ACTRUN_DOCKER_BIN": docker_bin },
   )
 
-  let lowered = lower_push_workflow(workflow)
+  let lowered = @actrun.lower_push_workflow(workflow)
   @debug.debug_inspect(lowered.errors, content="[]")
 
-  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let report = @actrun.execute_lowered_native(lowered, workspace_root=workspace)
   @debug.debug_inspect(report.ok, content="false")
   @debug.debug_inspect(
     report.state,
@@ -5643,18 +5678,18 @@ async test "executor: job container runs docker action as sibling container" {
   @xfs.write_string_to_file(action_root + "/action.yml", action_src)
   @xfs.write_string_to_file(action_root + "/Dockerfile", "FROM alpine:3.21\n")
 
-  let workflow = new_workflow(
+  let workflow = @actrun.new_workflow(
     "ci",
     [
-      new_job(
+      @actrun.new_job(
         "build",
         [
-          new_uses_step(
+          @actrun.new_uses_step(
             "remote", "mizchi-test/docker-action-container/action@v1",
           ),
         ],
         container=Some(
-          new_job_container_spec(
+          @actrun.new_job_container_spec(
             "node:20-bookworm",
             env={ "CONTAINER_FLAG": "from-container" },
             volumes=["cache:/cache"],
@@ -5665,10 +5700,10 @@ async test "executor: job container runs docker action as sibling container" {
     env={ "ACTRUN_DOCKER_BIN": docker_bin },
   )
 
-  let lowered = lower_push_workflow_in_workspace(workflow, workspace)
+  let lowered = @actrun.lower_push_workflow_in_workspace(workflow, workspace)
   @debug.debug_inspect(lowered.errors, content="[]")
 
-  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let report = @actrun.execute_lowered_native(lowered, workspace_root=workspace)
   @debug.debug_inspect(report.ok, content="true")
   let remote = expect_task_report(report, "build/remote")
   @debug.debug_inspect(
@@ -5721,25 +5756,27 @@ async test "executor: github repo node action lifecycle shares GITHUB_STATE acro
   let node_log_path = workspace + "/node.log"
   let node_bin = test_support_prepare_fake_node_bin(workspace, node_log_path)
 
-  let workflow = new_workflow(
+  let workflow = @actrun.new_workflow(
     "ci",
     [
-      new_job(
+      @actrun.new_job(
         "build",
         [
-          new_uses_step("remote", "mizchi-test/node-lifecycle/action@v1"),
-          new_run_step("verify", "cat main.txt"),
+          @actrun.new_uses_step(
+            "remote", "mizchi-test/node-lifecycle/action@v1",
+          ),
+          @actrun.new_run_step("verify", "cat main.txt"),
         ],
-        defaults=new_run_defaults(shell=Some("bash")),
+        defaults=@actrun.new_run_defaults(shell=Some("bash")),
       ),
     ],
     env={ "ACTRUN_NODE_BIN": node_bin },
   )
 
-  let lowered = lower_push_workflow_in_workspace(workflow, workspace)
+  let lowered = @actrun.lower_push_workflow_in_workspace(workflow, workspace)
   @debug.debug_inspect(lowered.errors, content="[]")
 
-  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let report = @actrun.execute_lowered_native(lowered, workspace_root=workspace)
   @debug.debug_inspect(report.ok, content="true")
   @debug.debug_inspect(
     expect_task_report(report, "build/remote__pre").status,
@@ -5801,25 +5838,27 @@ async test "executor: github repo docker action lifecycle shares GITHUB_STATE ac
     workspace, docker_log_path,
   )
 
-  let workflow = new_workflow(
+  let workflow = @actrun.new_workflow(
     "ci",
     [
-      new_job(
+      @actrun.new_job(
         "build",
         [
-          new_uses_step("remote", "mizchi-test/docker-lifecycle/action@v1"),
-          new_run_step("verify", "cat main.txt"),
+          @actrun.new_uses_step(
+            "remote", "mizchi-test/docker-lifecycle/action@v1",
+          ),
+          @actrun.new_run_step("verify", "cat main.txt"),
         ],
-        defaults=new_run_defaults(shell=Some("bash")),
+        defaults=@actrun.new_run_defaults(shell=Some("bash")),
       ),
     ],
     env={ "ACTRUN_DOCKER_BIN": docker_bin },
   )
 
-  let lowered = lower_push_workflow_in_workspace(workflow, workspace)
+  let lowered = @actrun.lower_push_workflow_in_workspace(workflow, workspace)
   @debug.debug_inspect(lowered.errors, content="[]")
 
-  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let report = @actrun.execute_lowered_native(lowered, workspace_root=workspace)
   @debug.debug_inspect(report.ok, content="true")
   @debug.debug_inspect(
     expect_task_report(report, "build/remote__pre").status,
@@ -5888,18 +5927,18 @@ fn check_no_workspace_entries(dir : String, workspace : String) -> Bool {
 #cfg(target="native")
 async test "security: file_commands and runner_temp are cleaned up after run" {
   let workspace = prepare_workspace("security-cleanup")
-  let workflow = new_workflow("ci", [
-    new_job("build", [
-      new_run_step(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job("build", [
+      @actrun.new_run_step(
         "write-secret", "printf '%s' 'SECRET_TOKEN_VALUE' > secret.txt\nprintf '%s' 'token=secret123' >> \"$GITHUB_ENV\"",
       ),
     ]),
   ])
-  let lowered = lower_push_workflow_in_workspace(workflow, workspace)
+  let lowered = @actrun.lower_push_workflow_in_workspace(workflow, workspace)
   @debug.debug_inspect(lowered.errors, content="[]")
-  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let report = @actrun.execute_lowered_native(lowered, workspace_root=workspace)
   @debug.debug_inspect(report.ok, content="true")
-  cleanup_run_temp_files(workspace)
+  @actrun.cleanup_run_temp_files(workspace)
   assert_true(
     check_no_workspace_entries("_build/actrun/file_commands", workspace),
   )
@@ -5912,18 +5951,18 @@ async test "security: file_commands and runner_temp are cleaned up after run" {
 #cfg(target="native")
 async test "security: step script files are not world-readable" {
   let workspace = prepare_workspace("security-permissions")
-  let workflow = new_workflow("ci", [
-    new_job("build", [
-      new_run_step(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job("build", [
+      @actrun.new_run_step(
         "check-perms",
         "perms=$(stat -c '%a' \"$GITHUB_ENV\" 2>/dev/null || stat -f '%Lp' \"$GITHUB_ENV\") && [ \"$perms\" != '666' ]",
         shell=Some("bash"),
       ),
     ]),
   ])
-  let lowered = lower_push_workflow_in_workspace(workflow, workspace)
+  let lowered = @actrun.lower_push_workflow_in_workspace(workflow, workspace)
   @debug.debug_inspect(lowered.errors, content="[]")
-  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let report = @actrun.execute_lowered_native(lowered, workspace_root=workspace)
   @debug.debug_inspect(report.ok, content="true")
 }
 
@@ -5932,29 +5971,31 @@ async test "security: step script files are not world-readable" {
 async test "security: permissions workflow executes without GITHUB_TOKEN" {
   let workspace = prepare_workspace("security-permissions-no-token")
 
-  let workflow = new_workflow(
+  let workflow = @actrun.new_workflow(
     "ci",
     [
-      new_job(
+      @actrun.new_job(
         "build",
         [
-          new_run_step(
+          @actrun.new_run_step(
             "check",
             "printf '%s' \"${GITHUB_TOKEN:-unset}\"",
             shell=Some("bash"),
           ),
         ],
-        permissions=Some(new_permissions_spec(values={ "contents": "write" })),
-        defaults=new_run_defaults(shell=Some("bash")),
+        permissions=Some(
+          @actrun.new_permissions_spec(values={ "contents": "write" }),
+        ),
+        defaults=@actrun.new_run_defaults(shell=Some("bash")),
       ),
     ],
-    permissions=Some(new_permissions_spec(values={ "_": "write-all" })),
+    permissions=Some(@actrun.new_permissions_spec(values={ "_": "write-all" })),
   )
 
-  let lowered = lower_push_workflow(workflow)
+  let lowered = @actrun.lower_push_workflow(workflow)
   @debug.debug_inspect(lowered.errors, content="[]")
 
-  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let report = @actrun.execute_lowered_native(lowered, workspace_root=workspace)
   @debug.debug_inspect(report.ok, content="true")
   // GITHUB_TOKEN should not be automatically set
   @debug.debug_inspect(
@@ -5972,23 +6013,26 @@ async test "security: permissions workflow executes without GITHUB_TOKEN" {
 async test "security: secrets are masked in stdout" {
   let workspace = prepare_workspace("security-secrets-masked")
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "build",
       [
-        new_run_step(
+        @actrun.new_run_step(
           "leak",
           "echo 'token is super-secret-123'",
           shell=Some("bash"),
         ),
       ],
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
   ])
 
-  let lowered = lower_push_workflow(workflow)
-  let raw_report = execute_lowered_native(lowered, workspace_root=workspace)
-  let masked = mask_report_secrets(raw_report, ["super-secret-123"])
+  let lowered = @actrun.lower_push_workflow(workflow)
+  let raw_report = @actrun.execute_lowered_native(
+    lowered,
+    workspace_root=workspace,
+  )
+  let masked = @actrun.mask_report_secrets(raw_report, ["super-secret-123"])
   let stdout = expect_task_report(masked, "build/leak").stdout
   @debug.debug_inspect(stdout.contains("super-secret-123"), content="false")
   @debug.debug_inspect(stdout.contains("***"), content="true")
@@ -6002,25 +6046,25 @@ async test "security: path traversal in working-directory is contained" {
   ensure_dir(workspace + "/sub/deep")
 
   // A valid working-directory should resolve inside the workspace
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "build",
       [
-        new_run_step(
+        @actrun.new_run_step(
           "check-cwd",
           "pwd",
           shell=Some("bash"),
           working_directory=Some("sub/deep"),
         ),
       ],
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
   ])
 
-  let lowered = lower_push_workflow(workflow)
+  let lowered = @actrun.lower_push_workflow(workflow)
   @debug.debug_inspect(lowered.errors, content="[]")
 
-  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let report = @actrun.execute_lowered_native(lowered, workspace_root=workspace)
   @debug.debug_inspect(report.ok, content="true")
   let step = expect_task_report(report, "build/check-cwd")
   let cwd = step.stdout.trim(chars=" \n\r\t").to_owned()
@@ -6036,20 +6080,23 @@ async test "security: path traversal in working-directory is contained" {
 async test "security: secrets masked in GITHUB_ENV values" {
   let workspace = prepare_workspace("security-secrets-env")
 
-  let workflow = new_workflow("ci", [
-    new_job("build", [
-      new_run_step(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job("build", [
+      @actrun.new_run_step(
         "export",
         "echo \"LEAKED=super-secret-456\" >> \"$GITHUB_ENV\"",
         shell=Some("bash"),
       ),
-      new_run_step("read", "echo \"$LEAKED\"", shell=Some("bash")),
+      @actrun.new_run_step("read", "echo \"$LEAKED\"", shell=Some("bash")),
     ]),
   ])
 
-  let lowered = lower_push_workflow(workflow)
-  let raw_report = execute_lowered_native(lowered, workspace_root=workspace)
-  let masked = mask_report_secrets(raw_report, ["super-secret-456"])
+  let lowered = @actrun.lower_push_workflow(workflow)
+  let raw_report = @actrun.execute_lowered_native(
+    lowered,
+    workspace_root=workspace,
+  )
+  let masked = @actrun.mask_report_secrets(raw_report, ["super-secret-456"])
   let read_stdout = expect_task_report(masked, "build/read").stdout
   @debug.debug_inspect(
     read_stdout.contains("super-secret-456"),
@@ -6063,9 +6110,9 @@ async test "security: secrets masked in GITHUB_ENV values" {
 async test "security: secrets masked in step outputs" {
   let workspace = prepare_workspace("security-secrets-output")
 
-  let workflow = new_workflow("ci", [
-    new_job("build", [
-      new_run_step(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job("build", [
+      @actrun.new_run_step(
         "produce",
         "echo \"token=my-api-key-789\" >> \"$GITHUB_OUTPUT\"",
         shell=Some("bash"),
@@ -6073,9 +6120,12 @@ async test "security: secrets masked in step outputs" {
     ]),
   ])
 
-  let lowered = lower_push_workflow(workflow)
-  let raw_report = execute_lowered_native(lowered, workspace_root=workspace)
-  let masked = mask_report_secrets(raw_report, ["my-api-key-789"])
+  let lowered = @actrun.lower_push_workflow(workflow)
+  let raw_report = @actrun.execute_lowered_native(
+    lowered,
+    workspace_root=workspace,
+  )
+  let masked = @actrun.mask_report_secrets(raw_report, ["my-api-key-789"])
   let step = expect_task_report(masked, "build/produce")
   @debug.debug_inspect(step.stdout.contains("my-api-key-789"), content="false")
   @debug.debug_inspect(step.stderr.contains("my-api-key-789"), content="false")
@@ -6086,22 +6136,25 @@ async test "security: secrets masked in step outputs" {
 async test "security: env values cannot inject shell commands" {
   let workspace = prepare_workspace("security-env-injection")
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "build",
       [
-        new_run_step("check", "printf '%s' \"$SAFE_VAR\"", shell=Some("bash"), env={
-          "SAFE_VAR": "$(echo pwned)",
-        }),
+        @actrun.new_run_step(
+          "check",
+          "printf '%s' \"$SAFE_VAR\"",
+          shell=Some("bash"),
+          env={ "SAFE_VAR": "$(echo pwned)" },
+        ),
       ],
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
   ])
 
-  let lowered = lower_push_workflow(workflow)
+  let lowered = @actrun.lower_push_workflow(workflow)
   @debug.debug_inspect(lowered.errors, content="[]")
 
-  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let report = @actrun.execute_lowered_native(lowered, workspace_root=workspace)
   @debug.debug_inspect(report.ok, content="true")
   let step = expect_task_report(report, "build/check")
   // The literal string should be used, not command-substituted

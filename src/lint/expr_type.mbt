@@ -97,3 +97,21 @@ fn format_type(ty : ExprType) -> String {
     TyObject(_) => "object"
   }
 }
+
+///|
+pub extend ExprType with @debug.Debug::{to_repr}
+
+///|
+pub extend ExprType with Eq::{not_equal, equal}
+
+///|
+pub extend ExprType with Show::{to_string, output}
+
+///|
+pub extend ObjectKind with @debug.Debug::{to_repr}
+
+///|
+pub extend ObjectKind with Eq::{not_equal, equal}
+
+///|
+pub extend ObjectKind with Show::{to_string, output}
