@@ -32,3 +32,21 @@ pub fn LintDiagnostic::format(self : LintDiagnostic) -> String {
   }
   "[\{self.job_id}/step\{self.step_index}] \{self.field}: \{sev}[\{self.code}]: \{self.message}"
 }
+
+///|
+pub extend LintDiagnostic with @debug.Debug::{to_repr}
+
+///|
+pub extend LintDiagnostic with Eq::{not_equal, equal}
+
+///|
+pub extend LintDiagnostic with Show::{to_string, output}
+
+///|
+pub extend Severity with @debug.Debug::{to_repr}
+
+///|
+pub extend Severity with Eq::{not_equal, equal}
+
+///|
+pub extend Severity with Show::{to_string, output}

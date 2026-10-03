@@ -1,5 +1,7 @@
 ///|
-fn expect_bit_workspace(result : BitWorkspaceResult) -> BitWorkspace {
+fn expect_bit_workspace(
+  result : @actrun.BitWorkspaceResult,
+) -> @actrun.BitWorkspace {
   match result.workspace {
     Some(workspace) => workspace
     None => abort(result.errors.join("\n"))
@@ -54,13 +56,15 @@ test "runtime: materialize push workspace from bit repo" {
   let commit_id = setup_bit_repo(
     fs, fs, "/repo", "hello.txt", "hello\n", "Initial commit", 1700000000L,
   )
-  let event = new_push_event(
+  let event = @actrun.new_push_event(
     "main",
     ["hello.txt"],
     after_sha=commit_id.to_hex(),
   )
 
-  let result = materialize_bit_push_workspace(fs, fs, "/repo", event, "/work")
+  let result = @actrun.materialize_bit_push_workspace(
+    fs, fs, "/repo", event, "/work",
+  )
   @debug.debug_inspect(result.errors, content="[]")
 
   let workspace = expect_bit_workspace(result)
@@ -87,9 +91,11 @@ test "runtime: materialize uses HEAD when after sha is missing" {
   let commit_id = setup_bit_repo(
     fs, fs, "/repo", "hello.txt", "head\n", "Head commit", 1700000001L,
   )
-  let event = new_push_event("", ["hello.txt"])
+  let event = @actrun.new_push_event("", ["hello.txt"])
 
-  let result = materialize_bit_push_workspace(fs, fs, "/repo", event, "/head")
+  let result = @actrun.materialize_bit_push_workspace(
+    fs, fs, "/repo", event, "/head",
+  )
   @debug.debug_inspect(result.errors, content="[]")
   let workspace = expect_bit_workspace(result)
   @debug.assert_eq(workspace.commit_sha, commit_id.to_hex())
@@ -110,14 +116,14 @@ test "runtime: compute changed paths from before and after" {
   let after_id = commit_repo_file(
     fs, fs, "/repo", "b.txt", "two\n", "Add b", 1700000003L,
   )
-  let event = new_push_event(
+  let event = @actrun.new_push_event(
     "main",
     [],
     before_sha=before_id.to_hex(),
     after_sha=after_id.to_hex(),
   )
 
-  let result = compute_bit_changed_paths(fs, "/repo", event)
+  let result = @actrun.compute_bit_changed_paths(fs, "/repo", event)
   @debug.debug_inspect(result.errors, content="[]")
   @debug.debug_inspect(
     result.base_sha,
@@ -143,9 +149,9 @@ test "runtime: compute changed paths falls back to first parent" {
   let after_id = commit_repo_file(
     fs, fs, "/repo", "a.txt", "two\n", "Modify a", 1700000005L,
   )
-  let event = new_push_event("main", [], after_sha=after_id.to_hex())
+  let event = @actrun.new_push_event("main", [], after_sha=after_id.to_hex())
 
-  let result = compute_bit_changed_paths(fs, "/repo", event)
+  let result = @actrun.compute_bit_changed_paths(fs, "/repo", event)
   @debug.debug_inspect(result.errors, content="[]")
   @debug.debug_inspect(
     result.base_sha,
@@ -169,13 +175,15 @@ test "runtime: materialize clears stale workspace files" {
     fs, fs, "/repo", "hello.txt", "fresh\n", "Fresh commit", 1700000002L,
   )
   fs.write_string("/work/stale.txt", "stale\n")
-  let event = new_push_event(
+  let event = @actrun.new_push_event(
     "main",
     ["hello.txt"],
     after_sha=commit_id.to_hex(),
   )
 
-  let result = materialize_bit_push_workspace(fs, fs, "/repo", event, "/work")
+  let result = @actrun.materialize_bit_push_workspace(
+    fs, fs, "/repo", event, "/work",
+  )
   @debug.debug_inspect(result.errors, content="[]")
   @debug.assert_eq(fs.exists("/work/stale.txt"), false)
   @debug.debug_inspect(
@@ -192,13 +200,13 @@ test "runtime: materialize rejects overlapping repo and workspace" {
   let commit_id = setup_bit_repo(
     fs, fs, "/repo", "hello.txt", "hello\n", "Initial commit", 1700000003L,
   )
-  let event = new_push_event(
+  let event = @actrun.new_push_event(
     "main",
     ["hello.txt"],
     after_sha=commit_id.to_hex(),
   )
 
-  let result = materialize_bit_push_workspace(
+  let result = @actrun.materialize_bit_push_workspace(
     fs, fs, "/repo", event, "/repo/work",
   )
   @debug.debug_inspect(
@@ -223,13 +231,13 @@ test "runtime: native wrapper materializes workspace on disk" {
     1700000004L,
     allow_empty=true,
   )
-  let event = new_push_event(
+  let event = @actrun.new_push_event(
     "main",
     ["hello.txt"],
     after_sha=commit_id.to_hex(),
   )
 
-  let result = materialize_bit_push_workspace_native(
+  let result = @actrun.materialize_bit_push_workspace_native(
     repo_root, event, workspace_root,
   )
   @debug.debug_inspect(result.errors, content="[]")

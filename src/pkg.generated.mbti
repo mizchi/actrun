@@ -394,6 +394,9 @@ pub struct StoreEnvEntry {
   key : String
   value : String
 } derive(ToJson, @debug.Debug, @json.FromJson)
+pub fn StoreEnvEntry::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn StoreEnvEntry::to_json(Self) -> Json
+pub fn StoreEnvEntry::to_repr(Self) -> @debug.Repr
 
 pub enum StoreMode {
   FileStore
@@ -404,10 +407,16 @@ pub struct StoreOutputEntry {
   key : String
   value : String
 } derive(ToJson, @debug.Debug, @json.FromJson)
+pub fn StoreOutputEntry::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn StoreOutputEntry::to_json(Self) -> Json
+pub fn StoreOutputEntry::to_repr(Self) -> @debug.Repr
 
 pub struct StorePathEntry {
   path : String
 } derive(ToJson, @debug.Debug, @json.FromJson)
+pub fn StorePathEntry::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn StorePathEntry::to_json(Self) -> Json
+pub fn StorePathEntry::to_repr(Self) -> @debug.Repr
 
 pub struct StoreStepResult {
   outputs : Map[String, String]
@@ -415,10 +424,16 @@ pub struct StoreStepResult {
   path_entries : Array[String]
   summary : String
 } derive(ToJson, @debug.Debug, @json.FromJson)
+pub fn StoreStepResult::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn StoreStepResult::to_json(Self) -> Json
+pub fn StoreStepResult::to_repr(Self) -> @debug.Repr
 
 pub struct StoreSummaryEntry {
   content : String
 } derive(ToJson, @debug.Debug, @json.FromJson)
+pub fn StoreSummaryEntry::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn StoreSummaryEntry::to_json(Self) -> Json
+pub fn StoreSummaryEntry::to_repr(Self) -> @debug.Repr
 
 pub struct TaskPlan {
   id : String

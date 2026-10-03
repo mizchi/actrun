@@ -9,15 +9,20 @@ fn flow_task_by_id(ir : @wf.FlowIr, id : String) -> @wf.FlowTask {
 }
 
 ///|
-fn expect_task_plan(plan : ExecutionPlan, id : String) -> TaskPlan {
-  match find_task_plan(plan, id) {
+fn expect_task_plan(
+  plan : @actrun.ExecutionPlan,
+  id : String,
+) -> @actrun.TaskPlan {
+  match @actrun.find_task_plan(plan, id) {
     Some(task) => task
     None => abort("missing task plan: " + id)
   }
 }
 
 ///|
-fn expect_workflow(parsed : WorkflowParseResult) -> WorkflowSpec {
+fn expect_workflow(
+  parsed : @actrun.WorkflowParseResult,
+) -> @actrun.WorkflowSpec {
   match parsed.workflow {
     Some(workflow) => workflow
     None => abort(parsed.errors.join("\n"))
@@ -25,7 +30,9 @@ fn expect_workflow(parsed : WorkflowParseResult) -> WorkflowSpec {
 }
 
 ///|
-fn expect_local_action(parsed : LocalActionParseResult) -> LocalActionSpec {
+fn expect_local_action(
+  parsed : @actrun.LocalActionParseResult,
+) -> @actrun.LocalActionSpec {
   match parsed.action {
     Some(action) => action
     None => abort(parsed.errors.join("\n"))
@@ -178,7 +185,7 @@ test "parser: parse simple push workflow" {
     #|        run: pnpm install
     #|      - name: Test
     #|        run: pnpm test
-  let parsed = parse_workflow_yaml(src)
+  let parsed = @actrun.parse_workflow_yaml(src)
   let workflow = expect_workflow(parsed)
 
   @debug.debug_inspect(
@@ -249,7 +256,7 @@ test "parser: parse push object form and multiline run" {
     #|        run: |
     #|          pnpm install
     #|          pnpm lint
-  let parsed = parse_workflow_yaml(src)
+  let parsed = @actrun.parse_workflow_yaml(src)
   let workflow = expect_workflow(parsed)
 
   @debug.debug_inspect(
@@ -286,7 +293,7 @@ test "parser: parse job level if condition" {
     #|    runs-on: ubuntu-latest
     #|    steps:
     #|      - run: echo ok
-  let parsed = parse_workflow_yaml(src)
+  let parsed = @actrun.parse_workflow_yaml(src)
   let workflow = expect_workflow(parsed)
 
   @debug.debug_inspect(
@@ -309,7 +316,7 @@ test "parser: parse step continue-on-error" {
     #|      - id: fail_soft
     #|        continue-on-error: true
     #|        run: exit 1
-  let parsed = parse_workflow_yaml(src)
+  let parsed = @actrun.parse_workflow_yaml(src)
   let workflow = expect_workflow(parsed)
 
   @debug.debug_inspect(
@@ -333,7 +340,7 @@ test "parser: parse checkout uses step" {
     #|        with:
     #|          fetch-depth: 1
     #|      - run: cat package.json
-  let parsed = parse_workflow_yaml(src)
+  let parsed = @actrun.parse_workflow_yaml(src)
   let workflow = expect_workflow(parsed)
 
   @debug.debug_inspect(
@@ -365,7 +372,7 @@ test "parser: parse local composite action yaml" {
     #|      shell: bash
     #|    - id: finish
     #|      run: echo done
-  let parsed = parse_local_action_yaml(src)
+  let parsed = @actrun.parse_local_action_yaml(src)
   let action = expect_local_action(parsed)
 
   @debug.debug_inspect(
@@ -410,7 +417,7 @@ test "parser: accept pull_request trigger" {
     #|    runs-on: ubuntu-latest
     #|    steps:
     #|      - run: echo ok
-  let parsed = parse_workflow_yaml(src)
+  let parsed = @actrun.parse_workflow_yaml(src)
   @debug.debug_inspect(parsed.errors, content="[]")
   guard parsed.workflow is Some(workflow) else { fail("expected workflow") }
   @debug.debug_inspect(workflow.jobs.length(), content="1")
@@ -425,7 +432,7 @@ test "parser: reject unsupported trigger" {
     #|    runs-on: ubuntu-latest
     #|    steps:
     #|      - run: echo ok
-  let parsed = parse_workflow_yaml(src)
+  let parsed = @actrun.parse_workflow_yaml(src)
   @debug.debug_inspect(
     parsed.errors,
     content="[\"only push and workflow_call triggers are supported in MVP\"]",
@@ -449,7 +456,7 @@ test "parser: parse matrix exclude rows" {
     #|    runs-on: ${{ matrix.os }}
     #|    steps:
     #|      - run: printf '%s' '${{ matrix.target }}'
-  let parsed = parse_workflow_yaml(src)
+  let parsed = @actrun.parse_workflow_yaml(src)
   let workflow = expect_workflow(parsed)
 
   @debug.debug_inspect(parsed.errors, content="[]")
@@ -477,7 +484,7 @@ test "parser: parse mixed matrix axes and include rows" {
     #|    runs-on: ubuntu-latest
     #|    steps:
     #|      - run: printf '%s' ok
-  let parsed = parse_workflow_yaml(src)
+  let parsed = @actrun.parse_workflow_yaml(src)
   let workflow = expect_workflow(parsed)
 
   @debug.debug_inspect(parsed.errors, content="[]")
@@ -514,7 +521,7 @@ test "parser: parse matrix max parallel" {
     #|    runs-on: ${{ matrix.os }}
     #|    steps:
     #|      - run: printf '%s|%s' '${{ matrix.os }}' '${{ matrix.target }}'
-  let parsed = parse_workflow_yaml(src)
+  let parsed = @actrun.parse_workflow_yaml(src)
   let workflow = expect_workflow(parsed)
 
   @debug.debug_inspect(parsed.errors, content="[]")
@@ -542,7 +549,7 @@ test "parser: reject non-positive matrix max parallel" {
     #|    runs-on: ${{ matrix.os }}
     #|    steps:
     #|      - run: printf '%s' ok
-  let parsed = parse_workflow_yaml(src)
+  let parsed = @actrun.parse_workflow_yaml(src)
 
   @debug.debug_inspect(parsed.workflow is None, content="true")
   @debug.debug_inspect(
@@ -562,9 +569,9 @@ test "wasi job: wasm-only steps are accepted" {
     #|    steps:
     #|      - uses: wasm://lint@v1
     #|      - uses: wasm://test@v1
-  let parsed = parse_workflow_yaml(src)
+  let parsed = @actrun.parse_workflow_yaml(src)
   let workflow = expect_workflow(parsed)
-  let lowered = lower_push_workflow(workflow)
+  let lowered = @actrun.lower_push_workflow(workflow)
   @debug.debug_inspect(lowered.errors, content="[]")
 }
 
@@ -579,9 +586,9 @@ test "wasi job: run step is rejected" {
     #|    steps:
     #|      - uses: wasm://lint@v1
     #|      - run: echo "not allowed"
-  let parsed = parse_workflow_yaml(src)
+  let parsed = @actrun.parse_workflow_yaml(src)
   let workflow = expect_workflow(parsed)
-  let lowered = lower_push_workflow(workflow)
+  let lowered = @actrun.lower_push_workflow(workflow)
   @debug.debug_inspect(lowered.errors.length() > 0, content="true")
   @debug.debug_inspect(lowered.errors[0].contains("run:"), content="true")
 }
@@ -596,9 +603,9 @@ test "wasi job: github action is rejected" {
     #|    runs-on: wasi
     #|    steps:
     #|      - uses: actions/checkout@v4
-  let parsed = parse_workflow_yaml(src)
+  let parsed = @actrun.parse_workflow_yaml(src)
   let workflow = expect_workflow(parsed)
-  let lowered = lower_push_workflow(workflow)
+  let lowered = @actrun.lower_push_workflow(workflow)
   @debug.debug_inspect(lowered.errors.length() > 0, content="true")
   @debug.debug_inspect(lowered.errors[0].contains("wasm://"), content="true")
 }
@@ -613,9 +620,9 @@ test "wasi job: docker action is rejected" {
     #|    runs-on: wasi
     #|    steps:
     #|      - uses: docker://alpine
-  let parsed = parse_workflow_yaml(src)
+  let parsed = @actrun.parse_workflow_yaml(src)
   let workflow = expect_workflow(parsed)
-  let lowered = lower_push_workflow(workflow)
+  let lowered = @actrun.lower_push_workflow(workflow)
   @debug.debug_inspect(lowered.errors.length() > 0, content="true")
 }
 
@@ -629,36 +636,41 @@ test "non-wasi job: run step is allowed" {
     #|    runs-on: ubuntu-latest
     #|    steps:
     #|      - run: echo hello
-  let parsed = parse_workflow_yaml(src)
+  let parsed = @actrun.parse_workflow_yaml(src)
   let workflow = expect_workflow(parsed)
-  let lowered = lower_push_workflow(workflow)
+  let lowered = @actrun.lower_push_workflow(workflow)
   @debug.debug_inspect(lowered.errors, content="[]")
 }
 
 ///|
 test "push trigger: branch and path filters" {
-  let trigger = new_push_trigger(branches=["main"], paths=["src/*", "README.md"])
-  let matched = new_push_event("main", ["src/lib.mbt"])
-  let wrong_branch = new_push_event("feature/test", ["src/lib.mbt"])
-  let wrong_path = new_push_event("main", ["docs/spec.md"])
+  let trigger = @actrun.new_push_trigger(branches=["main"], paths=[
+    "src/*", "README.md",
+  ])
+  let matched = @actrun.new_push_event("main", ["src/lib.mbt"])
+  let wrong_branch = @actrun.new_push_event("feature/test", ["src/lib.mbt"])
+  let wrong_path = @actrun.new_push_event("main", ["docs/spec.md"])
 
-  @debug.assert_eq(matches_push_trigger(trigger, matched), true)
-  @debug.assert_eq(matches_push_trigger(trigger, wrong_branch), false)
-  @debug.assert_eq(matches_push_trigger(trigger, wrong_path), false)
+  @debug.assert_eq(@actrun.matches_push_trigger(trigger, matched), true)
+  @debug.assert_eq(@actrun.matches_push_trigger(trigger, wrong_branch), false)
+  @debug.assert_eq(@actrun.matches_push_trigger(trigger, wrong_path), false)
 }
 
 ///|
 test "push trigger: paths ignore skips fully ignored changes" {
-  let trigger = new_push_trigger(paths_ignore=["docs/*", "*.md"])
+  let trigger = @actrun.new_push_trigger(paths_ignore=["docs/*", "*.md"])
 
   @debug.assert_eq(
-    matches_push_trigger(trigger, new_push_event("main", ["docs/spec.md"])),
+    @actrun.matches_push_trigger(
+      trigger,
+      @actrun.new_push_event("main", ["docs/spec.md"]),
+    ),
     false,
   )
   @debug.assert_eq(
-    matches_push_trigger(
+    @actrun.matches_push_trigger(
       trigger,
-      new_push_event("main", ["docs/spec.md", "src/main.mbt"]),
+      @actrun.new_push_event("main", ["docs/spec.md", "src/main.mbt"]),
     ),
     true,
   )
@@ -666,29 +678,31 @@ test "push trigger: paths ignore skips fully ignored changes" {
 
 ///|
 test "lowering: jobs and steps become bitflow tasks" {
-  let workflow = new_workflow(
+  let workflow = @actrun.new_workflow(
     "ci",
     [
-      new_job(
+      @actrun.new_job(
         "build",
         [
-          new_run_step("install", "pnpm install"),
-          new_run_step("test", "pnpm test", env={ "STEP_ONLY": "1" }),
+          @actrun.new_run_step("install", "pnpm install"),
+          @actrun.new_run_step("test", "pnpm test", env={ "STEP_ONLY": "1" }),
         ],
         env={ "JOB_ONLY": "1", "LEVEL": "job" },
       ),
-      new_job(
+      @actrun.new_job(
         "lint",
-        [new_run_step("lint", "pnpm lint")],
+        [@actrun.new_run_step("lint", "pnpm lint")],
         needs=["build"],
-        defaults=new_run_defaults(working_directory=Some("packages/app")),
+        defaults=@actrun.new_run_defaults(
+          working_directory=Some("packages/app"),
+        ),
       ),
     ],
     env={ "GLOBAL": "1", "LEVEL": "workflow" },
-    defaults=new_run_defaults(shell=Some("bash")),
+    defaults=@actrun.new_run_defaults(shell=Some("bash")),
   )
 
-  let result = lower_push_workflow(workflow)
+  let result = @actrun.lower_push_workflow(workflow)
 
   @debug.debug_inspect(result.errors, content="[]")
   @debug.debug_inspect(result.ir.nodes.length(), content="2")
@@ -753,14 +767,14 @@ test "lowering: jobs and steps become bitflow tasks" {
 
 ///|
 test "lowering: checkout uses step becomes checkout task" {
-  let workflow = new_workflow("ci", [
-    new_job("test", [
-      new_uses_step("checkout", "builtin://checkout"),
-      new_run_step("verify", "cat package.json"),
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job("test", [
+      @actrun.new_uses_step("checkout", "builtin://checkout"),
+      @actrun.new_run_step("verify", "cat package.json"),
     ]),
   ])
 
-  let result = lower_push_workflow(workflow)
+  let result = @actrun.lower_push_workflow(workflow)
 
   @debug.debug_inspect(result.errors, content="[]")
   @debug.debug_inspect(result.ir.tasks.length(), content="3")
@@ -806,16 +820,16 @@ test "lowering: checkout uses step becomes checkout task" {
 
 ///|
 test "lowering: checkout with values become INPUT env" {
-  let workflow = new_workflow("ci", [
-    new_job("test", [
-      new_uses_step("checkout", "actions/checkout@v4", with_values={
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job("test", [
+      @actrun.new_uses_step("checkout", "actions/checkout@v4", with_values={
         "path": "repo",
         "sparse-checkout": "README.md\n.github",
       }),
     ]),
   ])
 
-  let result = lower_push_workflow(workflow)
+  let result = @actrun.lower_push_workflow(workflow)
 
   @debug.debug_inspect(result.errors, content="[]")
   let checkout_plan = expect_task_plan(result.plan, "test/checkout")
@@ -841,11 +855,13 @@ test "lowering: checkout with values become INPUT env" {
 
 ///|
 test "lowering: unsupported uses step is rejected" {
-  let workflow = new_workflow("ci", [
-    new_job("test", [new_uses_step("setup", "bit://std/cache@v1")]),
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job("test", [
+      @actrun.new_uses_step("setup", "bit://std/cache@v1"),
+    ]),
   ])
 
-  let result = lower_push_workflow(workflow)
+  let result = @actrun.lower_push_workflow(workflow)
 
   @debug.debug_inspect(
     result.errors,
@@ -874,15 +890,15 @@ test "lowering: custom registry composite action expands from registry root" {
     #|      run: printf '%s' '${{ inputs.message }}'
     #|      shell: bash
   @xfs.write_string_to_file(action_root + "/action.yml", manifest)
-  let workflow = new_workflow("ci", [
-    new_job("test", [
-      new_uses_step("setup", "bit://std/cache@v1", with_values={
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job("test", [
+      @actrun.new_uses_step("setup", "bit://std/cache@v1", with_values={
         "message": "from-registry",
       }),
     ]),
   ])
 
-  let result = lower_push_workflow_in_workspace(workflow, workspace)
+  let result = @actrun.lower_push_workflow_in_workspace(workflow, workspace)
   lib_test_restore_env_var("ACTRUN_ACTION_REGISTRY_ROOT", previous_root)
 
   @debug.debug_inspect(result.errors, content="[]")
@@ -922,15 +938,15 @@ test "lowering: custom registry node action resolves backend from manifest" {
     #|  using: node20
     #|  main: index.sh
   @xfs.write_string_to_file(action_root + "/action.yml", manifest)
-  let workflow = new_workflow("ci", [
-    new_job("test", [
-      new_uses_step("setup", "bit://std/cache@v1", with_values={
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job("test", [
+      @actrun.new_uses_step("setup", "bit://std/cache@v1", with_values={
         "message": "from-node",
       }),
     ]),
   ])
 
-  let result = lower_push_workflow_in_workspace(workflow, workspace)
+  let result = @actrun.lower_push_workflow_in_workspace(workflow, workspace)
   lib_test_restore_env_var("ACTRUN_ACTION_REGISTRY_ROOT", previous_root)
 
   @debug.debug_inspect(result.errors, content="[]")
@@ -987,15 +1003,15 @@ test "lowering: custom registry docker action resolves backend from manifest" {
     #|  args:
     #|    - ${{ inputs.message }}
   @xfs.write_string_to_file(action_root + "/action.yml", manifest)
-  let workflow = new_workflow("ci", [
-    new_job("test", [
-      new_uses_step("setup", "bit://std/docker-cache@v1", with_values={
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job("test", [
+      @actrun.new_uses_step("setup", "bit://std/docker-cache@v1", with_values={
         "message": "from-docker",
       }),
     ]),
   ])
 
-  let result = lower_push_workflow_in_workspace(workflow, workspace)
+  let result = @actrun.lower_push_workflow_in_workspace(workflow, workspace)
   lib_test_restore_env_var("ACTRUN_ACTION_REGISTRY_ROOT", previous_root)
 
   @debug.debug_inspect(result.errors, content="[]")
@@ -1032,14 +1048,14 @@ test "lowering: custom registry docker action resolves backend from manifest" {
 
 ///|
 test "lowering: docker uses step becomes docker action task" {
-  let workflow = new_workflow("ci", [
-    new_job("test", [
-      new_uses_step("image", "docker://alpine:3.21"),
-      new_run_step("verify", "echo ok"),
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job("test", [
+      @actrun.new_uses_step("image", "docker://alpine:3.21"),
+      @actrun.new_run_step("verify", "echo ok"),
     ]),
   ])
 
-  let result = lower_push_workflow(workflow)
+  let result = @actrun.lower_push_workflow(workflow)
 
   @debug.debug_inspect(result.errors, content="[]")
   let image_plan = expect_task_plan(result.plan, "test/image")
@@ -1074,14 +1090,14 @@ test "lowering: docker uses step becomes docker action task" {
 
 ///|
 test "lowering: wasm uses step becomes wasm action task" {
-  let workflow = new_workflow("ci", [
-    new_job("test", [
-      new_uses_step("module", "wasm://std/echo@v1"),
-      new_run_step("verify", "echo ok"),
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job("test", [
+      @actrun.new_uses_step("module", "wasm://std/echo@v1"),
+      @actrun.new_run_step("verify", "echo ok"),
     ]),
   ])
 
-  let result = lower_push_workflow(workflow)
+  let result = @actrun.lower_push_workflow(workflow)
 
   @debug.debug_inspect(result.errors, content="[]")
   let module_plan = expect_task_plan(result.plan, "test/module")
@@ -1120,20 +1136,20 @@ test "lowering: wasm uses step becomes wasm action task" {
 
 ///|
 test "lowering: builtin artifact actions receive with values as INPUT env" {
-  let workflow = new_workflow("ci", [
-    new_job("test", [
-      new_uses_step("upload", "actions/upload-artifact@v4", with_values={
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job("test", [
+      @actrun.new_uses_step("upload", "actions/upload-artifact@v4", with_values={
         "name": "bundle",
         "path": "dist/result.txt",
       }),
-      new_uses_step("download", "actions/download-artifact@v4", with_values={
+      @actrun.new_uses_step("download", "actions/download-artifact@v4", with_values={
         "name": "bundle",
         "path": "restored",
       }),
     ]),
   ])
 
-  let result = lower_push_workflow(workflow)
+  let result = @actrun.lower_push_workflow(workflow)
 
   @debug.debug_inspect(result.errors, content="[]")
   let upload_plan = expect_task_plan(result.plan, "test/upload")
@@ -1185,20 +1201,20 @@ test "lowering: builtin artifact actions receive with values as INPUT env" {
 
 ///|
 test "lowering: builtin cache actions receive with values as INPUT env" {
-  let workflow = new_workflow("ci", [
-    new_job("test", [
-      new_uses_step("restore", "actions/cache/restore@v4", with_values={
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job("test", [
+      @actrun.new_uses_step("restore", "actions/cache/restore@v4", with_values={
         "key": "bundle-v1",
         "path": "cache-dir",
       }),
-      new_uses_step("save", "actions/cache/save@v4", with_values={
+      @actrun.new_uses_step("save", "actions/cache/save@v4", with_values={
         "key": "bundle-v1",
         "path": "cache-dir",
       }),
     ]),
   ])
 
-  let result = lower_push_workflow(workflow)
+  let result = @actrun.lower_push_workflow(workflow)
 
   @debug.debug_inspect(result.errors, content="[]")
   let restore_plan = expect_task_plan(result.plan, "test/restore")
@@ -1250,17 +1266,17 @@ test "lowering: builtin cache actions receive with values as INPUT env" {
 
 ///|
 test "lowering: builtin cache action schedules deferred post save" {
-  let workflow = new_workflow("ci", [
-    new_job("test", [
-      new_uses_step("cache", "actions/cache@v4", with_values={
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job("test", [
+      @actrun.new_uses_step("cache", "actions/cache@v4", with_values={
         "key": "bundle-v1",
         "path": "cache-dir",
       }),
-      new_run_step("verify", "echo ok"),
+      @actrun.new_run_step("verify", "echo ok"),
     ]),
   ])
 
-  let result = lower_push_workflow(workflow)
+  let result = @actrun.lower_push_workflow(workflow)
 
   @debug.debug_inspect(result.errors, content="[]")
 
@@ -1326,20 +1342,20 @@ test "lowering: local composite action expands inner steps" {
     action_src,
   )
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "test",
       [
-        new_uses_step("setup", "./.github/actions/setup", with_values={
+        @actrun.new_uses_step("setup", "./.github/actions/setup", with_values={
           "message": "from-input",
         }),
-        new_run_step("verify", "cat local.txt"),
+        @actrun.new_run_step("verify", "cat local.txt"),
       ],
-      defaults=new_run_defaults(shell=Some("sh")),
+      defaults=@actrun.new_run_defaults(shell=Some("sh")),
     ),
   ])
 
-  let result = lower_push_workflow_in_workspace(workflow, workspace)
+  let result = @actrun.lower_push_workflow_in_workspace(workflow, workspace)
 
   @debug.debug_inspect(result.errors, content="[]")
   @debug.debug_inspect(result.ir.tasks.length(), content="4")
@@ -1427,11 +1443,13 @@ test "lowering: local composite action expands nested local action" {
     action_src,
   )
 
-  let workflow = new_workflow("ci", [
-    new_job("test", [new_uses_step("setup", "./.github/actions/setup")]),
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job("test", [
+      @actrun.new_uses_step("setup", "./.github/actions/setup"),
+    ]),
   ])
 
-  let result = lower_push_workflow_in_workspace(workflow, workspace)
+  let result = @actrun.lower_push_workflow_in_workspace(workflow, workspace)
 
   @debug.debug_inspect(result.errors, content="[]")
   let write = flow_task_by_id(result.ir, "test/setup__child__write")
@@ -1478,11 +1496,13 @@ test "lowering: local composite action nested builtin uses becomes action task" 
     action_src,
   )
 
-  let workflow = new_workflow("ci", [
-    new_job("test", [new_uses_step("setup", "./.github/actions/setup")]),
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job("test", [
+      @actrun.new_uses_step("setup", "./.github/actions/setup"),
+    ]),
   ])
 
-  let result = lower_push_workflow_in_workspace(workflow, workspace)
+  let result = @actrun.lower_push_workflow_in_workspace(workflow, workspace)
 
   @debug.debug_inspect(result.errors, content="[]")
   let checkout_plan = expect_task_plan(result.plan, "test/setup__checkout")
@@ -1532,15 +1552,15 @@ test "lowering: local composite action nested wasm uses receives input env" {
     action_src,
   )
 
-  let workflow = new_workflow("ci", [
-    new_job("test", [
-      new_uses_step("setup", "./.github/actions/setup", with_values={
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job("test", [
+      @actrun.new_uses_step("setup", "./.github/actions/setup", with_values={
         "message": "from-input",
       }),
     ]),
   ])
 
-  let result = lower_push_workflow_in_workspace(workflow, workspace)
+  let result = @actrun.lower_push_workflow_in_workspace(workflow, workspace)
 
   @debug.debug_inspect(result.errors, content="[]")
   let module_plan = expect_task_plan(result.plan, "test/setup__module")
@@ -1585,18 +1605,18 @@ test "lowering: cached github repo composite action with subpath expands inner s
     #|      shell: bash
   @xfs.write_string_to_file(action_root + "/action.yml", action_src)
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "test",
       [
-        new_uses_step("remote", "mizchi-test/demo-action/composite@v1"),
-        new_run_step("verify", "cat remote.txt"),
+        @actrun.new_uses_step("remote", "mizchi-test/demo-action/composite@v1"),
+        @actrun.new_run_step("verify", "cat remote.txt"),
       ],
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
   ])
 
-  let result = lower_push_workflow_in_workspace(workflow, workspace)
+  let result = @actrun.lower_push_workflow_in_workspace(workflow, workspace)
 
   @debug.debug_inspect(result.errors, content="[]")
   let write = flow_task_by_id(result.ir, "test/remote__write")
@@ -1637,20 +1657,20 @@ test "lowering: cached github repo node action becomes node task" {
     #|  main: main.sh
   @xfs.write_string_to_file(action_root + "/action.yml", action_src)
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "test",
       [
-        new_uses_step("remote", "mizchi-test/node-action/action@v1", with_values={
+        @actrun.new_uses_step("remote", "mizchi-test/node-action/action@v1", with_values={
           "message": "from-input",
         }),
-        new_run_step("verify", "echo ok"),
+        @actrun.new_run_step("verify", "echo ok"),
       ],
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
   ])
 
-  let result = lower_push_workflow_in_workspace(workflow, workspace)
+  let result = @actrun.lower_push_workflow_in_workspace(workflow, workspace)
 
   @debug.debug_inspect(result.errors, content="[]")
   let remote_plan = expect_task_plan(result.plan, "test/remote")
@@ -1732,20 +1752,20 @@ test "lowering: cached github repo node action becomes node task" {
 
 ///|
 test "lowering: job outputs are carried into execution plan" {
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "build",
       [
-        new_run_step(
+        @actrun.new_run_step(
           "produce", "printf 'artifact_id=build-42\\n' >> \"$GITHUB_OUTPUT\"",
         ),
       ],
       outputs={ "artifact_id": "${{ steps.produce.outputs.artifact_id }}" },
     ),
-    new_job(
+    @actrun.new_job(
       "consume",
       [
-        new_run_step(
+        @actrun.new_run_step(
           "read", "printf '%s' \"${{ needs.build.outputs.artifact_id }}\"",
         ),
       ],
@@ -1753,7 +1773,7 @@ test "lowering: job outputs are carried into execution plan" {
     ),
   ])
 
-  let result = lower_push_workflow(workflow)
+  let result = @actrun.lower_push_workflow(workflow)
 
   @debug.debug_inspect(result.errors, content="[]")
   @debug.debug_inspect(
@@ -1796,20 +1816,20 @@ test "lowering: cached github repo docker action becomes docker task" {
   @xfs.write_string_to_file(action_root + "/action.yml", action_src)
   @xfs.write_string_to_file(action_root + "/Dockerfile", "FROM alpine:3.21\n")
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "test",
       [
-        new_uses_step("remote", "mizchi-test/docker-action/action@v1", with_values={
+        @actrun.new_uses_step("remote", "mizchi-test/docker-action/action@v1", with_values={
           "message": "from-input",
         }),
-        new_run_step("verify", "echo ok"),
+        @actrun.new_run_step("verify", "echo ok"),
       ],
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
   ])
 
-  let result = lower_push_workflow_in_workspace(workflow, workspace)
+  let result = @actrun.lower_push_workflow_in_workspace(workflow, workspace)
 
   @debug.debug_inspect(result.errors, content="[]")
   let remote_plan = expect_task_plan(result.plan, "test/remote")
@@ -1892,18 +1912,20 @@ test "lowering: cached github repo docker action schedules post lifecycle at job
   @xfs.write_string_to_file(action_root + "/action.yml", action_src)
   @xfs.write_string_to_file(action_root + "/Dockerfile", "FROM alpine:3.21\n")
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "test",
       [
-        new_uses_step("remote", "mizchi-test/docker-lifecycle/action@v1"),
-        new_run_step("verify", "echo ok"),
+        @actrun.new_uses_step(
+          "remote", "mizchi-test/docker-lifecycle/action@v1",
+        ),
+        @actrun.new_run_step("verify", "echo ok"),
       ],
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
   ])
 
-  let result = lower_push_workflow_in_workspace(workflow, workspace)
+  let result = @actrun.lower_push_workflow_in_workspace(workflow, workspace)
 
   @debug.debug_inspect(result.errors, content="[]")
   let pre = flow_task_by_id(result.ir, "test/remote__pre")
@@ -1947,18 +1969,18 @@ test "lowering: cached github repo node action schedules post lifecycle at job e
     #|  post: post.sh
   @xfs.write_string_to_file(action_root + "/action.yml", action_src)
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "test",
       [
-        new_uses_step("remote", "mizchi-test/node-lifecycle/action@v1"),
-        new_run_step("verify", "echo ok"),
+        @actrun.new_uses_step("remote", "mizchi-test/node-lifecycle/action@v1"),
+        @actrun.new_run_step("verify", "echo ok"),
       ],
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
   ])
 
-  let result = lower_push_workflow_in_workspace(workflow, workspace)
+  let result = @actrun.lower_push_workflow_in_workspace(workflow, workspace)
 
   @debug.debug_inspect(result.errors, content="[]")
   let pre = flow_task_by_id(result.ir, "test/remote__pre")
@@ -1986,24 +2008,32 @@ test "lowering: cached github repo node action schedules post lifecycle at job e
 
 ///|
 test "lowering: step if status functions are accepted" {
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "build",
       [
-        new_run_step("fail", "exit 1"),
-        new_run_step("always_step", "echo always", if_condition="always()"),
-        new_run_step("failure_step", "echo failure", if_condition="failure()"),
-        new_run_step(
+        @actrun.new_run_step("fail", "exit 1"),
+        @actrun.new_run_step(
+          "always_step",
+          "echo always",
+          if_condition="always()",
+        ),
+        @actrun.new_run_step(
+          "failure_step",
+          "echo failure",
+          if_condition="failure()",
+        ),
+        @actrun.new_run_step(
           "cancelled_step",
           "echo cancelled",
           if_condition="cancelled()",
         ),
       ],
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
   ])
 
-  let lowered = lower_push_workflow(workflow)
+  let lowered = @actrun.lower_push_workflow(workflow)
 
   @debug.debug_inspect(lowered.errors, content="[]")
   @debug.debug_inspect(
@@ -2028,18 +2058,18 @@ test "lowering: step if status functions are accepted" {
 
 ///|
 test "lowering: step continue-on-error is accepted" {
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "build",
       [
-        new_run_step("fail_soft", "exit 1", continue_on_error="true"),
-        new_run_step("after", "echo after"),
+        @actrun.new_run_step("fail_soft", "exit 1", continue_on_error="true"),
+        @actrun.new_run_step("after", "echo after"),
       ],
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
   ])
 
-  let lowered = lower_push_workflow(workflow)
+  let lowered = @actrun.lower_push_workflow(workflow)
 
   @debug.debug_inspect(lowered.errors, content="[]")
   @debug.debug_inspect(
@@ -2072,23 +2102,23 @@ async test "lowering: github repo action cache miss fetches and expands composit
     workspace, action_src, log_path,
   )
 
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "test",
       [
-        new_uses_step("remote", action_uses),
-        new_run_step("verify", "cat remote.txt"),
+        @actrun.new_uses_step("remote", action_uses),
+        @actrun.new_run_step("verify", "cat remote.txt"),
       ],
-      defaults=new_run_defaults(shell=Some("bash")),
+      defaults=@actrun.new_run_defaults(shell=Some("bash")),
     ),
   ])
 
-  let prefetch = prefetch_workflow_github_actions_native(
+  let prefetch = @actrun.prefetch_workflow_github_actions_native(
     workflow,
     workspace,
     git_bin=Some(git_path),
   )
-  let result = lower_push_workflow_in_workspace(workflow, workspace)
+  let result = @actrun.lower_push_workflow_in_workspace(workflow, workspace)
 
   @debug.debug_inspect(prefetch.errors, content="[]")
   @debug.debug_inspect(prefetch.fetched.length(), content="1")
@@ -2127,11 +2157,13 @@ test "lowering: local composite action rejects unsupported nested uses" {
     action_src,
   )
 
-  let workflow = new_workflow("ci", [
-    new_job("test", [new_uses_step("setup", "./.github/actions/setup")]),
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job("test", [
+      @actrun.new_uses_step("setup", "./.github/actions/setup"),
+    ]),
   ])
 
-  let result = lower_push_workflow_in_workspace(workflow, workspace)
+  let result = @actrun.lower_push_workflow_in_workspace(workflow, workspace)
 
   @debug.debug_inspect(
     result.errors,
@@ -2141,16 +2173,22 @@ test "lowering: local composite action rejects unsupported nested uses" {
 
 ///|
 test "lowering: matrix job fan-in expands downstream needs" {
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "build",
-      [new_run_step("emit", "printf '%s' '${{ matrix.target }}'")],
-      matrix=Some(new_job_matrix([{ "target": "native" }, { "target": "js" }])),
+      [@actrun.new_run_step("emit", "printf '%s' '${{ matrix.target }}'")],
+      matrix=Some(
+        @actrun.new_job_matrix([{ "target": "native" }, { "target": "js" }]),
+      ),
     ),
-    new_job("consume", [new_run_step("read", "printf '%s' ok")], needs=["build"]),
+    @actrun.new_job(
+      "consume",
+      [@actrun.new_run_step("read", "printf '%s' ok")],
+      needs=["build"],
+    ),
   ])
 
-  let result = lower_push_workflow(workflow)
+  let result = @actrun.lower_push_workflow(workflow)
   let consume = flow_task_by_id(result.ir, "consume/read")
 
   @debug.debug_inspect(result.errors, content="[]")
@@ -2174,11 +2212,11 @@ test "lowering: matrix job fan-in expands downstream needs" {
 
 ///|
 test "lowering: matrix outputs are carried into execution plan" {
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "build",
       [
-        new_run_step(
+        @actrun.new_run_step(
           "produce", "printf '%s=%s\\n' '${{ matrix.target }}' '${{ matrix.target }}' >> \"$GITHUB_OUTPUT\"",
         ),
       ],
@@ -2186,12 +2224,14 @@ test "lowering: matrix outputs are carried into execution plan" {
         "native": "${{ steps.produce.outputs.native }}",
         "js": "${{ steps.produce.outputs.js }}",
       },
-      matrix=Some(new_job_matrix([{ "target": "native" }, { "target": "js" }])),
+      matrix=Some(
+        @actrun.new_job_matrix([{ "target": "native" }, { "target": "js" }]),
+      ),
     ),
-    new_job(
+    @actrun.new_job(
       "consume",
       [
-        new_run_step(
+        @actrun.new_run_step(
           "read", "printf '%s' \"${{ needs.build.outputs.native }}\"",
         ),
       ],
@@ -2199,7 +2239,7 @@ test "lowering: matrix outputs are carried into execution plan" {
     ),
   ])
 
-  let result = lower_push_workflow(workflow)
+  let result = @actrun.lower_push_workflow(workflow)
 
   @debug.debug_inspect(result.errors, content="[]")
   @debug.debug_inspect(
@@ -2226,12 +2266,12 @@ test "lowering: matrix outputs are carried into execution plan" {
 
 ///|
 test "lowering: matrix jobs retain fail-fast metadata" {
-  let workflow = new_workflow("ci", [
-    new_job(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job(
       "build",
-      [new_run_step("emit", "printf '%s' '${{ matrix.variant }}'")],
+      [@actrun.new_run_step("emit", "printf '%s' '${{ matrix.variant }}'")],
       matrix=Some(
-        new_job_matrix(
+        @actrun.new_job_matrix(
           [{ "variant": "ok" }, { "variant": "fail" }, { "variant": "late" }],
           fail_fast=true,
         ),
@@ -2239,7 +2279,7 @@ test "lowering: matrix jobs retain fail-fast metadata" {
     ),
   ])
 
-  let result = lower_push_workflow(workflow)
+  let result = @actrun.lower_push_workflow(workflow)
 
   @debug.debug_inspect(result.errors, content="[]")
   @debug.debug_inspect(
@@ -2266,45 +2306,48 @@ test "lowering: matrix jobs retain fail-fast metadata" {
 
 ///|
 test "parser/lowering: workflow and job permissions are silently ignored" {
-  let workflow = new_workflow(
+  let workflow = @actrun.new_workflow(
     "ci",
     [
-      new_job(
+      @actrun.new_job(
         "build",
-        [new_run_step("show", "printf '%s' hi")],
+        [@actrun.new_run_step("show", "printf '%s' hi")],
         permissions=Some(
-          new_permissions_spec(values={ "contents": "read", "issues": "write" }),
+          @actrun.new_permissions_spec(values={
+            "contents": "read",
+            "issues": "write",
+          }),
         ),
       ),
     ],
-    permissions=Some(new_permissions_spec(values={ "_": "read-all" })),
+    permissions=Some(@actrun.new_permissions_spec(values={ "_": "read-all" })),
   )
 
-  let result = lower_push_workflow(workflow)
+  let result = @actrun.lower_push_workflow(workflow)
 
   @debug.debug_inspect(result.errors, content="[]")
 }
 
 ///|
 test "security: permissions do not leak into task plan env" {
-  let workflow = new_workflow(
+  let workflow = @actrun.new_workflow(
     "ci",
     [
-      new_job(
+      @actrun.new_job(
         "build",
-        [new_run_step("check", "echo test")],
+        [@actrun.new_run_step("check", "echo test")],
         permissions=Some(
-          new_permissions_spec(values={
+          @actrun.new_permissions_spec(values={
             "contents": "write",
             "packages": "write",
           }),
         ),
       ),
     ],
-    permissions=Some(new_permissions_spec(values={ "_": "write-all" })),
+    permissions=Some(@actrun.new_permissions_spec(values={ "_": "write-all" })),
   )
 
-  let result = lower_push_workflow(workflow)
+  let result = @actrun.lower_push_workflow(workflow)
   @debug.debug_inspect(result.errors, content="[]")
   // Permissions should not appear in task plan env
   for task in result.plan.tasks {
@@ -2319,26 +2362,31 @@ test "security: permissions do not leak into task plan env" {
 ///|
 test "security: permissions do not affect execution plan structure" {
   // Same workflow with and without permissions should produce identical plans
-  let with_perms = new_workflow(
+  let with_perms = @actrun.new_workflow(
     "ci",
     [
-      new_job(
+      @actrun.new_job(
         "build",
-        [new_run_step("step1", "echo one"), new_run_step("step2", "echo two")],
-        permissions=Some(new_permissions_spec(values={ "contents": "write" })),
+        [
+          @actrun.new_run_step("step1", "echo one"),
+          @actrun.new_run_step("step2", "echo two"),
+        ],
+        permissions=Some(
+          @actrun.new_permissions_spec(values={ "contents": "write" }),
+        ),
       ),
     ],
-    permissions=Some(new_permissions_spec(values={ "_": "read-all" })),
+    permissions=Some(@actrun.new_permissions_spec(values={ "_": "read-all" })),
   )
-  let without_perms = new_workflow("ci", [
-    new_job("build", [
-      new_run_step("step1", "echo one"),
-      new_run_step("step2", "echo two"),
+  let without_perms = @actrun.new_workflow("ci", [
+    @actrun.new_job("build", [
+      @actrun.new_run_step("step1", "echo one"),
+      @actrun.new_run_step("step2", "echo two"),
     ]),
   ])
 
-  let result_with = lower_push_workflow(with_perms)
-  let result_without = lower_push_workflow(without_perms)
+  let result_with = @actrun.lower_push_workflow(with_perms)
+  let result_without = @actrun.lower_push_workflow(without_perms)
 
   @debug.debug_inspect(result_with.errors, content="[]")
   @debug.debug_inspect(result_without.errors, content="[]")
@@ -2358,26 +2406,29 @@ test "security: permissions do not affect execution plan structure" {
 
 ///|
 test "parser/lowering: workflow and job concurrency are silently ignored" {
-  let workflow = new_workflow(
+  let workflow = @actrun.new_workflow(
     "ci",
     [
-      new_job(
+      @actrun.new_job(
         "build",
-        [new_run_step("show", "printf '%s' hi")],
+        [@actrun.new_run_step("show", "printf '%s' hi")],
         concurrency=Some(
-          new_concurrency_spec("job-group", cancel_in_progress=Some("true")),
+          @actrun.new_concurrency_spec(
+            "job-group",
+            cancel_in_progress=Some("true"),
+          ),
         ),
       ),
     ],
     concurrency=Some(
-      new_concurrency_spec(
+      @actrun.new_concurrency_spec(
         "workflow-group",
         cancel_in_progress=Some("${{ github.ref_name == 'main' }}"),
       ),
     ),
   )
 
-  let result = lower_push_workflow(workflow)
+  let result = @actrun.lower_push_workflow(workflow)
 
   @debug.debug_inspect(result.errors, content="[]")
 }
@@ -2406,7 +2457,7 @@ test "parser/lowering: workflow_call is parsed and rejected in MVP" {
     #|    steps:
     #|      - id: show
     #|        run: printf '%s' hi
-  let parsed = parse_workflow_yaml(src)
+  let parsed = @actrun.parse_workflow_yaml(src)
 
   @debug.debug_inspect(parsed.errors, content="[]")
   let workflow = parsed.workflow.unwrap()
@@ -2439,7 +2490,7 @@ test "parser/lowering: workflow_call is parsed and rejected in MVP" {
     content="true",
   )
 
-  let result = lower_push_workflow(workflow)
+  let result = @actrun.lower_push_workflow(workflow)
   @debug.debug_inspect(
     result.errors,
     content="[\"workflow_call is not supported in MVP\"]",
@@ -2483,11 +2534,11 @@ test "lowering: local reusable workflow jobs are expanded in workspace-aware mod
     #|    steps:
     #|      - id: show
     #|        run: printf '%s' done > result.txt
-  let parsed = parse_workflow_yaml(caller_src)
+  let parsed = @actrun.parse_workflow_yaml(caller_src)
 
   @debug.debug_inspect(parsed.errors, content="[]")
   let workflow = parsed.workflow.unwrap()
-  let result = lower_push_workflow_in_workspace(workflow, workspace)
+  let result = @actrun.lower_push_workflow_in_workspace(workflow, workspace)
 
   @debug.debug_inspect(result.errors, content="[]")
   let build_write = flow_task_by_id(result.ir, "call__build/write")
@@ -2555,7 +2606,7 @@ test "lowering: reusable workflow with and outputs are rewired to caller context
     #|    steps:
     #|      - id: show
     #|        run: printf '%s' "${{ needs.call.outputs.result }}" > result.txt
-  let parsed = parse_workflow_yaml(caller_src)
+  let parsed = @actrun.parse_workflow_yaml(caller_src)
 
   @debug.debug_inspect(parsed.errors, content="[]")
   let workflow = parsed.workflow.unwrap()
@@ -2571,7 +2622,7 @@ test "lowering: reusable workflow with and outputs are rewired to caller context
       #|"${{ secrets.CALL_TOKEN }}"
     ),
   )
-  let result = lower_push_workflow_in_workspace(workflow, workspace)
+  let result = @actrun.lower_push_workflow_in_workspace(workflow, workspace)
 
   @debug.debug_inspect(result.errors, content="[]")
   @debug.debug_inspect(
@@ -2641,7 +2692,7 @@ test "lowering: reusable workflow secrets inherit is rewired to caller secrets c
     #|    steps:
     #|      - id: show
     #|        run: printf '%s' "${{ needs.call.outputs.result }}" > result.txt
-  let parsed = parse_workflow_yaml(caller_src)
+  let parsed = @actrun.parse_workflow_yaml(caller_src)
 
   @debug.debug_inspect(parsed.errors, content="[]")
   let workflow = parsed.workflow.unwrap()
@@ -2649,7 +2700,7 @@ test "lowering: reusable workflow secrets inherit is rewired to caller secrets c
     workflow.jobs[0].reusable_workflow_inherit_secrets,
     content="true",
   )
-  let result = lower_push_workflow_in_workspace(workflow, workspace)
+  let result = @actrun.lower_push_workflow_in_workspace(workflow, workspace)
 
   @debug.debug_inspect(result.errors, content="[]")
   let build_write = expect_task_plan(result.plan, "call__build/write")
@@ -2703,11 +2754,11 @@ test "lowering: reusable workflow fills implicit defaults for typed inputs" {
     #|jobs:
     #|  call:
     #|    uses: ./.github/workflows/reusable.yml
-  let parsed = parse_workflow_yaml(caller_src)
+  let parsed = @actrun.parse_workflow_yaml(caller_src)
 
   @debug.debug_inspect(parsed.errors, content="[]")
   let workflow = parsed.workflow.unwrap()
-  let result = lower_push_workflow_in_workspace(workflow, workspace)
+  let result = @actrun.lower_push_workflow_in_workspace(workflow, workspace)
 
   @debug.debug_inspect(result.errors, content="[]")
   let capture = expect_task_plan(result.plan, "call__build/capture")
@@ -2754,11 +2805,11 @@ test "lowering: reusable workflow rejects invalid typed inputs" {
     #|    with:
     #|      enabled: maybe
     #|      retries: nope
-  let parsed = parse_workflow_yaml(caller_src)
+  let parsed = @actrun.parse_workflow_yaml(caller_src)
 
   @debug.debug_inspect(parsed.errors, content="[]")
   let workflow = parsed.workflow.unwrap()
-  let result = lower_push_workflow_in_workspace(workflow, workspace)
+  let result = @actrun.lower_push_workflow_in_workspace(workflow, workspace)
 
   @debug.debug_inspect(
     result.errors,
@@ -2811,11 +2862,11 @@ test "lowering: reusable workflow caller matrix fans out to row aliases" {
     #|    steps:
     #|      - id: verify
     #|        run: test -f one.txt && test -f two.txt
-  let parsed = parse_workflow_yaml(caller_src)
+  let parsed = @actrun.parse_workflow_yaml(caller_src)
 
   @debug.debug_inspect(parsed.errors, content="[]")
   let workflow = parsed.workflow.unwrap()
-  let result = lower_push_workflow_in_workspace(workflow, workspace)
+  let result = @actrun.lower_push_workflow_in_workspace(workflow, workspace)
 
   @debug.debug_inspect(result.errors, content="[]")
   @debug.debug_inspect(
@@ -2880,11 +2931,11 @@ test "lowering: reusable workflow caller matrix aggregates workflow outputs" {
     #|    steps:
     #|      - id: show
     #|        run: printf '%s' "${{ needs.call.outputs.result }}" > result.txt
-  let parsed = parse_workflow_yaml(caller_src)
+  let parsed = @actrun.parse_workflow_yaml(caller_src)
 
   @debug.debug_inspect(parsed.errors, content="[]")
   let workflow = parsed.workflow.unwrap()
-  let result = lower_push_workflow_in_workspace(workflow, workspace)
+  let result = @actrun.lower_push_workflow_in_workspace(workflow, workspace)
 
   @debug.debug_inspect(result.errors, content="[]")
   @debug.debug_inspect(
@@ -2957,7 +3008,7 @@ async test "lowering: remote reusable workflow cache miss fetches and expands wo
     #|    steps:
     #|      - id: show
     #|        run: printf '%s' "${{ needs.call.outputs.result }}" > result.txt
-  let parsed = parse_workflow_yaml(caller_src)
+  let parsed = @actrun.parse_workflow_yaml(caller_src)
 
   @debug.debug_inspect(parsed.errors, content="[]")
   let workflow = parsed.workflow.unwrap()
@@ -2967,12 +3018,12 @@ async test "lowering: remote reusable workflow cache miss fetches and expands wo
   let git_path = test_support_prepare_fake_git_bin_from_source(
     workspace, remote_repo, log_path,
   )
-  let prefetch = prefetch_workflow_github_actions_native(
+  let prefetch = @actrun.prefetch_workflow_github_actions_native(
     workflow,
     workspace,
     git_bin=Some(git_path),
   )
-  let result = lower_push_workflow_in_workspace(workflow, workspace)
+  let result = @actrun.lower_push_workflow_in_workspace(workflow, workspace)
 
   @debug.debug_inspect(prefetch.errors, content="[]")
   @debug.debug_inspect(
@@ -3080,7 +3131,7 @@ async test "lowering: remote reusable workflow local action is resolved from cac
     #|    steps:
     #|      - id: show
     #|        run: printf '%s' "${{ needs.call.outputs.result }}" > result.txt
-  let parsed = parse_workflow_yaml(caller_src)
+  let parsed = @actrun.parse_workflow_yaml(caller_src)
 
   @debug.debug_inspect(parsed.errors, content="[]")
   let workflow = parsed.workflow.unwrap()
@@ -3090,12 +3141,12 @@ async test "lowering: remote reusable workflow local action is resolved from cac
   let git_path = test_support_prepare_fake_git_bin_from_source(
     workspace, remote_repo, log_path,
   )
-  let prefetch = prefetch_workflow_github_actions_native(
+  let prefetch = @actrun.prefetch_workflow_github_actions_native(
     workflow,
     workspace,
     git_bin=Some(git_path),
   )
-  let result = lower_push_workflow_in_workspace(workflow, workspace)
+  let result = @actrun.lower_push_workflow_in_workspace(workflow, workspace)
 
   @debug.debug_inspect(prefetch.errors, content="[]")
   @debug.debug_inspect(result.errors, content="[]")
@@ -3129,10 +3180,10 @@ async test "prefetch: SHA-pinned action uses git init+fetch+checkout instead of 
   let git_path = test_support_prepare_fake_sha_git_bin(
     workspace, action_src, log_path,
   )
-  let workflow = new_workflow("ci", [
-    new_job("test", [new_uses_step("action", action_uses)]),
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job("test", [@actrun.new_uses_step("action", action_uses)]),
   ])
-  let prefetch = prefetch_workflow_github_actions_native(
+  let prefetch = @actrun.prefetch_workflow_github_actions_native(
     workflow,
     workspace,
     git_bin=Some(git_path),
@@ -3233,11 +3284,11 @@ test "lowering: nested local reusable workflow is expanded recursively" {
     #|    steps:
     #|      - id: show
     #|        run: printf '%s' "${{ needs.call.outputs.result }}" > result.txt
-  let parsed = parse_workflow_yaml(caller_src)
+  let parsed = @actrun.parse_workflow_yaml(caller_src)
 
   @debug.debug_inspect(parsed.errors, content="[]")
   let workflow = parsed.workflow.unwrap()
-  let result = lower_push_workflow_in_workspace(workflow, workspace)
+  let result = @actrun.lower_push_workflow_in_workspace(workflow, workspace)
 
   @debug.debug_inspect(result.errors, content="[]")
   @debug.debug_inspect(
@@ -3287,7 +3338,7 @@ test "parser/lowering: job container mapping is parsed and lowered" {
     #|    steps:
     #|      - id: show
     #|        run: printf '%s' hi
-  let parsed = parse_workflow_yaml(src)
+  let parsed = @actrun.parse_workflow_yaml(src)
 
   @debug.debug_inspect(parsed.errors, content="[]")
   let workflow = parsed.workflow.unwrap()
@@ -3325,7 +3376,7 @@ test "parser/lowering: job container mapping is parsed and lowered" {
     ),
   )
 
-  let result = lower_push_workflow(workflow)
+  let result = @actrun.lower_push_workflow(workflow)
   @debug.debug_inspect(result.errors, content="[]")
   @debug.debug_inspect(
     result.plan.job_containers.get("build").unwrap().image,
@@ -3359,7 +3410,7 @@ test "parser/lowering: job services mapping is parsed and lowered into execution
     #|    steps:
     #|      - id: show
     #|        run: printf '%s' hi
-  let parsed = parse_workflow_yaml(src)
+  let parsed = @actrun.parse_workflow_yaml(src)
 
   @debug.debug_inspect(parsed.errors, content="[]")
   let workflow = parsed.workflow.unwrap()
@@ -3400,7 +3451,7 @@ test "parser/lowering: job services mapping is parsed and lowered into execution
     ),
   )
 
-  let result = lower_push_workflow(workflow)
+  let result = @actrun.lower_push_workflow(workflow)
   @debug.debug_inspect(result.errors, content="[]")
   @debug.debug_inspect(
     result.plan.job_services.get("build").unwrap().get("postgres").unwrap().image,
@@ -3412,9 +3463,9 @@ test "parser/lowering: job services mapping is parsed and lowered into execution
 
 ///|
 test "security: malicious step name does not affect execution" {
-  let workflow = new_workflow("ci", [
-    new_job("build", [
-      new_run_step(
+  let workflow = @actrun.new_workflow("ci", [
+    @actrun.new_job("build", [
+      @actrun.new_run_step(
         "malicious",
         "echo hello",
         name="\"; rm -rf / #",
@@ -3430,34 +3481,34 @@ test "security: malicious step name does not affect execution" {
       #|"\"; rm -rf / #"
     ),
   )
-  let result = lower_push_workflow(workflow)
+  let result = @actrun.lower_push_workflow(workflow)
   @debug.debug_inspect(result.errors, content="[]")
 }
 
 ///|
 test "security: skip pattern does not match partial action names incorrectly" {
   // "actions/check" should NOT match "actions/checkout" — it's a substring check
-  let checkout_step = new_uses_step("checkout", "actions/checkout@v5")
+  let checkout_step = @actrun.new_uses_step("checkout", "actions/checkout@v5")
   // "actions/check" is a substring of "actions/checkout", so contains-based matching
   // will match it — this documents the current behavior
   @debug.debug_inspect(
-    step_matches_skip_pattern(checkout_step, ["actions/check"]),
+    @actrun.step_matches_skip_pattern(checkout_step, ["actions/check"]),
     content="true",
   )
   // "actions/checkout" should match "actions/checkout@v5"
   @debug.debug_inspect(
-    step_matches_skip_pattern(checkout_step, ["actions/checkout"]),
+    @actrun.step_matches_skip_pattern(checkout_step, ["actions/checkout"]),
     content="true",
   )
   // A completely different action should not match
   @debug.debug_inspect(
-    step_matches_skip_pattern(checkout_step, ["actions/setup-node"]),
+    @actrun.step_matches_skip_pattern(checkout_step, ["actions/setup-node"]),
     content="false",
   )
   // A run step (no uses) should never match any pattern
-  let run_step = new_run_step("build", "echo hello", shell=Some("bash"))
+  let run_step = @actrun.new_run_step("build", "echo hello", shell=Some("bash"))
   @debug.debug_inspect(
-    step_matches_skip_pattern(run_step, ["actions/checkout"]),
+    @actrun.step_matches_skip_pattern(run_step, ["actions/checkout"]),
     content="false",
   )
 }
@@ -3471,7 +3522,7 @@ test "parser: post-if !cancelled() is accepted" {
     #|  main: main.js
     #|  post: post.js
     #|  post-if: '!cancelled()'
-  let parsed = parse_local_action_yaml(src)
+  let parsed = @actrun.parse_local_action_yaml(src)
   // Only the composite restriction error, not a post-if error
   @debug.debug_inspect(
     parsed.errors,
@@ -3488,7 +3539,7 @@ test "parser: pre-if !cancelled() is accepted" {
     #|  main: main.js
     #|  pre: pre.js
     #|  pre-if: '!cancelled()'
-  let parsed = parse_local_action_yaml(src)
+  let parsed = @actrun.parse_local_action_yaml(src)
   // Only the composite restriction error, not a pre-if error
   @debug.debug_inspect(
     parsed.errors,
@@ -3505,7 +3556,7 @@ test "parser: post-if failure() is rejected" {
     #|  main: main.js
     #|  post: post.js
     #|  post-if: failure()
-  let parsed = parse_local_action_yaml(src)
+  let parsed = @actrun.parse_local_action_yaml(src)
   // Both post-if error and composite restriction error
   @debug.debug_inspect(
     parsed.errors.iter().any(fn(e) { e.contains("post-if") }),

@@ -45,6 +45,8 @@ pub struct WasiRunResult {
   outputs : Map[String, String]
   env_updates : Map[String, String]
 } derive(ToJson, @debug.Debug)
+pub fn WasiRunResult::to_json(Self) -> Json
+pub fn WasiRunResult::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

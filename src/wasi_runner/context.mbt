@@ -73,6 +73,12 @@ pub struct WasiRunResult {
 } derive(ToJson, Debug)
 
 ///|
+pub extend WasiRunResult with ToJson::{to_json}
+
+///|
+pub extend WasiRunResult with @debug.Debug::{to_repr}
+
+///|
 pub fn WasiContext::collect_result(self : WasiContext) -> WasiRunResult {
   {
     status: if self.exit_code == 0 {

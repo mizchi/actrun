@@ -16,8 +16,8 @@ async test "compat act: set env uses a new env file per step" {
   let (fixture, workflow, workspace) = compat_prepare_act_fixture_auto(
     "set-env-new-env-file-per-step",
   )
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
   )
   let initial = compat_expect_task_report(report, "check/show_initial")
@@ -72,8 +72,8 @@ async test "compat act: step env override is visible inside local composite acti
     "set-env-step-env-override",
     copy_fixture=true,
   )
-  let lowered = lower_push_workflow_in_workspace(workflow, workspace)
-  let report = execute_lowered_native(lowered, workspace_root=workspace)
+  let lowered = @actrun.lower_push_workflow_in_workspace(workflow, workspace)
+  let report = @actrun.execute_lowered_native(lowered, workspace_root=workspace)
   let before = compat_expect_task_report(report, "check/before")
   let after = compat_expect_task_report(report, "check/after")
 
@@ -117,8 +117,8 @@ async test "compat act: steps context outcome is supported" {
   let (fixture, workflow, workspace) = compat_prepare_act_fixture_auto(
     "steps-context-outcome",
   )
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
   )
   let second = compat_expect_task_report(report, "check/second")
@@ -170,8 +170,8 @@ async test "compat act: steps context conclusion is supported" {
   let (fixture, workflow, workspace) = compat_prepare_act_fixture_auto(
     "steps-context-conclusion",
   )
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
   )
   let second = compat_expect_task_report(report, "check/second")
@@ -223,8 +223,8 @@ async test "compat act: step summary is collected from file command" {
   let (fixture, workflow, workspace) = compat_prepare_act_fixture_auto(
     "stepsummary",
   )
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
   )
   let task = compat_expect_task_report(report, "create_summary/write_summary")
@@ -262,8 +262,8 @@ async test "compat act: bash shell fixture works on host runner" {
   let (fixture, workflow, workspace) = compat_prepare_act_fixture_auto(
     "shells-bash",
   )
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
   )
   let explicit = compat_expect_task_report(report, "check/step_1")
@@ -304,8 +304,8 @@ async test "compat act: sh shell fixture works on host runner" {
   let (fixture, workflow, workspace) = compat_prepare_act_fixture_auto(
     "shells-sh",
   )
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
   )
   let explicit = compat_expect_task_report(report, "check/step_1")
@@ -356,8 +356,8 @@ async test "compat act: default runner shell is bash" {
   let (fixture, workflow, workspace) = compat_prepare_act_fixture_auto(
     "shells-defaults",
   )
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
   )
   let task = compat_expect_task_report(report, "check/step_1")
@@ -390,8 +390,8 @@ async test "compat act: custom templated shell is a known diff" {
   let (fixture, workflow, workspace) = compat_prepare_act_fixture_auto(
     "shells-custom",
   )
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
   )
   let task = compat_expect_task_report(report, "check/step_1")

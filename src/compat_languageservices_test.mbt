@@ -222,8 +222,8 @@ async test "compat languageservices: expression env exact property fixture" {
   let (fixture, workflow, workspace) = compat_prepare_languageservices_fixture_auto(
     "expr-env-basic",
   )
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
   )
   let task = compat_expect_task_report(report, "build/show")
@@ -255,8 +255,8 @@ async test "compat languageservices: expression env property is case-insensitive
   let (fixture, workflow, workspace) = compat_prepare_languageservices_fixture_auto(
     "expr-env-case-insensitive",
   )
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
   )
   let task = compat_expect_task_report(report, "build/show")
@@ -288,8 +288,8 @@ async test "compat languageservices: expression step output exact property fixtu
   let (fixture, workflow, workspace) = compat_prepare_languageservices_fixture_auto(
     "expr-step-output-basic",
   )
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
   )
   let task = compat_expect_task_report(report, "build/consume")
@@ -321,8 +321,8 @@ async test "compat languageservices: expression step output property is case-ins
   let (fixture, workflow, workspace) = compat_prepare_languageservices_fixture_auto(
     "expr-step-output-case-insensitive",
   )
-  let report = execute_lowered_native(
-    lower_push_workflow(workflow),
+  let report = @actrun.execute_lowered_native(
+    @actrun.lower_push_workflow(workflow),
     workspace_root=workspace,
   )
   let task = compat_expect_task_report(report, "build/consume")

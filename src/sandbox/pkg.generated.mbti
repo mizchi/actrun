@@ -21,7 +21,13 @@ pub fn step_result_to_json(StepResult) -> String
 pub struct MemFs {
   files : Map[String, String]
 }
+pub fn MemFs::exists(Self, String) -> Bool
+pub fn MemFs::is_dir(Self, String) -> Bool
+pub fn MemFs::mkdir(Self, String) -> Bool
 pub fn MemFs::new() -> Self
+pub fn MemFs::read(Self, String) -> String?
+pub fn MemFs::remove(Self, String) -> Bool
+pub fn MemFs::write(Self, String, String, Bool) -> Unit
 pub impl Fs for MemFs
 
 pub struct StepResult {
@@ -32,6 +38,8 @@ pub struct StepResult {
   outputs : Map[String, String]
   env_updates : Map[String, String]
 } derive(ToJson, @debug.Debug)
+pub fn StepResult::to_json(Self) -> Json
+pub fn StepResult::to_repr(Self) -> @debug.Repr
 
 // Type aliases
 

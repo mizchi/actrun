@@ -9,7 +9,7 @@ test "plan_workflow: basic wasi workflow" {
     #|    steps:
     #|      - uses: wasm://lint@v1
     #|      - uses: wasm://test@v1
-  let result = plan_workflow(yaml)
+  let result = @actrun.plan_workflow(yaml)
   @debug.debug_inspect(
     result.workflow_name,
     content=(
@@ -63,7 +63,7 @@ test "plan_workflow: standard workflow with run steps" {
     #|    steps:
     #|      - run: echo hello
     #|      - run: echo world
-  let result = plan_workflow(yaml)
+  let result = @actrun.plan_workflow(yaml)
   @debug.debug_inspect(
     result.workflow_name,
     content=(
@@ -101,7 +101,7 @@ test "plan_workflow: multi-job with needs" {
     #|    runs-on: wasi
     #|    steps:
     #|      - uses: wasm://test@v1
-  let result = plan_workflow(yaml)
+  let result = @actrun.plan_workflow(yaml)
   @debug.debug_inspect(result.errors, content="[]")
   @debug.debug_inspect(result.jobs.length(), content="2")
   @debug.debug_inspect(result.jobs[1].needs, content="[\"build\"]")
@@ -117,7 +117,7 @@ test "plan_workflow: wasi rejects run steps" {
     #|    runs-on: wasi
     #|    steps:
     #|      - run: echo "not allowed"
-  let result = plan_workflow(yaml)
+  let result = @actrun.plan_workflow(yaml)
   @debug.debug_inspect(result.errors.length() > 0, content="true")
 }
 
@@ -131,8 +131,8 @@ test "plan_result_to_json: produces valid json structure" {
     #|    runs-on: wasi
     #|    steps:
     #|      - uses: wasm://lint@v1
-  let result = plan_workflow(yaml)
-  let json = plan_result_to_json(result)
+  let result = @actrun.plan_workflow(yaml)
+  let json = @actrun.plan_result_to_json(result)
   @debug.debug_inspect(json.contains("\"workflow\": \"ci\""), content="true")
   @debug.debug_inspect(json.contains("\"wasm://lint@v1\""), content="true")
   @debug.debug_inspect(json.contains("\"wasm\""), content="true")
@@ -150,7 +150,7 @@ test "plan_workflow: preserves uses step with values" {
     #|      - uses: actions/checkout@v4
     #|        with:
     #|          fetch-depth: 1
-  let result = plan_workflow(yaml)
+  let result = @actrun.plan_workflow(yaml)
   @debug.debug_inspect(
     result.jobs[0].steps[0].with_values.get("fetch-depth").unwrap_or(""),
     content=(
@@ -174,8 +174,8 @@ test "plan_result_to_json: includes script env and with values" {
     #|      - uses: actions/checkout@v4
     #|        with:
     #|          fetch-depth: 1
-  let result = plan_workflow(yaml)
-  let json = plan_result_to_json(result)
+  let result = @actrun.plan_workflow(yaml)
+  let json = @actrun.plan_result_to_json(result)
   @debug.debug_inspect(
     json.contains("\"script\": \"echo hello\""),
     content="true",

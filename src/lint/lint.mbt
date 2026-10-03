@@ -191,3 +191,6 @@ pub fn has_errors(diagnostics : Array[LintDiagnostic]) -> Bool {
   }
   false
 }
+
+///|
+pub extend LintOptions with @debug.Debug::{to_repr}

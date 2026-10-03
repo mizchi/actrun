@@ -81,21 +81,23 @@ CLI では `actrun workflow list --repo /path/to/repo` で `.github/workflows/*.
 ```mbt check
 ///|
 test {
-  let workflow = new_workflow(
+  let workflow = @actrun.new_workflow(
     "ci",
     [
-      new_job("build", [
-        new_run_step("install", "pnpm install"),
-        new_run_step("test", "pnpm test"),
+      @actrun.new_job("build", [
+        @actrun.new_run_step("install", "pnpm install"),
+        @actrun.new_run_step("test", "pnpm test"),
       ]),
-      new_job("lint", [new_run_step("lint", "pnpm lint")], needs=["build"]),
+      @actrun.new_job("lint", [@actrun.new_run_step("lint", "pnpm lint")], needs=[
+        "build",
+      ]),
     ],
-    trigger=new_push_trigger(branches=["main"], paths=["src/*"]),
-    defaults=new_run_defaults(shell=Some("bash")),
+    trigger=@actrun.new_push_trigger(branches=["main"], paths=["src/*"]),
+    defaults=@actrun.new_run_defaults(shell=Some("bash")),
   )
 
-  let event = new_push_event("main", ["src/lib.mbt"])
-  inspect(matches_push_trigger(workflow.trigger, event), content="true")
+  let event = @actrun.new_push_event("main", ["src/lib.mbt"])
+  inspect(@actrun.matches_push_trigger(workflow.trigger, event), content="true")
 
   let src =
     #|on: push
@@ -104,8 +106,8 @@ test {
     #|    runs-on: ubuntu-latest
     #|    steps:
     #|      - run: pnpm test
-  let parsed = parse_workflow_yaml(src)
-  let lowered = lower_push_workflow(parsed.workflow.unwrap())
+  let parsed = @actrun.parse_workflow_yaml(src)
+  let lowered = @actrun.lower_push_workflow(parsed.workflow.unwrap())
   @debug.debug_inspect(lowered.errors, content="[]")
   @debug.debug_inspect(lowered.ir.tasks.length(), content="2")
 }

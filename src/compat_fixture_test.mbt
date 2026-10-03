@@ -209,7 +209,9 @@ fn compat_expect_fixture(result : CompatFixtureLoadResult) -> CompatFixture {
 }
 
 ///|
-fn compat_expect_workflow(parsed : WorkflowParseResult) -> WorkflowSpec {
+fn compat_expect_workflow(
+  parsed : @actrun.WorkflowParseResult,
+) -> @actrun.WorkflowSpec {
   match parsed.workflow {
     Some(workflow) => workflow
     None => abort(parsed.errors.join("\n"))
@@ -217,8 +219,11 @@ fn compat_expect_workflow(parsed : WorkflowParseResult) -> WorkflowSpec {
 }
 
 ///|
-fn compat_expect_task_plan(plan : ExecutionPlan, id : String) -> TaskPlan {
-  match find_task_plan(plan, id) {
+fn compat_expect_task_plan(
+  plan : @actrun.ExecutionPlan,
+  id : String,
+) -> @actrun.TaskPlan {
+  match @actrun.find_task_plan(plan, id) {
     Some(task) => task
     None => abort("missing task plan: " + id)
   }
@@ -226,10 +231,10 @@ fn compat_expect_task_plan(plan : ExecutionPlan, id : String) -> TaskPlan {
 
 ///|
 fn compat_expect_task_report(
-  report : WorkflowRunReport,
+  report : @actrun.WorkflowRunReport,
   id : String,
-) -> TaskRunReport {
-  match find_task_run_report(report, id) {
+) -> @actrun.TaskRunReport {
+  match @actrun.find_task_run_report(report, id) {
     Some(task) => task
     None => abort("missing task report: " + id)
   }
@@ -237,10 +242,10 @@ fn compat_expect_task_report(
 
 ///|
 fn compat_expect_step_report(
-  report : WorkflowRunReport,
+  report : @actrun.WorkflowRunReport,
   id : String,
-) -> WorkflowStepReport {
-  match find_workflow_step_report(report, id) {
+) -> @actrun.WorkflowStepReport {
+  match @actrun.find_workflow_step_report(report, id) {
     Some(step) => step
     None => abort("missing step report: " + id)
   }
@@ -249,10 +254,10 @@ fn compat_expect_step_report(
 ///|
 fn compat_expect_workflow_fixture(
   fixture_dir : String,
-) -> (CompatFixture, WorkflowSpec) {
+) -> (CompatFixture, @actrun.WorkflowSpec) {
   let fixture = compat_expect_fixture(load_compat_fixture(fixture_dir))
   let workflow = compat_expect_workflow(
-    parse_workflow_yaml(fixture.workflow_text),
+    @actrun.parse_workflow_yaml(fixture.workflow_text),
   )
   (fixture, workflow)
 }
@@ -261,31 +266,31 @@ fn compat_expect_workflow_fixture(
 fn compat_expect_workflow_fixture_in(
   root : String,
   fixture_name : String,
-) -> (CompatFixture, WorkflowSpec) {
+) -> (CompatFixture, @actrun.WorkflowSpec) {
   compat_expect_workflow_fixture(compat_fixture_dir(root, fixture_name))
 }
 
 ///|
 fn compat_expect_lowered_workflow_fixture(
   fixture_dir : String,
-) -> (CompatFixture, WorkflowSpec, LoweringResult) {
+) -> (CompatFixture, @actrun.WorkflowSpec, @actrun.LoweringResult) {
   let (fixture, workflow) = compat_expect_workflow_fixture(fixture_dir)
-  (fixture, workflow, lower_push_workflow(workflow))
+  (fixture, workflow, @actrun.lower_push_workflow(workflow))
 }
 
 ///|
 fn compat_expect_lowered_workflow_fixture_in(
   root : String,
   fixture_name : String,
-) -> (CompatFixture, WorkflowSpec, LoweringResult) {
+) -> (CompatFixture, @actrun.WorkflowSpec, @actrun.LoweringResult) {
   compat_expect_lowered_workflow_fixture(compat_fixture_dir(root, fixture_name))
 }
 
 ///|
-fn compat_push_event_fixture(fixture : CompatFixture) -> PushEvent? {
+fn compat_push_event_fixture(fixture : CompatFixture) -> @actrun.PushEvent? {
   match fixture.event_text {
     Some(event_text) =>
-      match parse_github_push_event_json(event_text) {
+      match @actrun.parse_github_push_event_json(event_text) {
         { event: Some(event), errors: [], } => Some(event)
         { event: None, errors, } => abort(errors.join("\n"))
         { event: Some(_), errors, } if errors.length() > 0 =>
@@ -297,7 +302,9 @@ fn compat_push_event_fixture(fixture : CompatFixture) -> PushEvent? {
 }
 
 ///|
-fn compat_expect_push_event_fixture(fixture : CompatFixture) -> PushEvent {
+fn compat_expect_push_event_fixture(
+  fixture : CompatFixture,
+) -> @actrun.PushEvent {
   match compat_push_event_fixture(fixture) {
     Some(event) => event
     None => abort("fixture has no event.json: " + fixture.root_dir)
@@ -407,7 +414,7 @@ fn compat_prepare_workflow_fixture(
   workspace_name : String,
   copy_fixture? : Bool = false,
   absolute? : Bool = false,
-) -> (CompatFixture, WorkflowSpec, String) raise {
+) -> (CompatFixture, @actrun.WorkflowSpec, String) raise {
   let (fixture, workflow) = compat_expect_workflow_fixture(fixture_dir)
   let workspace = if copy_fixture {
     compat_prepare_copied_workspace_in(
@@ -430,7 +437,7 @@ fn compat_prepare_workflow_fixture_auto(
   workspace_prefix? : String = "",
   copy_fixture? : Bool = false,
   absolute? : Bool = false,
-) -> (CompatFixture, WorkflowSpec, String) raise {
+) -> (CompatFixture, @actrun.WorkflowSpec, String) raise {
   compat_prepare_workflow_fixture(
     fixture_dir,
     workspace_root,
@@ -761,7 +768,7 @@ test "compat fixture: expect lowered workflow fixture lowers workflow" {
   )
   @debug.debug_inspect(lowered.errors, content="[]")
   @debug.debug_inspect(
-    find_task_plan(lowered.plan, "build/print") is Some(_),
+    @actrun.find_task_plan(lowered.plan, "build/print") is Some(_),
     content="true",
   )
 }

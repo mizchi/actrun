@@ -68,7 +68,7 @@ fn compat_prepare_suite_fixture_auto(
   suite : CompatFixtureSuite,
   fixture_name : String,
   copy_fixture? : Bool = false,
-) -> (CompatFixture, WorkflowSpec, String) raise {
+) -> (CompatFixture, @actrun.WorkflowSpec, String) raise {
   let fixture_dir = compat_fixture_dir(suite.fixture_root, fixture_name)
   if copy_fixture {
     let (fixture, workflow, workspace) = compat_prepare_workflow_fixture_auto(
@@ -94,7 +94,7 @@ fn compat_prepare_suite_fixture_auto(
 fn compat_expect_suite_fixture(
   suite : CompatFixtureSuite,
   fixture_name : String,
-) -> (CompatFixture, WorkflowSpec) {
+) -> (CompatFixture, @actrun.WorkflowSpec) {
   let (fixture, workflow) = compat_expect_workflow_fixture_in(
     suite.fixture_root,
     fixture_name,
@@ -106,7 +106,7 @@ fn compat_expect_suite_fixture(
 fn compat_expect_lowered_suite_fixture(
   suite : CompatFixtureSuite,
   fixture_name : String,
-) -> (CompatFixture, WorkflowSpec, LoweringResult) {
+) -> (CompatFixture, @actrun.WorkflowSpec, @actrun.LoweringResult) {
   let (fixture, workflow, lowered) = compat_expect_lowered_workflow_fixture_in(
     suite.fixture_root,
     fixture_name,
@@ -118,21 +118,21 @@ fn compat_expect_lowered_suite_fixture(
 #cfg(target="native")
 fn compat_prepare_docs_fixture_auto(
   fixture_name : String,
-) -> (CompatFixture, WorkflowSpec, String) raise {
+) -> (CompatFixture, @actrun.WorkflowSpec, String) raise {
   compat_prepare_suite_fixture_auto(compat_docs_suite(), fixture_name)
 }
 
 ///|
 fn compat_expect_docs_fixture(
   fixture_name : String,
-) -> (CompatFixture, WorkflowSpec) {
+) -> (CompatFixture, @actrun.WorkflowSpec) {
   compat_expect_suite_fixture(compat_docs_suite(), fixture_name)
 }
 
 ///|
 fn compat_expect_lowered_docs_fixture(
   fixture_name : String,
-) -> (CompatFixture, WorkflowSpec, LoweringResult) {
+) -> (CompatFixture, @actrun.WorkflowSpec, @actrun.LoweringResult) {
   compat_expect_lowered_suite_fixture(compat_docs_suite(), fixture_name)
 }
 
@@ -140,7 +140,7 @@ fn compat_expect_lowered_docs_fixture(
 #cfg(target="native")
 fn compat_prepare_languageservices_fixture_auto(
   fixture_name : String,
-) -> (CompatFixture, WorkflowSpec, String) raise {
+) -> (CompatFixture, @actrun.WorkflowSpec, String) raise {
   compat_prepare_suite_fixture_auto(
     compat_languageservices_suite(),
     fixture_name,
@@ -150,14 +150,14 @@ fn compat_prepare_languageservices_fixture_auto(
 ///|
 fn compat_expect_languageservices_fixture(
   fixture_name : String,
-) -> (CompatFixture, WorkflowSpec) {
+) -> (CompatFixture, @actrun.WorkflowSpec) {
   compat_expect_suite_fixture(compat_languageservices_suite(), fixture_name)
 }
 
 ///|
 fn compat_expect_lowered_languageservices_fixture(
   fixture_name : String,
-) -> (CompatFixture, WorkflowSpec, LoweringResult) {
+) -> (CompatFixture, @actrun.WorkflowSpec, @actrun.LoweringResult) {
   compat_expect_lowered_suite_fixture(
     compat_languageservices_suite(),
     fixture_name,
@@ -169,7 +169,7 @@ fn compat_expect_lowered_languageservices_fixture(
 fn compat_prepare_act_fixture_auto(
   fixture_name : String,
   copy_fixture? : Bool = false,
-) -> (CompatFixture, WorkflowSpec, String) raise {
+) -> (CompatFixture, @actrun.WorkflowSpec, String) raise {
   compat_prepare_suite_fixture_auto(
     compat_act_suite(),
     fixture_name,

@@ -72,6 +72,7 @@ pub struct ActionRefToResolve {
   step_index : Int
   is_sha_pinned : Bool
 } derive(@debug.Debug)
+pub fn ActionRefToResolve::to_repr(Self) -> @debug.Repr
 
 pub struct ActionResolution {
   uses : String
@@ -79,6 +80,7 @@ pub struct ActionResolution {
   exists : Bool
   error : String
 } derive(@debug.Debug)
+pub fn ActionResolution::to_repr(Self) -> @debug.Repr
 
 pub enum BinaryOp {
   OpAnd
@@ -90,6 +92,11 @@ pub enum BinaryOp {
   OpGt
   OpGe
 } derive(Eq, @debug.Debug)
+pub fn BinaryOp::equal(Self, Self) -> Bool
+pub fn BinaryOp::not_equal(Self, Self) -> Bool
+pub fn BinaryOp::output(Self, &Logger) -> Unit
+pub fn BinaryOp::to_repr(Self) -> @debug.Repr
+pub fn BinaryOp::to_string(Self) -> String
 pub impl Show for BinaryOp
 
 pub enum Expr {
@@ -101,6 +108,11 @@ pub enum Expr {
   BinaryOp(BinaryOp, Expr, Expr)
   FunctionCall(String, Array[Expr])
 } derive(Eq, @debug.Debug)
+pub fn Expr::equal(Self, Self) -> Bool
+pub fn Expr::not_equal(Self, Self) -> Bool
+pub fn Expr::output(Self, &Logger) -> Unit
+pub fn Expr::to_repr(Self) -> @debug.Repr
+pub fn Expr::to_string(Self) -> String
 pub impl Show for Expr
 
 pub enum ExprLiteral {
@@ -109,6 +121,11 @@ pub enum ExprLiteral {
   LitBool(Bool)
   LitNull
 } derive(Eq, @debug.Debug)
+pub fn ExprLiteral::equal(Self, Self) -> Bool
+pub fn ExprLiteral::not_equal(Self, Self) -> Bool
+pub fn ExprLiteral::output(Self, &Logger) -> Unit
+pub fn ExprLiteral::to_repr(Self) -> @debug.Repr
+pub fn ExprLiteral::to_string(Self) -> String
 pub impl Show for ExprLiteral
 
 pub enum ExprType {
@@ -120,6 +137,11 @@ pub enum ExprType {
   TyArray(ExprType)
   TyObject(ObjectKind)
 } derive(Eq, @debug.Debug)
+pub fn ExprType::equal(Self, Self) -> Bool
+pub fn ExprType::not_equal(Self, Self) -> Bool
+pub fn ExprType::output(Self, &Logger) -> Unit
+pub fn ExprType::to_repr(Self) -> @debug.Repr
+pub fn ExprType::to_string(Self) -> String
 pub impl Show for ExprType
 
 pub struct LintContext {
@@ -134,7 +156,12 @@ pub struct LintDiagnostic {
   step_index : Int
   field : String
 } derive(Eq, @debug.Debug)
+pub fn LintDiagnostic::equal(Self, Self) -> Bool
 pub fn LintDiagnostic::format(Self) -> String
+pub fn LintDiagnostic::not_equal(Self, Self) -> Bool
+pub fn LintDiagnostic::output(Self, &Logger) -> Unit
+pub fn LintDiagnostic::to_repr(Self) -> @debug.Repr
+pub fn LintDiagnostic::to_string(Self) -> String
 pub impl Show for LintDiagnostic
 
 pub struct LintOptions {
@@ -142,23 +169,39 @@ pub struct LintOptions {
   online : Bool
   yaml_text : String
 } derive(@debug.Debug)
+pub fn LintOptions::to_repr(Self) -> @debug.Repr
 
 pub enum ObjectKind {
   Strict(Map[String, ExprType])
   Loose(Map[String, ExprType], ExprType)
   MapObj(ExprType)
 } derive(Eq, @debug.Debug)
+pub fn ObjectKind::equal(Self, Self) -> Bool
+pub fn ObjectKind::not_equal(Self, Self) -> Bool
+pub fn ObjectKind::output(Self, &Logger) -> Unit
+pub fn ObjectKind::to_repr(Self) -> @debug.Repr
+pub fn ObjectKind::to_string(Self) -> String
 pub impl Show for ObjectKind
 
 pub enum Severity {
   Error
   Warning
 } derive(Eq, @debug.Debug)
+pub fn Severity::equal(Self, Self) -> Bool
+pub fn Severity::not_equal(Self, Self) -> Bool
+pub fn Severity::output(Self, &Logger) -> Unit
+pub fn Severity::to_repr(Self) -> @debug.Repr
+pub fn Severity::to_string(Self) -> String
 pub impl Show for Severity
 
 pub enum UnaryOp {
   OpNot
 } derive(Eq, @debug.Debug)
+pub fn UnaryOp::equal(Self, Self) -> Bool
+pub fn UnaryOp::not_equal(Self, Self) -> Bool
+pub fn UnaryOp::output(Self, &Logger) -> Unit
+pub fn UnaryOp::to_repr(Self) -> @debug.Repr
+pub fn UnaryOp::to_string(Self) -> String
 pub impl Show for UnaryOp
 
 // Type aliases

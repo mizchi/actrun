@@ -1,10 +1,10 @@
 ///|
 test "shell_exec: echo" {
-  let env = new_shell_env({})
-  let code = shell_exec(env, "echo hello world")
+  let env = @actrun.new_shell_env({})
+  let code = @actrun.shell_exec(env, "echo hello world")
   @debug.debug_inspect(code, content="0")
   @debug.debug_inspect(
-    shell_stdout(env),
+    @actrun.shell_stdout(env),
     content=(
       #|"hello world\n"
     ),
@@ -13,10 +13,10 @@ test "shell_exec: echo" {
 
 ///|
 test "shell_exec: variable expansion" {
-  let env = new_shell_env({ "NAME": "actrun" })
-  ignore(shell_exec(env, "echo hello $NAME"))
+  let env = @actrun.new_shell_env({ "NAME": "actrun" })
+  ignore(@actrun.shell_exec(env, "echo hello $NAME"))
   @debug.debug_inspect(
-    shell_stdout(env),
+    @actrun.shell_stdout(env),
     content=(
       #|"hello actrun\n"
     ),
@@ -25,10 +25,10 @@ test "shell_exec: variable expansion" {
 
 ///|
 test "shell_exec: printf" {
-  let env = new_shell_env({})
-  ignore(shell_exec(env, "printf '%s|%s' foo bar"))
+  let env = @actrun.new_shell_env({})
+  ignore(@actrun.shell_exec(env, "printf '%s|%s' foo bar"))
   @debug.debug_inspect(
-    shell_stdout(env),
+    @actrun.shell_stdout(env),
     content=(
       #|"foo|bar"
     ),
@@ -37,10 +37,10 @@ test "shell_exec: printf" {
 
 ///|
 test "shell_exec: variable assignment" {
-  let env = new_shell_env({})
-  ignore(shell_exec(env, "X=hello; echo $X"))
+  let env = @actrun.new_shell_env({})
+  ignore(@actrun.shell_exec(env, "X=hello; echo $X"))
   @debug.debug_inspect(
-    shell_stdout(env),
+    @actrun.shell_stdout(env),
     content=(
       #|"hello\n"
     ),
@@ -49,10 +49,10 @@ test "shell_exec: variable assignment" {
 
 ///|
 test "shell_exec: if true" {
-  let env = new_shell_env({})
-  ignore(shell_exec(env, "if true; then echo yes; else echo no; fi"))
+  let env = @actrun.new_shell_env({})
+  ignore(@actrun.shell_exec(env, "if true; then echo yes; else echo no; fi"))
   @debug.debug_inspect(
-    shell_stdout(env),
+    @actrun.shell_stdout(env),
     content=(
       #|"yes\n"
     ),
@@ -61,10 +61,10 @@ test "shell_exec: if true" {
 
 ///|
 test "shell_exec: if false" {
-  let env = new_shell_env({})
-  ignore(shell_exec(env, "if false; then echo yes; else echo no; fi"))
+  let env = @actrun.new_shell_env({})
+  ignore(@actrun.shell_exec(env, "if false; then echo yes; else echo no; fi"))
   @debug.debug_inspect(
-    shell_stdout(env),
+    @actrun.shell_stdout(env),
     content=(
       #|"no\n"
     ),
@@ -73,10 +73,10 @@ test "shell_exec: if false" {
 
 ///|
 test "shell_exec: for loop" {
-  let env = new_shell_env({})
-  ignore(shell_exec(env, "for x in a b c; do echo $x; done"))
+  let env = @actrun.new_shell_env({})
+  ignore(@actrun.shell_exec(env, "for x in a b c; do echo $x; done"))
   @debug.debug_inspect(
-    shell_stdout(env),
+    @actrun.shell_stdout(env),
     content=(
       #|"a\nb\nc\n"
     ),
@@ -85,10 +85,10 @@ test "shell_exec: for loop" {
 
 ///|
 test "shell_exec: && operator" {
-  let env = new_shell_env({})
-  ignore(shell_exec(env, "true && echo yes"))
+  let env = @actrun.new_shell_env({})
+  ignore(@actrun.shell_exec(env, "true && echo yes"))
   @debug.debug_inspect(
-    shell_stdout(env),
+    @actrun.shell_stdout(env),
     content=(
       #|"yes\n"
     ),
@@ -97,10 +97,10 @@ test "shell_exec: && operator" {
 
 ///|
 test "shell_exec: || operator" {
-  let env = new_shell_env({})
-  ignore(shell_exec(env, "false || echo fallback"))
+  let env = @actrun.new_shell_env({})
+  ignore(@actrun.shell_exec(env, "false || echo fallback"))
   @debug.debug_inspect(
-    shell_stdout(env),
+    @actrun.shell_stdout(env),
     content=(
       #|"fallback\n"
     ),
@@ -109,10 +109,10 @@ test "shell_exec: || operator" {
 
 ///|
 test "shell_exec: && short-circuit" {
-  let env = new_shell_env({})
-  ignore(shell_exec(env, "false && echo no"))
+  let env = @actrun.new_shell_env({})
+  ignore(@actrun.shell_exec(env, "false && echo no"))
   @debug.debug_inspect(
-    shell_stdout(env),
+    @actrun.shell_stdout(env),
     content=(
       #|""
     ),
@@ -121,38 +121,38 @@ test "shell_exec: && short-circuit" {
 
 ///|
 test "shell_exec: exit code" {
-  let env = new_shell_env({})
-  let code = shell_exec(env, "exit 42")
+  let env = @actrun.new_shell_env({})
+  let code = @actrun.shell_exec(env, "exit 42")
   @debug.debug_inspect(code, content="42")
 }
 
 ///|
 test "shell_exec: test -z empty" {
-  let env = new_shell_env({})
-  let code = shell_exec(env, "test -z ''")
+  let env = @actrun.new_shell_env({})
+  let code = @actrun.shell_exec(env, "test -z ''")
   @debug.debug_inspect(code, content="0")
 }
 
 ///|
 test "shell_exec: test -z non-empty" {
-  let env = new_shell_env({})
-  let code = shell_exec(env, "test -z 'hello'")
+  let env = @actrun.new_shell_env({})
+  let code = @actrun.shell_exec(env, "test -z 'hello'")
   @debug.debug_inspect(code, content="1")
 }
 
 ///|
 test "shell_exec: test string equality" {
-  let env = new_shell_env({})
-  let code = shell_exec(env, "test hello = hello")
+  let env = @actrun.new_shell_env({})
+  let code = @actrun.shell_exec(env, "test hello = hello")
   @debug.debug_inspect(code, content="0")
 }
 
 ///|
 test "shell_exec: export sets variable" {
-  let env = new_shell_env({})
-  ignore(shell_exec(env, "FOO=bar; export FOO; echo $FOO"))
+  let env = @actrun.new_shell_env({})
+  ignore(@actrun.shell_exec(env, "FOO=bar; export FOO; echo $FOO"))
   @debug.debug_inspect(
-    shell_stdout(env),
+    @actrun.shell_stdout(env),
     content=(
       #|"bar\n"
     ),
@@ -162,7 +162,7 @@ test "shell_exec: export sets variable" {
 ///|
 test "shell_exec: redirect to file" {
   let files : Map[String, String] = Map([])
-  let env = new_shell_env({}, write_file=fn(path, content, append) {
+  let env = @actrun.new_shell_env({}, write_file=fn(path, content, append) {
     if append {
       files[path] = files.get(path).unwrap_or("") + content
     } else {
@@ -170,7 +170,7 @@ test "shell_exec: redirect to file" {
     }
     true
   })
-  ignore(shell_exec(env, "echo hello > /tmp/out.txt"))
+  ignore(@actrun.shell_exec(env, "echo hello > /tmp/out.txt"))
   @debug.debug_inspect(
     files.get("/tmp/out.txt").unwrap_or(""),
     content=(
@@ -182,7 +182,7 @@ test "shell_exec: redirect to file" {
 ///|
 test "shell_exec: append redirect" {
   let files : Map[String, String] = Map([])
-  let env = new_shell_env({}, write_file=fn(path, content, append) {
+  let env = @actrun.new_shell_env({}, write_file=fn(path, content, append) {
     if append {
       files[path] = files.get(path).unwrap_or("") + content
     } else {
@@ -191,7 +191,9 @@ test "shell_exec: append redirect" {
     true
   })
   ignore(
-    shell_exec(env, "echo line1 >> /tmp/out.txt; echo line2 >> /tmp/out.txt"),
+    @actrun.shell_exec(
+      env, "echo line1 >> /tmp/out.txt; echo line2 >> /tmp/out.txt",
+    ),
   )
   @debug.debug_inspect(
     files.get("/tmp/out.txt").unwrap_or(""),
@@ -203,16 +205,16 @@ test "shell_exec: append redirect" {
 
 ///|
 test "shell_exec: cat reads file" {
-  let env = new_shell_env({}, read_file=fn(path) {
+  let env = @actrun.new_shell_env({}, read_file=fn(path) {
     if path == "/data.txt" {
       Some("content")
     } else {
       None
     }
   })
-  ignore(shell_exec(env, "cat /data.txt"))
+  ignore(@actrun.shell_exec(env, "cat /data.txt"))
   @debug.debug_inspect(
-    shell_stdout(env),
+    @actrun.shell_stdout(env),
     content=(
       #|"content"
     ),
@@ -222,7 +224,7 @@ test "shell_exec: cat reads file" {
 ///|
 test "shell_exec: github output pattern" {
   let files : Map[String, String] = Map([])
-  let env = new_shell_env({ "GITHUB_OUTPUT": "/tmp/output" }, write_file=fn(
+  let env = @actrun.new_shell_env({ "GITHUB_OUTPUT": "/tmp/output" }, write_file=fn(
     path,
     content,
     append,
@@ -234,7 +236,7 @@ test "shell_exec: github output pattern" {
     }
     true
   })
-  ignore(shell_exec(env, "echo 'result=hello' >> \"$GITHUB_OUTPUT\""))
+  ignore(@actrun.shell_exec(env, "echo 'result=hello' >> \"$GITHUB_OUTPUT\""))
   @debug.debug_inspect(
     files.get("/tmp/output").unwrap_or(""),
     content=(
@@ -245,21 +247,23 @@ test "shell_exec: github output pattern" {
 
 ///|
 test "shell_exec: command not found" {
-  let env = new_shell_env({})
-  let code = shell_exec(env, "nonexistent_command")
+  let env = @actrun.new_shell_env({})
+  let code = @actrun.shell_exec(env, "nonexistent_command")
   @debug.debug_inspect(code, content="127")
   @debug.debug_inspect(
-    shell_stderr(env).contains("command not found"),
+    @actrun.shell_stderr(env).contains("command not found"),
     content="true",
   )
 }
 
 ///|
 test "shell_exec: while loop" {
-  let env = new_shell_env({})
-  ignore(shell_exec(env, "X=0; while test $X = 0; do echo loop; X=1; done"))
+  let env = @actrun.new_shell_env({})
+  ignore(
+    @actrun.shell_exec(env, "X=0; while test $X = 0; do echo loop; X=1; done"),
+  )
   @debug.debug_inspect(
-    shell_stdout(env),
+    @actrun.shell_stdout(env),
     content=(
       #|"loop\n"
     ),

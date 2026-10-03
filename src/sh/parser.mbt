@@ -534,6 +534,9 @@ pub suberror ParseError {
 }
 
 ///|
+pub extend ParseError with Show::{to_string, output}
+
+///|
 pub impl Show for ParseError with fn output(self, logger) {
   match self {
     LexError(msg) => logger.write_string("Lex error: \{msg}")

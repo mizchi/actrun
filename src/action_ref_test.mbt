@@ -1,5 +1,5 @@
 ///|
-fn expect_action(result : ActionRefParseResult) -> ActionRef {
+fn expect_action(result : @actrun.ActionRefParseResult) -> @actrun.ActionRef {
   match result.action {
     Some(action) => action
     None => abort(result.errors.join("\n"))
@@ -7,7 +7,9 @@ fn expect_action(result : ActionRefParseResult) -> ActionRef {
 }
 
 ///|
-fn expect_resolved(result : ActionResolutionResult) -> ResolvedAction {
+fn expect_resolved(
+  result : @actrun.ActionResolutionResult,
+) -> @actrun.ResolvedAction {
   match result.action {
     Some(action) => action
     None => abort(result.errors.join("\n"))
@@ -16,7 +18,7 @@ fn expect_resolved(result : ActionResolutionResult) -> ResolvedAction {
 
 ///|
 test "action ref: parse github repo action" {
-  let action = expect_action(parse_action_ref("actions/checkout@v4"))
+  let action = expect_action(@actrun.parse_action_ref("actions/checkout@v4"))
 
   match action {
     GitHubRepo(owner, repo, version, subpath) => {
@@ -46,7 +48,7 @@ test "action ref: parse github repo action" {
 
 ///|
 test "action ref: parse custom registry action" {
-  let action = expect_action(parse_action_ref("bit://std/cache@v1"))
+  let action = expect_action(@actrun.parse_action_ref("bit://std/cache@v1"))
 
   match action {
     Registry(scheme, name, version) => {
@@ -76,10 +78,10 @@ test "action ref: parse custom registry action" {
 ///|
 test "action ref: resolve builtin checkout aliases" {
   let github_checkout = expect_resolved(
-    resolve_action_uses("actions/checkout@v4"),
+    @actrun.resolve_action_uses("actions/checkout@v4"),
   )
   let builtin_checkout = expect_resolved(
-    resolve_action_uses("builtin://checkout"),
+    @actrun.resolve_action_uses("builtin://checkout"),
   )
 
   @debug.debug_inspect(
@@ -115,10 +117,10 @@ test "action ref: resolve builtin checkout aliases" {
 ///|
 test "action ref: resolve builtin artifact aliases" {
   let upload = expect_resolved(
-    resolve_action_uses("actions/upload-artifact@v4"),
+    @actrun.resolve_action_uses("actions/upload-artifact@v4"),
   )
   let download = expect_resolved(
-    resolve_action_uses("actions/download-artifact@v4"),
+    @actrun.resolve_action_uses("actions/download-artifact@v4"),
   )
 
   @debug.debug_inspect(
@@ -151,8 +153,12 @@ test "action ref: resolve builtin artifact aliases" {
 
 ///|
 test "action ref: resolve builtin cache aliases" {
-  let restore = expect_resolved(resolve_action_uses("actions/cache/restore@v4"))
-  let save = expect_resolved(resolve_action_uses("actions/cache/save@v4"))
+  let restore = expect_resolved(
+    @actrun.resolve_action_uses("actions/cache/restore@v4"),
+  )
+  let save = expect_resolved(
+    @actrun.resolve_action_uses("actions/cache/save@v4"),
+  )
 
   @debug.debug_inspect(
     restore.kind,
@@ -184,7 +190,7 @@ test "action ref: resolve builtin cache aliases" {
 
 ///|
 test "action ref: resolve builtin cache main alias" {
-  let cache = expect_resolved(resolve_action_uses("actions/cache@v4"))
+  let cache = expect_resolved(@actrun.resolve_action_uses("actions/cache@v4"))
 
   @debug.debug_inspect(
     cache.kind,
@@ -203,7 +209,9 @@ test "action ref: resolve builtin cache main alias" {
 
 ///|
 test "action ref: resolve builtin setup-node alias" {
-  let setup = expect_resolved(resolve_action_uses("actions/setup-node@v4"))
+  let setup = expect_resolved(
+    @actrun.resolve_action_uses("actions/setup-node@v4"),
+  )
 
   @debug.debug_inspect(
     setup.kind,
@@ -223,7 +231,7 @@ test "action ref: resolve builtin setup-node alias" {
 ///|
 test "action ref: resolve docker image action" {
   let docker_action = expect_resolved(
-    resolve_action_uses("docker://alpine:3.21"),
+    @actrun.resolve_action_uses("docker://alpine:3.21"),
   )
 
   @debug.debug_inspect(
@@ -258,7 +266,9 @@ test "action ref: resolve docker image action" {
 
 ///|
 test "action ref: resolve wasm registry action" {
-  let wasm_action = expect_resolved(resolve_action_uses("wasm://std/echo@v1"))
+  let wasm_action = expect_resolved(
+    @actrun.resolve_action_uses("wasm://std/echo@v1"),
+  )
 
   @debug.debug_inspect(
     wasm_action.kind,
@@ -285,9 +295,9 @@ test "action ref: resolve wasm registry action" {
 
 ///|
 test "action ref: backend capability presets include wasm" {
-  let host = backend_capabilities_for("node")
-  let docker = backend_capabilities_for("docker")
-  let wasm = backend_capabilities_for("wasm")
+  let host = @actrun.backend_capabilities_for("node")
+  let docker = @actrun.backend_capabilities_for("docker")
+  let wasm = @actrun.backend_capabilities_for("wasm")
 
   @debug.debug_inspect(host.host, content="true")
   @debug.debug_inspect(host.docker, content="false")
@@ -299,7 +309,7 @@ test "action ref: backend capability presets include wasm" {
 
 ///|
 test "action ref: unresolved custom registry action is rejected" {
-  let result = resolve_action_uses("bit://std/cache@v1")
+  let result = @actrun.resolve_action_uses("bit://std/cache@v1")
 
   @debug.debug_inspect(
     result.errors,
